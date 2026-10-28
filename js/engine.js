@@ -1,6 +1,6 @@
-import { ARMORS, BEATEN_HP, GEAR_MAX, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
-  START_POINTS, STATS, TRAIN_XP, WEAPONS, armorOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf,
-  gearPrice, maxHp, xpNeed, CRIT_HIT, SPREAD } from './balance.js';
+import { BEATEN_HP, GEAR_MAX, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
+  START_POINTS, STATS, TRAIN_XP, armorOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
+  CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
 
 export const COMMANDS = new Map([
@@ -13,7 +13,6 @@ export const BOTS = [
   'kofistreambot', 'tangiabot', 'botisimo', 'lumiastream', 'streamstickers', 'creatisbot', 'own3d', 'dixperbro',
   'pokemoncommunitygame', 'songlistbot', 'pretzelrocks', 'restreambot', 'commanderroot', 'frostytoolsdotcom',
 ];
-export const BUY_WORDS = new Map([['оружие', 'weapon'], ['меч', 'weapon'], ['доспех', 'armor'], ['броня', 'armor']]);
 export const CARD_WORDS = new Set(['профиль', 'проф']);
 export const YIELD_WORDS = new Set(['сдаюсь', 'сдаться', 'сдался']);
 export const MIN_FIGHTERS = 2;
@@ -32,7 +31,6 @@ const SAVE_EVERY = 15;
 const STEP_MAX = 1;
 const EVENTS_MAX = 400;
 const STROLL = 1.4;
-const FORGE_TIME = 3;
 const CROWDING = 160;
 const DUEL_TIME = 12;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -289,7 +287,6 @@ export class Game {
     }
     if (this.state === 'battle' && g.fate) return;
     if (PLACE_BY_WORD.has(word)) this._goTo(g, PLACE_BY_WORD.get(word));
-    else if (BUY_WORDS.has(word)) this._buy(g, BUY_WORDS.get(word));
     else if (STAT_BY_WORD.has(word)) this._spend(g, STAT_BY_WORD.get(word), arg);
   }
 
@@ -314,29 +311,6 @@ export class Game {
     }
     this._emit('go', { login: g.login, place });
     this._arrive(g, place, true);
-  }
-
-  _buy(g, kind) {
-    const tier = g[kind];
-    const names = kind === 'weapon' ? WEAPONS : ARMORS;
-    if (tier >= GEAR_MAX) {
-      this._line(g.name + ': лучше «' + names[tier] + '» в кузнице ничего нет', 'info');
-      return;
-    }
-    const price = gearPrice(tier);
-    if (g.coins < price) {
-      this._line(g.name + ': «' + names[tier + 1] + '» стоит ' + price + ' монет, у тебя ' + g.coins, 'warn');
-      return;
-    }
-    g.coins -= price;
-    g[kind] = tier + 1;
-    this._line(g.name + ' покупает «' + names[tier + 1] + '»', 'buy');
-    this._emit('buy', { login: g.login, kind });
-    if (this.state !== 'battle' && g.place !== 'forge') {
-      g.back = g.place === 'heal' || g.place === 'train' ? g.place : 'rest';
-      this._arrive(g, 'forge', true);
-    }
-    this._keep(g);
   }
 
   _spend(g, stat, arg) {
@@ -434,10 +408,6 @@ export class Game {
       g.wait -= dt;
       if (g.place === 'train' && g.swing <= 0 && this.random() < dt * 1.6) g.swing = 0.3;
       if (g.wait > 0) return;
-      if (g.place === 'forge') {
-        this._arrive(g, g.back || 'rest', true);
-        return;
-      }
       const p = this._spot(g, g.place);
       g.tx = p.x;
       g.ty = p.y;
@@ -450,11 +420,10 @@ export class Game {
       g.x = g.tx;
       g.y = g.ty;
       g.walking = false;
-      g.wait = g.place === 'forge' ? FORGE_TIME : 4 + this.random() * 5;
+      g.wait = 4 + this.random() * 5;
       if (g.place === 'rest') g.pose = 'sit';
       else if (g.place === 'heal') g.pose = 'lie';
       if (g.place === 'train' && g.dummy) g.face = g.dummy.x >= g.x ? 1 : -1;
-      if (g.place === 'forge') g.face = 1;
       return;
     }
     g.x += dx / d * speed * dt;
@@ -705,7 +674,7 @@ export class Game {
         row.level = g.level;
         g.fate = null;
         g.target = null;
-        this._arrive(g, 'rest');
+        this._arrive(g, g.hp < maxHp(g) ? 'heal' : 'rest');
         this.roster.put(g);
       }
       rows.push(row);
@@ -718,6 +687,8 @@ export class Game {
     this.endIn = null;
     this.state = 'results';
     this.timer = RESULTS_TIME;
+    const wounded = rows.filter((row) => row.fate !== 'dead' && this.members.get(row.login)?.place === 'heal').length;
+    if (wounded) this._line('Раненых уносят в лазарет: ' + wounded, 'heal');
     if (champion) this._line(champion.name + ' — чемпион арены!', 'champion');
     else this._line('Время вышло — бой окончен', 'battle');
     this._emit('phase', { state: 'results' });

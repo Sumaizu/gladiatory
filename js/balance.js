@@ -36,7 +36,7 @@ export const GEAR_MAX = WEAPONS.length - 1;
 export const gearPrice = (tier) => Math.round(30 * Math.pow(tier + 1, 1.5) / 5) * 5;
 
 // в лудусе, доля здоровья в секунду
-export const HEAL_RATE = { rest: 0.003, heal: 0.015, train: 0, forge: 0 };
+export const HEAL_RATE = { rest: 0.003, heal: 0.015, train: 0 };
 export const BEATEN_HP = 0.15;
 export const TRAIN_XP = 0.4;
 

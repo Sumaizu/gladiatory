@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { GEAR_MAX, HEAL_RATE, REWARD, START_COINS, START_POINTS, deathChance, gearPrice, maxHp,
+import { GEAR_MAX, HEAL_RATE, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
 import { inArena } from '../../../js/places.js';
@@ -131,17 +131,6 @@ test('вылечился в лазарете — возвращается на �
   eq(a.hp, maxHp(a));
 });
 
-test('после покупки гладиатор заходит в кузницу и возвращается', () => {
-  const g = game();
-  const [a] = join(g, 'Brutus');
-  a.coins = 500;
-  g.feed('Brutus', 'трен', { login: 'brutus' });
-  g.feed('Brutus', 'оружие', { login: 'brutus' });
-  eq(a.place, 'forge');
-  for (let i = 0; i < 20 * 30; i++) g.step(0.05);
-  eq(a.place, 'train');
-});
-
 test('тренировка даёт опыт и уровень с очками', () => {
   const g = game({ settings: { ludus: 900 } });
   const [a] = join(g, 'Brutus');
@@ -152,16 +141,13 @@ test('тренировка даёт опыт и уровень с очками',
   eq(a.hp <= maxHp(a), true);
 });
 
-test('кузница: оружие и доспех за монеты, цена растёт, предел', () => {
+test('оружие и доспех пока не продаются: команды ничего не делают', () => {
   const g = game();
   const [a] = join(g, 'Brutus');
   a.coins = 10000;
   g.feed('Brutus', 'оружие', { login: 'brutus' });
   g.feed('Brutus', 'доспех', { login: 'brutus' });
-  eq([a.weapon, a.armor, a.coins], [1, 1, 10000 - 2 * gearPrice(0)]);
-  ok(gearPrice(1) > gearPrice(0));
-  for (let i = 0; i < 10; i++) g.feed('Brutus', 'меч', { login: 'brutus' });
-  eq(a.weapon, GEAR_MAX);
+  eq([a.weapon, a.armor, a.coins], [0, 0, 10000]);
 });
 
 test('бой не начнётся, пока гладиаторов меньше двух', () => {
@@ -299,7 +285,8 @@ test('итоги сменяются лудусом, раны остаются', 
   eq(g.state, 'ludus');
   const hurt = Array.from(g.members.values()).filter((m) => m.hp < maxHp(m));
   ok(hurt.length >= 2, 'павшие вернулись ранеными');
-  for (const m of g.members.values()) eq(m.place, 'rest');
+  for (const m of g.members.values()) eq(m.place, m.hp < maxHp(m) ? 'heal' : 'rest', 'раненые — в лазарет');
+  ok(Array.from(g.members.values()).some((m) => m.place === 'heal'));
 });
 
 test('время боя вышло — выстоявших несколько, чемпиона нет', () => {
@@ -319,13 +306,13 @@ test('сохранение: прогресс переживает перезап
   const g = game({ roster: new Roster(memory, 'k') });
   const [a] = join(g, 'Brutus');
   a.coins = 500;
-  g.feed('Brutus', 'оружие', { login: 'brutus' });
+  a.weapon = 2;
   g.feed('Brutus', 'сила 2', { login: 'brutus' });
   a.hp = maxHp(a) / 2;
   g.stop();
   const again = game({ roster: new Roster(memory, 'k') });
   const [b] = join(again, 'Brutus');
-  eq([b.weapon, b.str, b.coins], [1, 2, 500 - gearPrice(0)]);
+  eq([b.weapon, b.str, b.coins], [2, 2, 500]);
   eq(b.hp, Math.round(maxHp(b) / 2));
 });
 

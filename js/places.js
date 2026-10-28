@@ -4,7 +4,7 @@ export const FIELD_H = 644;
 // лудус сбоку, как в Domina: сзади колоннада с комнатами, в центре песок, спереди перила
 export const WALL = { top: 40, floor: 228, step: 292, sand: 300, rail: 556, front: 590 };
 export const COLUMNS = [30, 202, 374, 546, 718, 890];
-export const BAYS = { rest: [0, 1], temple: [2], forge: [3], heal: [4] };
+export const BAYS = { rest: [0, 1], temple: [2], heal: [3, 4] };
 export const bayX = (i) => COLUMNS[i] + 6;
 export const BAY_W = 160;
 
@@ -22,12 +22,8 @@ export const PLACES = {
   },
   heal: {
     name: 'Лазарет', words: ['лазарет', 'лечение', 'лечиться', 'лечить', 'хил'],
-    seats: [...row(262, 748, 868, 40), ...row(288, 742, 862, 40), ...row(322, 742, 862, 40)],
-    walk: { x: 730, y: 250, w: 150, h: 86 },
-  },
-  forge: {
-    name: 'Кузница', words: ['кузница', 'кузня'],
-    walk: { x: 566, y: 256, w: 120, h: 30 },
+    seats: [...row(262, 576, 870, 49), ...row(290, 600, 870, 49), ...row(324, 576, 870, 49)],
+    walk: { x: 560, y: 250, w: 320, h: 86 },
   },
   train: {
     name: 'Тренировка', words: ['трен', 'тренировка', 'тренироваться', 'тренить'],
@@ -36,8 +32,9 @@ export const PLACES = {
 };
 
 export const DUMMIES = [
-  { x: 120, y: 392 }, { x: 290, y: 368 }, { x: 470, y: 400 }, { x: 640, y: 366 }, { x: 812, y: 396 },
-  { x: 200, y: 486 }, { x: 382, y: 500 }, { x: 560, y: 484 }, { x: 736, y: 500 },
+  { x: 120, y: 392, kind: 'shield' }, { x: 290, y: 368, kind: 'straw' }, { x: 470, y: 400, kind: 'bag' },
+  { x: 640, y: 366, kind: 'target' }, { x: 812, y: 396, kind: 'palus' }, { x: 200, y: 490, kind: 'palus' },
+  { x: 382, y: 504, kind: 'shield' }, { x: 560, y: 488, kind: 'straw' }, { x: 736, y: 504, kind: 'bag' },
 ];
 export const ENTRANCE = { x: 940, y: 440 };
 

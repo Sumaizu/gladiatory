@@ -3,6 +3,7 @@ import { FIELD_H, FIELD_W, DUMMIES, PLACES } from './places.js';
 import { FONT, drawCrowd, drawGladiator, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
 import { ambience, play, setSound } from './sound.js';
+import { P } from './art.js';
 
 const STAGE_WIDTH = 1280;
 const STAGE_HEIGHT = 720;
@@ -10,17 +11,17 @@ const DOM_EVERY = 0.2;
 const FADE = 0.7;
 const FLOAT_TIME = 1.1;
 // мир рисуется в низком разрешении и растягивается крупными пикселями — как в Domina
-const PIXEL = 2.5;
+const PIXEL = P;
 const BLOOD = ['#8f1414', '#a8191b', '#6e0d0f', '#c22a22'];
 const WHERE = {
-  train: 'трен', heal: 'лазарет', rest: 'отдых', forge: 'кузница',
+  train: 'трен', heal: 'лазарет', rest: 'отдых',
   fight: 'в бою', down: 'пал', yield: 'сдался', dead: 'погиб',
 };
 
 const COMMANDS = {
   ludus: [['трен', 'тренироваться: опыт'], ['лазарет', 'лечиться бесплатно'], ['отдых', 'сесть на скамью'],
-    ['оружие', 'купить меч получше'], ['доспех', 'купить доспех'], ['сила · ловкость · выносливость', 'вложить очко'],
-    ['проф', 'твоя карточка']],
+    ['сила · ловкость · выносливость', 'вложить очко'], ['проф', 'твоя карточка'],
+    ['что угодно', 'стать гладиатором']],
   battle: [['сдаюсь', 'сдаться и точно выжить, но награда меньше'], ['проф', 'твоя карточка'],
     ['что угодно', 'вступить: в бой пойдёшь следующим']],
 };
