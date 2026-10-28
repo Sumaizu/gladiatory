@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { DUEL, HEAL_RATE, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { DUEL, HEAL_RATE, PIT, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { starOf } from '../../../js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
@@ -849,19 +849,36 @@ test('стартовый капитал — 100 монет', () => {
   eq(START_COINS, 100);
 });
 
-test('Яма со львами: нет гладиаторов 5 уровня — выходит один лев', () => {
-  const g = game({ mode: 'pit' });
-  join(g, 'A', 'B', 'C', 'D', 'E', 'F', 'G');
-  g.next();
-  eq(g.fighters.filter((f) => f.lion).length, 1);
+test('Яма со львами: лев на каждых ' + PIT.per + ' гладиаторов, хотя бы один и не больше ' + PIT.max, () => {
+  const lionsFor = (n) => {
+    const g = game({ mode: 'pit' });
+    join(g, ...Array.from({ length: n }, (_, i) => 'P' + i));
+    g.next();
+    return g.fighters.filter((f) => f.lion).length;
+  };
+  eq([lionsFor(2), lionsFor(7), lionsFor(30)], [1, 2, PIT.max]);
 });
 
-test('Яма со львами: по льву на каждого 5 уровня и выше, все бьют львов, а львы — гладиаторов', () => {
+test('Яма со львами: чем сильнее команда, тем сильнее львы', () => {
+  const mightFor = (level, gear) => {
+    const g = game({ mode: 'pit' });
+    for (const m of join(g, 'A', 'B', 'C')) {
+      m.level = level;
+      m.str = m.vit = level;
+      if (gear) m.weapon = { kind: 'weapon', type: 'sword', rarity: 'epic', power: 11 };
+    }
+    g.next();
+    const lion = g.fighters.find((f) => f.lion);
+    eq(lion.hp, maxHp(lion));
+    return lion.might;
+  };
+  const weak = mightFor(1, false), strong = mightFor(10, true);
+  ok(strong > weak * 2, weak + ' → ' + strong);
+});
+
+test('Яма со львами: все бьют львов, а львы — гладиаторов', () => {
   const g = game({ mode: 'pit' });
   const people = join(g, 'A', 'B', 'C', 'D', 'E', 'F', 'G');
-  g.members.get('a').level = 5;
-  g.members.get('b').level = 9;
-  g.members.get('c').level = 4;
   g.next();
   const lions = g.fighters.filter((f) => f.lion);
   eq(lions.length, 2);
@@ -1067,16 +1084,6 @@ test('на арену некому — все сидят на отдыхе, бо
   eq(g.state, 'ludus');
 });
 
-test('лев в полтора раза сильнее гладиатора 5 уровня с теми же статами: здоровье и урон', () => {
-  const g = game({ mode: 'pit' });
-  join(g, 'A', 'B');
-  g.next();
-  const lion = g.fighters.find((f) => f.lion);
-  const twin = Object.assign({}, lion, { might: undefined });
-  ok(Math.abs(maxHp(lion) - 1.5 * maxHp(twin)) < 1e-9);
-  ok(Math.abs(damageOf(lion) - 1.5 * damageOf(twin)) < 1e-9);
-  eq(lion.hp, maxHp(lion));
-});
 
 test('в сети не убежать: крит не заставляет бежать, пока сеть не спала', () => {
   const g = game();

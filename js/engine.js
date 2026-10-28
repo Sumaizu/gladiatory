@@ -1,4 +1,4 @@
-import { AFK_ROUNDS, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
+import { AFK_ROUNDS, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
@@ -687,7 +687,7 @@ export class Game {
       ready.push(...pair);
       this.timer = DUEL.bet;
     }
-    const lions = this.mode === 'pit' ? this._lions(Math.max(1, ready.filter((g) => g.level >= PIT.veteran).length)) : [];
+    const lions = this.mode === 'pit' ? this._lions(ready) : [];
     this.fighters = ready.concat(lions);
     const all = this.fighters, n = ready.length;
     const spots = this.duel ? [{ x: ARENA.cx - DUEL.gap, y: ARENA.cy + 10 }, { x: ARENA.cx + DUEL.gap, y: ARENA.cy + 10 }]
@@ -812,13 +812,28 @@ export class Game {
   }
 
   // львы для «Ямы со львами»: не гладиаторы, в лудус и сохранение не попадают
-  _lions(count) {
+  _lions(people) {
+    const count = Math.max(1, Math.min(PIT.max, Math.round(people.length / PIT.per)));
+    // сила стороны — (сумма урона в секунду) × (сумма живучести); львы получают strength от силы гладиаторов
+    let dps = 0, ehp = 0;
+    for (const g of people) {
+      const p = powerOf(Object.assign({}, g, { hp: maxHp(g) }));
+      dps += p.dps;
+      ehp += p.ehp;
+    }
     const lions = [];
     for (let i = 0; i < count; i++) {
-      const lion = Object.assign(newGladiator('lion' + (i + 1), 'Лев', '#c98a3e', 0), PIT.lion, { lion: true,
-        weapon: { kind: 'weapon', type: 'claws', rarity: 'common', power: 0 }, points: 0 });
+      lions.push(Object.assign(newGladiator('lion' + (i + 1), 'Лев', '#c98a3e', 0), PIT.lion, { lion: true,
+        weapon: { kind: 'weapon', type: 'claws', rarity: 'common', power: 0 }, points: 0 }));
+    }
+    const one = powerOf(lions[0]);
+    // сила львов растёт как might² (здоровье и урон сразу)
+    const even = Math.sqrt(pitStrength(people.length) * dps * ehp / (count * count * one.dps * one.ehp));
+    // новички без вещей против льва слабее, чем выходит по формуле, а одетые ветераны — сильнее: чуть выравниваем
+    const [pivot, tilt] = PIT.tilt, might = pivot * Math.pow(even / pivot, tilt);
+    for (const lion of lions) {
+      lion.might = Math.max(PIT.might[0], Math.min(PIT.might[1], might));
       lion.hp = maxHp(lion);
-      lions.push(lion);
     }
     return lions;
   }

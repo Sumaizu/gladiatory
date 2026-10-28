@@ -110,14 +110,28 @@ export function deathChance(base, overkill, hpMax) {
 // кто столько раундов (лудус + бой) подряд ничего не писал в чат — афк и садится на скамью
 export const AFK_ROUNDS = 3;
 
-// «Яма со львами»: вместо обычного боя все гладиаторы против львов. Лев — как гладиатор 5 уровня без вещей, но с когтями.
-// Львов столько, сколько на арене гладиаторов veteran уровня и выше, но хотя бы один
+// грубая боевая сила: урон в секунду и сколько урона боец выдержит (с бронёй, уклонением и щитом)
+export function powerOf(g) {
+  const dps = damageOf(g) * (1 + critOf(g) * (CRIT_HIT - 1)) / attackEvery(g);
+  const ehp = maxHp(g) / (1 - armorOf(g)) / (1 - dodgeOf(g)) / (shieldUp(g) ? 1 - SHIELD.block : 1);
+  return { dps, ehp };
+}
+
+// «Яма со львами»: вместо обычного боя все гладиаторы против львов с когтями. Львов один на per бойцов (не больше max),
+// а их сила (might — множитель здоровья и урона) подстраивается под команду: сила львов — доля от силы гладиаторов.
+// Сила стороны — (сумма урона в секунду) × (сумма живучести). Толпа бьёт слаженнее, поэтому доля растёт от strength[0]
+// при grow[0] бойцах до strength[1] при grow[1] и больше. Подобрано симуляцией: игроки побеждают ~9 боёв из 10, но с потерями
 export const PIT = {
-  chance: 0.1, veteran: 5, deathMult: 3,
-  lion: { level: 5, str: 4, agi: 3, vit: 4, might: 1.5 },
+  chance: 0.1, deathMult: 3, per: 3, max: 6, strength: [0.51, 0.62], grow: [3, 8], might: [0.4, 12], tilt: [2.5, 1.07],
+  lion: { level: 5, str: 4, agi: 3, vit: 4 },
   reward: { standing: { xp: 100, coins: 80 }, beaten: { xp: 70, coins: 55 }, perKo: { xp: 20, coins: 15 } },
 };
 
 // «Дуэль»: двое случайных на арене, bet секунд на ставки «1» (левый) и «2» (правый), потом бой без смертей.
 // Обоим xp опыта, победителю perBet монет за каждую ставку против него, угадавшим — prize монет
+export function pitStrength(n) {
+  const [from, to] = PIT.grow, part = Math.max(0, Math.min(1, (n - from) / (to - from)));
+  return PIT.strength[0] + (PIT.strength[1] - PIT.strength[0]) * part;
+}
+
 export const DUEL = { chance: 0.2, bet: 30, xp: 150, perBet: 30, prize: 100, gap: 170 };
