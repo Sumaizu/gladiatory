@@ -1,7 +1,7 @@
 import { ARMORS, BEATEN_HP, GEAR_MAX, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
   START_POINTS, STATS, TRAIN_XP, WEAPONS, armorOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf,
-  gearPrice, healPrice, maxHp, xpNeed, CRIT_HIT, SPREAD } from './balance.js';
-import { ARENA, GATE, PLACES, clampToArena, pointIn } from './places.js';
+  gearPrice, maxHp, xpNeed, CRIT_HIT, SPREAD } from './balance.js';
+import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
 
 export const COMMANDS = new Map([
   ['!гладиаторы-пауза', 'pause'],
@@ -31,7 +31,8 @@ export const PALETTE = ['#e0524a', '#4f8fe8', '#3fb877', '#e8a23a', '#a46be0', '
 const SAVE_EVERY = 15;
 const STEP_MAX = 1;
 const EVENTS_MAX = 400;
-const STROLL = 0.6;
+const STROLL = 1.4;
+const FORGE_TIME = 3;
 const CROWDING = 160;
 const DUEL_TIME = 12;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -271,7 +272,7 @@ export class Game {
     g.name = name.slice(0, NAME_MAX) || g.name;
     g.fate = null;
     this.members.set(login, g);
-    this._arrive(g, 'yard');
+    this._arrive(g, 'rest');
     this._emit('join', { login });
     return g;
   }
@@ -301,20 +302,17 @@ export class Game {
   _goTo(g, place) {
     if (g.place === place) return;
     if (place === 'heal') {
-      const price = healPrice(g.level);
       if (g.hp >= maxHp(g)) {
         this._line(g.name + ' здоров — в лазарете делать нечего', 'info');
         return;
       }
-      if (g.coins < price) {
-        this._line(g.name + ': лазарет стоит ' + price + ' монет, у тебя ' + g.coins, 'warn');
-        return;
-      }
-      g.coins -= price;
-      this._line(g.name + ' лечится в лазарете (−' + price + ' монет)', 'heal');
+      this._line(g.name + ' ложится в лазарет', 'heal');
     } else if (place === 'train') {
       this._line(g.name + ' идёт тренироваться', 'info');
+    } else if (place === 'rest') {
+      this._line(g.name + ' садится отдохнуть', 'info');
     }
+    this._emit('go', { login: g.login, place });
     this._arrive(g, place, true);
   }
 
@@ -334,7 +332,10 @@ export class Game {
     g[kind] = tier + 1;
     this._line(g.name + ' покупает «' + names[tier + 1] + '»', 'buy');
     this._emit('buy', { login: g.login, kind });
-    if (this.state !== 'battle') this._arrive(g, 'forge', true);
+    if (this.state !== 'battle' && g.place !== 'forge') {
+      g.back = g.place === 'heal' || g.place === 'train' ? g.place : 'rest';
+      this._arrive(g, 'forge', true);
+    }
     this._keep(g);
   }
 
@@ -365,19 +366,45 @@ export class Game {
 
   // --- лудус ---
 
+  // в отдыхе и лазарете у каждого своё место: сидит или лежит, пока его не отправят дальше
   _arrive(g, place, walk = false) {
     g.place = place;
-    const target = pointIn(PLACES[place].walk, this.random);
+    g.seat = null;
     if (!walk || g.x === undefined) {
-      g.x = GATE.x + GATE.w / 2 + (this.random() - 0.5) * 40;
-      g.y = GATE.y + 20;
+      g.x = ENTRANCE.x;
+      g.y = ENTRANCE.y + (this.random() - 0.5) * 60;
     }
+    const target = this._spot(g, place);
     g.tx = target.x;
     g.ty = target.y;
     g.wait = 0;
     g.face = g.tx >= g.x ? 1 : -1;
     g.walking = true;
     g.swing = 0;
+    g.pose = null;
+  }
+
+  _spot(g, place) {
+    const seats = PLACES[place].seats;
+    if (seats) {
+      const taken = new Set();
+      for (const other of this.members.values()) {
+        if (other !== g && other.place === place && other.seat !== null && other.seat !== undefined) taken.add(other.seat);
+      }
+      const free = seats.findIndex((_, i) => !taken.has(i));
+      if (free >= 0) {
+        g.seat = free;
+        return seats[free];
+      }
+      return pointIn(PLACES[place].walk, this.random);
+    }
+    if (place === 'train') {
+      const dummy = DUMMIES[Math.floor(this.random() * DUMMIES.length)];
+      const side = this.random() < 0.5 ? -1 : 1;
+      g.dummy = dummy;
+      return { x: dummy.x + side * 26, y: dummy.y + 3 };
+    }
+    return pointIn(PLACES[place].walk, this.random);
   }
 
   _stepLudus(dt) {
@@ -385,11 +412,11 @@ export class Game {
       if (g.fate) continue;
       this._stroll(g, dt);
       const hpMax = maxHp(g);
-      const rate = g.walking && g.place !== 'yard' ? HEAL_RATE.yard : HEAL_RATE[g.place] || 0;
+      const rate = g.walking ? 0 : HEAL_RATE[g.place] || 0;
       g.hp = Math.min(hpMax, g.hp + rate * hpMax * dt);
       if (g.place === 'heal' && g.hp >= hpMax) {
         this._line(g.name + ' вылечился и выходит из лазарета', 'heal');
-        this._arrive(g, 'yard', true);
+        this._arrive(g, 'rest', true);
       }
       if (g.place === 'train' && !g.walking) this._gainXp(g, TRAIN_XP * dt);
     }
@@ -402,24 +429,32 @@ export class Game {
 
   _stroll(g, dt) {
     g.swing = Math.max(0, g.swing - dt);
-    if (g.wait > 0) {
+    if (!g.walking) {
+      if (g.place === 'rest' || g.place === 'heal') return;
       g.wait -= dt;
-      if (g.place === 'train' && g.swing <= 0 && this.random() < dt * 1.5) g.swing = 0.3;
-      if (g.wait <= 0) {
-        const p = pointIn(PLACES[g.place].walk, this.random);
-        g.tx = p.x;
-        g.ty = p.y;
-        g.walking = true;
+      if (g.place === 'train' && g.swing <= 0 && this.random() < dt * 1.6) g.swing = 0.3;
+      if (g.wait > 0) return;
+      if (g.place === 'forge') {
+        this._arrive(g, g.back || 'rest', true);
+        return;
       }
+      const p = this._spot(g, g.place);
+      g.tx = p.x;
+      g.ty = p.y;
+      g.walking = true;
       return;
     }
     const dx = g.tx - g.x, dy = g.ty - g.y, d = Math.hypot(dx, dy);
-    const speed = MOVE_SPEED * (g.place === 'yard' || g.place === 'rest' ? STROLL : 1.2);
+    const speed = MOVE_SPEED * STROLL;
     if (d <= speed * dt) {
       g.x = g.tx;
       g.y = g.ty;
       g.walking = false;
-      g.wait = 1.5 + this.random() * (g.place === 'rest' ? 8 : 4);
+      g.wait = g.place === 'forge' ? FORGE_TIME : 4 + this.random() * 5;
+      if (g.place === 'rest') g.pose = 'sit';
+      else if (g.place === 'heal') g.pose = 'lie';
+      if (g.place === 'train' && g.dummy) g.face = g.dummy.x >= g.x ? 1 : -1;
+      if (g.place === 'forge') g.face = 1;
       return;
     }
     g.x += dx / d * speed * dt;
@@ -473,6 +508,8 @@ export class Game {
       g.x = spots[i].x;
       g.y = spots[i].y;
       g.fate = 'fight';
+      g.seat = null;
+      g.pose = null;
       g.cool = 0.6 + this.random() * attackEvery(g);
       g.target = null;
       g.retarget = 0;
@@ -668,7 +705,7 @@ export class Game {
         row.level = g.level;
         g.fate = null;
         g.target = null;
-        this._arrive(g, 'yard');
+        this._arrive(g, 'rest');
         this.roster.put(g);
       }
       rows.push(row);

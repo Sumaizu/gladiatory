@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { GEAR_MAX, HEAL_RATE, REWARD, START_COINS, START_POINTS, deathChance, gearPrice, healPrice, maxHp,
+import { GEAR_MAX, HEAL_RATE, REWARD, START_COINS, START_POINTS, deathChance, gearPrice, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
 import { inArena } from '../../../js/places.js';
@@ -92,37 +92,54 @@ test('очки характеристик: сила, все, выносливо�
   eq(a.agi, 0, 'без очков ничего не меняется');
 });
 
-test('лазарет стоит монет и лечит быстрее отдыха', () => {
+test('новичок садится на скамью в зоне отдыха и сидит, пока его не отправят', () => {
+  const g = game();
+  const [a, b] = join(g, 'Brutus', 'Crixus');
+  for (let i = 0; i < 20 * 20; i++) g.step(0.05);
+  eq([a.place, a.pose, a.walking], ['rest', 'sit', false]);
+  ok(a.seat !== b.seat, 'у каждого своё место');
+  const spot = [a.x, a.y];
+  for (let i = 0; i < 20 * 30; i++) g.step(0.05);
+  eq([a.x, a.y], spot, 'не встаёт сам');
+});
+
+test('лазарет бесплатный и лечит быстрее отдыха', () => {
   const g = game();
   const [a, b] = join(g, 'Brutus', 'Crixus');
   a.hp = b.hp = 30;
   g.feed('Brutus', 'лазарет', { login: 'brutus' });
-  g.feed('Crixus', 'отдых', { login: 'crixus' });
-  eq(a.coins, START_COINS - healPrice(1));
-  eq(a.place, 'heal');
-  for (let i = 0; i < 200; i++) g.step(0.05);
+  eq([a.place, a.coins], ['heal', START_COINS]);
+  for (let i = 0; i < 20 * 30; i++) g.step(0.05);
+  eq(a.pose, 'lie');
   ok(a.hp > b.hp, 'в лазарете здоровья больше');
 });
 
-test('лазарет: без монет и здоровому нельзя', () => {
+test('здоровому в лазарет не надо', () => {
   const g = game();
-  const [a, b] = join(g, 'Brutus', 'Crixus');
+  const [a] = join(g, 'Brutus');
   g.feed('Brutus', 'лазарет', { login: 'brutus' });
-  eq([a.place, a.coins], ['yard', START_COINS], 'здоровый');
-  b.hp = 10;
-  b.coins = 0;
-  g.feed('Crixus', 'лазарет', { login: 'crixus' });
-  eq(b.place, 'yard', 'без монет');
+  eq(a.place, 'rest');
 });
 
-test('вылечился в лазарете — выходит во двор', () => {
+test('вылечился в лазарете — возвращается на скамью', () => {
   const g = game();
   const [a] = join(g, 'Brutus');
   a.hp = maxHp(a) - 1;
   g.feed('Brutus', 'лазарет', { login: 'brutus' });
-  for (let i = 0; i < 40; i++) g.step(0.05);
-  eq(a.place, 'yard');
+  for (let i = 0; i < 20 * 20; i++) g.step(0.05);
+  eq(a.place, 'rest');
   eq(a.hp, maxHp(a));
+});
+
+test('после покупки гладиатор заходит в кузницу и возвращается', () => {
+  const g = game();
+  const [a] = join(g, 'Brutus');
+  a.coins = 500;
+  g.feed('Brutus', 'трен', { login: 'brutus' });
+  g.feed('Brutus', 'оружие', { login: 'brutus' });
+  eq(a.place, 'forge');
+  for (let i = 0; i < 20 * 30; i++) g.step(0.05);
+  eq(a.place, 'train');
 });
 
 test('тренировка даёт опыт и уровень с очками', () => {
@@ -282,6 +299,7 @@ test('итоги сменяются лудусом, раны остаются', 
   eq(g.state, 'ludus');
   const hurt = Array.from(g.members.values()).filter((m) => m.hp < maxHp(m));
   ok(hurt.length >= 2, 'павшие вернулись ранеными');
+  for (const m of g.members.values()) eq(m.place, 'rest');
 });
 
 test('время боя вышло — выстоявших несколько, чемпиона нет', () => {
@@ -352,9 +370,9 @@ test('шанс гибели растёт от сильного удара, но 
   eq(deathChance(0.8, 500, 100), 0.9);
 });
 
-test('формулы: опыт до уровня растёт, отдых лечит быстрее двора', () => {
+test('формулы: опыт до уровня растёт, лазарет лечит быстрее отдыха', () => {
   ok(xpNeed(2) > xpNeed(1));
-  ok(HEAL_RATE.rest > HEAL_RATE.yard && HEAL_RATE.heal > HEAL_RATE.rest);
+  ok(HEAL_RATE.heal > HEAL_RATE.rest && HEAL_RATE.rest > 0);
   eq(plural(1, 'а', 'б', 'в') + plural(3, 'а', 'б', 'в') + plural(11, 'а', 'б', 'в'), 'абв');
 });
 

@@ -2,7 +2,7 @@ import { TwitchChat } from './chat.js';
 import { clean, fromQuery } from './config.js';
 import { demoGame } from './demo.js';
 import { Game, Roster } from './engine.js';
-import { playAll } from './sound.js';
+import { playAll, unlock } from './sound.js';
 import { View } from './view.js';
 
 const CODE_FILES = ['overlay.html', 'css/overlay.css', 'js/overlay.js', 'js/view.js', 'js/draw.js', 'js/engine.js',
@@ -135,6 +135,7 @@ function run(view) {
       view.use(settings);
     },
     start() {
+      unlock();
       live = true;
       chat.start();
       game.stop();

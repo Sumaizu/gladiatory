@@ -1,34 +1,45 @@
 export const FIELD_W = 920;
 export const FIELD_H = 644;
 
-// места лудуса: walk — где гуляют гладиаторы, house — здание за ними
+// лудус сбоку, как в Domina: сзади колоннада с комнатами, в центре песок, спереди перила
+export const WALL = { top: 40, floor: 228, step: 292, sand: 300, rail: 556, front: 590 };
+export const COLUMNS = [30, 202, 374, 546, 718, 890];
+export const BAYS = { rest: [0, 1], temple: [2], forge: [3], heal: [4] };
+export const bayX = (i) => COLUMNS[i] + 6;
+export const BAY_W = 160;
+
+function row(y, from, to, step) {
+  const spots = [];
+  for (let x = from; x <= to; x += step) spots.push({ x, y });
+  return spots;
+}
+
 export const PLACES = {
-  train: {
-    name: 'Тренировочная', words: ['трен', 'тренировка', 'тренироваться', 'тренить'],
-    house: { x: 28, y: 18, w: 276, h: 92 }, walk: { x: 40, y: 128, w: 252, h: 136 },
+  rest: {
+    name: 'Зона отдыха', words: ['отдых', 'отдыхать', 'отдохнуть', 'сесть'],
+    seats: [...row(262, 52, 352, 42), ...row(286, 72, 352, 42), ...row(322, 52, 352, 42)],
+    walk: { x: 40, y: 250, w: 320, h: 86 },
   },
   heal: {
     name: 'Лазарет', words: ['лазарет', 'лечение', 'лечиться', 'лечить', 'хил'],
-    house: { x: 616, y: 18, w: 276, h: 92 }, walk: { x: 628, y: 128, w: 252, h: 136 },
-  },
-  rest: {
-    name: 'Зона отдыха', words: ['отдых', 'отдыхать', 'отдохнуть'],
-    house: { x: 28, y: 338, w: 276, h: 74 }, walk: { x: 40, y: 430, w: 252, h: 184 },
+    seats: [...row(262, 748, 868, 40), ...row(288, 742, 862, 40), ...row(322, 742, 862, 40)],
+    walk: { x: 730, y: 250, w: 150, h: 86 },
   },
   forge: {
     name: 'Кузница', words: ['кузница', 'кузня'],
-    house: { x: 616, y: 338, w: 276, h: 74 }, walk: { x: 628, y: 430, w: 252, h: 184 },
+    walk: { x: 566, y: 256, w: 120, h: 30 },
   },
-  yard: {
-    name: 'Двор', words: ['двор'],
-    house: null, walk: { x: 342, y: 246, w: 236, h: 300 },
+  train: {
+    name: 'Тренировка', words: ['трен', 'тренировка', 'тренироваться', 'тренить'],
+    walk: { x: 50, y: 350, w: 820, h: 190 },
   },
 };
 
-export const TEMPLE = { x: 352, y: 14, w: 216, h: 196 };
-export const GATE = { x: 400, y: 584, w: 120, h: 60 };
-export const DUMMIES = [{ x: 82, y: 168 }, { x: 166, y: 196 }, { x: 250, y: 168 }];
-export const FOUNTAIN = { x: 166, y: 520, r: 34 };
+export const DUMMIES = [
+  { x: 120, y: 392 }, { x: 290, y: 368 }, { x: 470, y: 400 }, { x: 640, y: 366 }, { x: 812, y: 396 },
+  { x: 200, y: 486 }, { x: 382, y: 500 }, { x: 560, y: 484 }, { x: 736, y: 500 },
+];
+export const ENTRANCE = { x: 940, y: 440 };
 
 export const ARENA = { cx: 460, cy: 352, rx: 372, ry: 236 };
 

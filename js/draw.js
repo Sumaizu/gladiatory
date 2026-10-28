@@ -1,5 +1,5 @@
 import { maxHp } from './balance.js';
-import { ARENA, DUMMIES, FIELD_H, FIELD_W, FOUNTAIN, GATE, PLACES, TEMPLE } from './places.js';
+import { ARENA, BAYS, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, PLACES, WALL, bayX } from './places.js';
 
 export const FIGURE = { ludus: 1.3, arena: 1.6 };
 const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
@@ -67,82 +67,6 @@ function plaque(ctx, x, y, text, size = 15, tone = '#6b4426') {
   ctx.fillText(text, x, y + 1);
 }
 
-function cypress(ctx, x, y, h) {
-  ctx.fillStyle = 'rgba(0,0,0,.2)';
-  ctx.beginPath();
-  ctx.ellipse(x + 4, y, h * 0.16, h * 0.06, 0, 0, Math.PI * 2);
-  ctx.fill();
-  const grad = ctx.createLinearGradient(x - h * 0.14, 0, x + h * 0.14, 0);
-  grad.addColorStop(0, '#2f5a2c');
-  grad.addColorStop(1, '#1d3a1c');
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.moveTo(x, y - h);
-  ctx.bezierCurveTo(x + h * 0.2, y - h * 0.6, x + h * 0.16, y - h * 0.1, x, y);
-  ctx.bezierCurveTo(x - h * 0.16, y - h * 0.1, x - h * 0.2, y - h * 0.6, x, y - h);
-  ctx.fill();
-}
-
-function sandFloor(ctx, random, x, y, w, h, base) {
-  ctx.fillStyle = base;
-  ctx.fillRect(x, y, w, h);
-  for (let i = 0; i < w * h / 90; i++) {
-    const px = x + random() * w, py = y + random() * h, r = 0.6 + random() * 1.6;
-    ctx.fillStyle = random() < 0.5 ? 'rgba(120,80,40,.10)' : 'rgba(255,240,210,.14)';
-    ctx.beginPath();
-    ctx.arc(px, py, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-function paving(ctx, random, x, y, w, h) {
-  ctx.fillStyle = '#b9a58a';
-  ctx.fillRect(x, y, w, h);
-  const size = 22;
-  for (let row = 0; row * size < h; row++) {
-    for (let col = -1; col * size < w; col++) {
-      const sx = x + col * size + (row % 2 ? size / 2 : 0), sy = y + row * size;
-      ctx.fillStyle = shade('#c4b195', (random() - 0.5) * 0.16);
-      ctx.fillRect(sx + 1, sy + 1, size - 2, size - 2);
-    }
-  }
-}
-
-function roof(ctx, x, y, w, h, tone) {
-  const grad = ctx.createLinearGradient(0, y, 0, y + h);
-  grad.addColorStop(0, shade(tone, 0.12));
-  grad.addColorStop(1, shade(tone, -0.2));
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.moveTo(x - 8, y + h);
-  ctx.lineTo(x + 10, y);
-  ctx.lineTo(x + w - 10, y);
-  ctx.lineTo(x + w + 8, y + h);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = shade(tone, -0.4);
-  ctx.lineWidth = 1;
-  for (let i = 1; i < w / 12; i++) {
-    const t = i / (w / 12);
-    ctx.beginPath();
-    ctx.moveTo(x + 10 + (w - 20) * t, y);
-    ctx.lineTo(x - 8 + (w + 16) * t, y + h);
-    ctx.stroke();
-  }
-  ctx.fillStyle = shade(tone, -0.35);
-  ctx.fillRect(x - 8, y + h - 3, w + 16, 4);
-}
-
-function wall(ctx, x, y, w, h, tone) {
-  const grad = ctx.createLinearGradient(0, y, 0, y + h);
-  grad.addColorStop(0, shade(tone, 0.08));
-  grad.addColorStop(1, shade(tone, -0.12));
-  ctx.fillStyle = grad;
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = 'rgba(0,0,0,.12)';
-  ctx.fillRect(x, y + h - 4, w, 4);
-}
-
 function column(ctx, x, y, h, tone = '#efe6d6') {
   ctx.fillStyle = shade(tone, -0.12);
   ctx.fillRect(x - 6, y, 12, 4);
@@ -155,324 +79,347 @@ function column(ctx, x, y, h, tone = '#efe6d6') {
   ctx.fillRect(x - 4, y + 4, 8, h - 8);
 }
 
-function drawTraining(ctx) {
-  const { house, walk } = PLACES.train;
-  ctx.fillStyle = 'rgba(110,78,44,.22)';
-  roundRect(ctx, walk.x - 8, walk.y - 10, walk.w + 16, walk.h + 18, 14);
-  ctx.fill();
-  // навес с оружейной стойкой
-  wall(ctx, house.x + 10, house.y + 34, house.w - 20, house.h - 34, '#a07a52');
-  ctx.fillStyle = '#5e4128';
-  for (let i = 0; i < 9; i++) {
-    const x = house.x + 30 + i * 28;
-    ctx.fillRect(x, house.y + 44, 3, 40);
-    ctx.fillStyle = i % 3 === 0 ? '#c9ced3' : i % 3 === 1 ? '#8b5a2b' : '#b8bec4';
-    ctx.fillRect(x - 1, house.y + 40, 5, 8);
-    ctx.fillStyle = '#5e4128';
-  }
-  roof(ctx, house.x + 4, house.y + 4, house.w - 8, 32, '#b5532f');
-  // ограда
-  ctx.strokeStyle = '#7a5532';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(walk.x - 6, walk.y + walk.h + 6);
-  ctx.lineTo(walk.x + walk.w + 6, walk.y + walk.h + 6);
-  ctx.stroke();
-  for (let x = walk.x - 6; x <= walk.x + walk.w + 6; x += 21) {
-    ctx.fillStyle = '#6b4a2b';
-    ctx.fillRect(x - 2, walk.y + walk.h - 4, 4, 14);
-  }
-  plaque(ctx, house.x + house.w / 2, house.y + house.h + 2, 'Тренировочная');
+// --- лудус: вид сбоку, как в Domina ---
+
+const L = {
+  roof: '#2b1a12', wall: '#6a4630', wallDark: '#4e321f', trim: '#82573a', door: '#2f1d13',
+  colTop: '#c98b6b', colLow: '#e2c3a6', floor: '#8a5a3c', floorLine: '#744a30', step: '#5e3a24',
+  sand: '#e6cba0', sandDark: '#d4b282', rail: '#7a4a2a', railDark: '#55321b', front: '#3d2416',
+};
+
+function bench(ctx, x, y, w) {
+  ctx.fillStyle = 'rgba(0,0,0,.25)';
+  ctx.fillRect(x + 2, y + 2, w, 8);
+  ctx.fillStyle = '#7b4c2c';
+  ctx.fillRect(x, y - 4, w, 5);
+  ctx.fillStyle = '#5a361f';
+  ctx.fillRect(x, y + 1, w, 2);
+  ctx.fillRect(x + 4, y + 1, 3, 7);
+  ctx.fillRect(x + w - 7, y + 1, 3, 7);
 }
 
-function drawDummy(ctx, x, y, hit) {
+function cot(ctx, x, y) {
+  ctx.fillStyle = 'rgba(0,0,0,.25)';
+  ctx.fillRect(x - 16, y + 2, 36, 6);
+  ctx.fillStyle = '#6b4329';
+  ctx.fillRect(x - 18, y - 3, 36, 6);
+  ctx.fillStyle = '#e9dfcc';
+  ctx.fillRect(x - 17, y - 6, 34, 4);
+  ctx.fillStyle = '#d2c3a8';
+  ctx.fillRect(x - 17, y - 7, 8, 5);
+  ctx.fillStyle = '#4a2c18';
+  ctx.fillRect(x - 17, y + 3, 3, 5);
+  ctx.fillRect(x + 13, y + 3, 3, 5);
+}
+
+function amphora(ctx, x, y, tone = '#a8582f') {
+  ctx.fillStyle = tone;
+  ctx.beginPath();
+  ctx.ellipse(x, y - 9, 6, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(x - 2, y - 22, 4, 6);
+  ctx.fillStyle = shade(tone, -0.3);
+  ctx.fillRect(x - 5, y - 21, 10, 2);
+  ctx.fillRect(x - 1, y - 2, 2, 3);
+}
+
+function pillar(ctx, x, top, bottom) {
   ctx.fillStyle = 'rgba(0,0,0,.22)';
+  ctx.fillRect(x - 10, top + 4, 26, bottom - top);
+  ctx.fillStyle = shade(L.colTop, -0.2);
+  ctx.fillRect(x - 15, top, 30, 8);
+  ctx.fillRect(x - 15, bottom - 8, 30, 8);
+  const mid = top + (bottom - top) * 0.55;
+  const g1 = ctx.createLinearGradient(x - 12, 0, x + 12, 0);
+  g1.addColorStop(0, shade(L.colTop, -0.18));
+  g1.addColorStop(0.45, L.colTop);
+  g1.addColorStop(1, shade(L.colTop, -0.32));
+  ctx.fillStyle = g1;
+  ctx.fillRect(x - 12, top + 8, 24, mid - top - 8);
+  const g2 = ctx.createLinearGradient(x - 12, 0, x + 12, 0);
+  g2.addColorStop(0, shade(L.colLow, -0.15));
+  g2.addColorStop(0.45, L.colLow);
+  g2.addColorStop(1, shade(L.colLow, -0.3));
+  ctx.fillStyle = g2;
+  ctx.fillRect(x - 12, mid, 24, bottom - 8 - mid);
+}
+
+function door(ctx, x, y, w, h) {
+  ctx.fillStyle = L.door;
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = shade(L.door, 0.15);
+  for (let i = 1; i < 4; i++) ctx.fillRect(x + i * w / 4, y + 2, 1, h - 2);
+  ctx.fillStyle = L.trim;
+  ctx.fillRect(x - 3, y - 4, w + 6, 4);
+}
+
+function bayRest(ctx, i) {
+  const x = bayX(i);
+  door(ctx, x + 50, 92, 60, 136);
+  amphora(ctx, x + 20, 226);
+  amphora(ctx, x + 138, 226, '#8f4a26');
+  bench(ctx, x + 8, 262, BAY_W - 16);
+  bench(ctx, x + 18, 286, BAY_W - 30);
+}
+
+function bayTemple(ctx) {
+  const x = bayX(2), cx = x + BAY_W / 2;
+  ctx.fillStyle = '#3a2418';
+  ctx.fillRect(x + 20, 80, BAY_W - 40, 148);
+  ctx.fillStyle = 'rgba(255,200,90,.12)';
+  ctx.fillRect(x + 20, 80, BAY_W - 40, 148);
+  // статуя Фортуны
+  ctx.fillStyle = '#b9ab95';
+  ctx.fillRect(cx - 18, 196, 36, 32);
+  ctx.fillStyle = '#e8e0d0';
+  ctx.fillRect(cx - 8, 140, 16, 56);
   ctx.beginPath();
-  ctx.ellipse(x, y, 12, 4, 0, 0, Math.PI * 2);
+  ctx.arc(cx, 132, 8, 0, Math.PI * 2);
   ctx.fill();
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(Math.sin(hit * 30) * hit * 0.4);
-  ctx.fillStyle = '#6b4a2b';
-  ctx.fillRect(-2, -34, 4, 34);
-  ctx.fillStyle = '#d6b45e';
-  roundRect(ctx, -9, -34, 18, 20, 6);
-  ctx.fill();
-  ctx.strokeStyle = '#8a6d2c';
-  ctx.lineWidth = 1.5;
+  ctx.fillRect(cx + 6, 146, 14, 4);
+  ctx.strokeStyle = '#d9a441';
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(-9, -26);
-  ctx.lineTo(9, -26);
-  ctx.moveTo(-9, -19);
-  ctx.lineTo(9, -19);
+  ctx.arc(cx + 24, 150, 10, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.fillStyle = '#d6b45e';
-  ctx.beginPath();
-  ctx.arc(0, -40, 7, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#6b4a2b';
-  ctx.fillRect(-14, -30, 28, 3);
-  ctx.restore();
-}
-
-function drawInfirmary(ctx) {
-  const { house, walk } = PLACES.heal;
-  ctx.fillStyle = 'rgba(255,255,255,.18)';
-  roundRect(ctx, walk.x - 8, walk.y - 10, walk.w + 16, walk.h + 18, 14);
-  ctx.fill();
-  wall(ctx, house.x + 10, house.y + 30, house.w - 20, house.h - 30, '#efe4d0');
-  for (let i = 0; i < 4; i++) {
-    const x = house.x + 34 + i * 64;
-    if (i === 1 || i === 2) continue;
-    ctx.fillStyle = '#5a4636';
-    roundRect(ctx, x, house.y + 46, 22, 26, 10);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#4b3a2c';
-  roundRect(ctx, house.x + house.w / 2 - 20, house.y + 42, 40, house.h - 42, 18);
-  ctx.fill();
-  roof(ctx, house.x + 4, house.y + 2, house.w - 8, 30, '#b5532f');
-  // посох со змеёй
-  const cx = house.x + house.w / 2, cy = house.y + 16;
-  ctx.fillStyle = '#fbf6ec';
-  ctx.beginPath();
-  ctx.arc(cx, cy, 13, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#d0343a';
-  ctx.fillRect(cx - 3, cy - 9, 6, 18);
-  ctx.fillRect(cx - 9, cy - 3, 18, 6);
-  // койки
-  for (let i = 0; i < 3; i++) {
-    const x = walk.x + 26 + i * 80, y = walk.y + walk.h - 30;
-    ctx.fillStyle = 'rgba(0,0,0,.18)';
-    ctx.fillRect(x + 2, y + 4, 54, 18);
-    ctx.fillStyle = '#8b6a48';
-    ctx.fillRect(x, y, 54, 18);
-    ctx.fillStyle = '#f6f1e6';
-    ctx.fillRect(x + 2, y + 2, 50, 12);
-    ctx.fillStyle = '#e6dccb';
-    ctx.fillRect(x + 2, y + 2, 12, 12);
-  }
-  plaque(ctx, house.x + house.w / 2, house.y + house.h + 2, 'Лазарет');
-}
-
-function drawRest(ctx, random) {
-  const { house, walk } = PLACES.rest;
-  ctx.fillStyle = 'rgba(80,120,60,.28)';
-  roundRect(ctx, walk.x - 8, walk.y - 10, walk.w + 16, walk.h + 18, 18);
-  ctx.fill();
-  for (let i = 0; i < 260; i++) {
-    ctx.fillStyle = random() < 0.5 ? 'rgba(70,120,50,.35)' : 'rgba(120,160,70,.3)';
-    ctx.fillRect(walk.x + random() * walk.w, walk.y + random() * walk.h, 2, 3);
-  }
-  // навес в полоску
-  wall(ctx, house.x + 14, house.y + 30, house.w - 28, house.h - 30, '#d9c3a0');
-  for (let i = 0; i < 4; i++) column(ctx, house.x + 26 + i * 75, house.y + 26, house.h - 26);
-  for (let i = 0; i < 12; i++) {
-    ctx.fillStyle = i % 2 ? '#f3ead8' : '#8e3b46';
+  for (let k = 0; k < 4; k++) {
+    const a = k * Math.PI / 4;
     ctx.beginPath();
-    const x = house.x + 6 + i * ((house.w - 12) / 12);
-    ctx.moveTo(x, house.y + 6);
-    ctx.lineTo(x + (house.w - 12) / 12, house.y + 6);
-    ctx.lineTo(x + (house.w - 12) / 12, house.y + 30);
-    ctx.quadraticCurveTo(x + (house.w - 12) / 24, house.y + 38, x, house.y + 30);
-    ctx.fill();
+    ctx.moveTo(cx + 24 - Math.cos(a) * 10, 150 - Math.sin(a) * 10);
+    ctx.lineTo(cx + 24 + Math.cos(a) * 10, 150 + Math.sin(a) * 10);
+    ctx.stroke();
   }
-  // скамьи
-  for (const [x, y] of [[walk.x + 20, walk.y + 30], [walk.x + walk.w - 76, walk.y + 30],
-    [walk.x + 20, walk.y + walk.h - 34], [walk.x + walk.w - 76, walk.y + walk.h - 34]]) {
-    ctx.fillStyle = 'rgba(0,0,0,.2)';
-    ctx.fillRect(x + 2, y + 6, 56, 10);
-    ctx.fillStyle = '#d9cdb8';
-    ctx.fillRect(x, y, 56, 10);
-    ctx.fillStyle = '#b3a68f';
-    ctx.fillRect(x + 4, y + 10, 6, 6);
-    ctx.fillRect(x + 46, y + 10, 6, 6);
+  for (const dx of [-44, 44]) {
+    ctx.fillStyle = '#c9b99b';
+    ctx.fillRect(cx + dx - 4, 206, 8, 22);
   }
-  // фонтан
-  const f = FOUNTAIN;
-  ctx.fillStyle = 'rgba(0,0,0,.2)';
-  ctx.beginPath();
-  ctx.ellipse(f.x + 3, f.y + 6, f.r + 4, f.r * 0.55 + 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#d9cfbf';
-  ctx.beginPath();
-  ctx.ellipse(f.x, f.y, f.r + 4, f.r * 0.55 + 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#4f9fc4';
-  ctx.beginPath();
-  ctx.ellipse(f.x, f.y, f.r - 2, f.r * 0.55 - 2, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#d9cfbf';
-  ctx.fillRect(f.x - 4, f.y - 26, 8, 26);
-  ctx.beginPath();
-  ctx.ellipse(f.x, f.y - 26, 12, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  plaque(ctx, house.x + house.w / 2, house.y + house.h + 2, 'Зона отдыха', 15, '#5d6e3a');
 }
 
-function drawForge(ctx) {
-  const { house, walk } = PLACES.forge;
-  ctx.fillStyle = 'rgba(60,50,45,.22)';
-  roundRect(ctx, walk.x - 8, walk.y - 10, walk.w + 16, walk.h + 18, 14);
-  ctx.fill();
-  wall(ctx, house.x + 10, house.y + 22, house.w - 20, house.h - 22, '#7c726a');
-  ctx.strokeStyle = 'rgba(0,0,0,.18)';
-  ctx.lineWidth = 1;
-  for (let row = 0; row < 4; row++) {
-    for (let col = 0; col < 12; col++) {
-      ctx.strokeRect(house.x + 10 + col * 22 + (row % 2) * 11, house.y + 24 + row * 12, 22, 12);
-    }
+function bayForge(ctx) {
+  const x = bayX(3);
+  ctx.fillStyle = '#2a1a12';
+  ctx.fillRect(x + 22, 132, 70, 96);
+  ctx.fillStyle = '#4b3022';
+  ctx.fillRect(x + 16, 124, 82, 10);
+  // стойка с оружием на стене
+  for (let k = 0; k < 4; k++) {
+    ctx.fillStyle = '#b9c1c8';
+    ctx.fillRect(x + 108 + k * 10, 100, 3, 40);
+    ctx.fillStyle = '#5a3a22';
+    ctx.fillRect(x + 107 + k * 10, 138, 5, 8);
   }
-  ctx.fillStyle = '#5c534c';
-  ctx.fillRect(house.x + house.w - 60, house.y - 10, 26, 40);
-  roof(ctx, house.x + 4, house.y + 2, house.w - 8, 22, '#5a5048');
-  ctx.fillStyle = '#2a201a';
-  roundRect(ctx, house.x + 40, house.y + 34, 56, house.h - 34, 20);
+  ctx.fillStyle = '#6d5a3a';
+  ctx.beginPath();
+  ctx.arc(x + 124, 176, 14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#9b7b4a';
+  ctx.beginPath();
+  ctx.arc(x + 124, 176, 5, 0, Math.PI * 2);
   ctx.fill();
   // наковальня
-  const ax = walk.x + walk.w / 2, ay = walk.y + 50;
-  ctx.fillStyle = 'rgba(0,0,0,.22)';
-  ctx.beginPath();
-  ctx.ellipse(ax, ay + 2, 26, 6, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#6b4a2b';
-  ctx.fillRect(ax - 10, ay - 14, 20, 16);
-  ctx.fillStyle = '#3d4247';
-  ctx.beginPath();
-  ctx.moveTo(ax - 24, ay - 26);
-  ctx.lineTo(ax + 18, ay - 26);
-  ctx.quadraticCurveTo(ax + 30, ay - 26, ax + 32, ay - 20);
-  ctx.lineTo(ax + 12, ay - 18);
-  ctx.lineTo(ax + 8, ay - 12);
-  ctx.lineTo(ax - 14, ay - 12);
-  ctx.lineTo(ax - 18, ay - 18);
-  ctx.lineTo(ax - 24, ay - 20);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#5b6168';
-  ctx.fillRect(ax - 24, ay - 27, 44, 3);
-  // стойка с доспехами
-  for (let i = 0; i < 2; i++) {
-    const x = walk.x + 40 + i * (walk.w - 80), y = walk.y + walk.h - 40;
-    ctx.fillStyle = '#6b4a2b';
-    ctx.fillRect(x - 2, y - 30, 4, 34);
-    ctx.fillStyle = i ? '#c58a3e' : '#a9b0b6';
-    roundRect(ctx, x - 11, y - 30, 22, 22, 6);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x, y - 36, 8, Math.PI, 0);
-    ctx.fill();
-  }
-  plaque(ctx, house.x + house.w / 2, house.y + house.h + 2, 'Кузница', 15, '#4e4640');
+  const ax = x + 72, ay = 278;
+  ctx.fillStyle = 'rgba(0,0,0,.3)';
+  ctx.fillRect(ax - 20, ay, 40, 5);
+  ctx.fillStyle = '#5a3a22';
+  ctx.fillRect(ax - 8, ay - 14, 16, 14);
+  ctx.fillStyle = '#3b3f44';
+  ctx.fillRect(ax - 18, ay - 22, 34, 8);
+  ctx.fillRect(ax + 16, ay - 20, 8, 4);
+  ctx.fillStyle = '#6a7077';
+  ctx.fillRect(ax - 18, ay - 22, 34, 2);
 }
 
-function drawTemple(ctx) {
-  const t = TEMPLE;
-  const top = t.y + 6;
-  ctx.fillStyle = 'rgba(0,0,0,.18)';
-  ctx.fillRect(t.x + 6, t.y + t.h - 16, t.w, 14);
-  for (let i = 0; i < 3; i++) {
-    ctx.fillStyle = shade('#e6dccb', -0.06 * i);
-    ctx.fillRect(t.x + 10 - i * 6, t.y + t.h - 30 + i * 8, t.w - 20 + i * 12, 8);
+function bayHeal(ctx) {
+  const x = bayX(4);
+  door(ctx, x + 58, 104, 46, 124);
+  // полки с травами и склянками
+  ctx.fillStyle = '#5a3a22';
+  ctx.fillRect(x + 10, 120, 40, 4);
+  ctx.fillRect(x + 10, 150, 40, 4);
+  ctx.fillRect(x + 112, 120, 40, 4);
+  const jars = ['#7fb069', '#c9a227', '#a3c4d9', '#c9584a'];
+  for (let k = 0; k < 4; k++) {
+    ctx.fillStyle = jars[k];
+    ctx.fillRect(x + 13 + k * 9, 110, 6, 10);
+    ctx.fillRect(x + 115 + k * 9, 110, 6, 10);
+    ctx.fillStyle = jars[3 - k];
+    ctx.fillRect(x + 13 + k * 9, 140, 6, 10);
   }
-  wall(ctx, t.x + 26, top + 48, t.w - 52, t.h - 84, '#d8ccb6');
-  ctx.fillStyle = '#3c2f2a';
-  roundRect(ctx, t.x + t.w / 2 - 22, top + 74, 44, t.h - 110, 4);
-  ctx.fill();
-  for (let i = 0; i < 6; i++) column(ctx, t.x + 22 + i * ((t.w - 44) / 5), top + 44, t.h - 82);
-  ctx.fillStyle = '#efe6d6';
-  ctx.fillRect(t.x + 10, top + 34, t.w - 20, 12);
-  const grad = ctx.createLinearGradient(0, top, 0, top + 34);
-  grad.addColorStop(0, '#f6efe2');
-  grad.addColorStop(1, '#d9ccb4');
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.moveTo(t.x + 6, top + 34);
-  ctx.lineTo(t.x + t.w / 2, top);
-  ctx.lineTo(t.x + t.w - 6, top + 34);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = '#b9a98b';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  // колесо Фортуны
-  const cx = t.x + t.w / 2, cy = top + 22;
-  ctx.strokeStyle = '#d4a23a';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(cx, cy, 9, 0, Math.PI * 2);
-  ctx.stroke();
-  for (let i = 0; i < 8; i++) {
-    const a = i * Math.PI / 4;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.cos(a) * 9, cy + Math.sin(a) * 9);
-    ctx.stroke();
-  }
-  plaque(ctx, cx, t.y + t.h - 6, 'Храм Фортуны', 14, '#7a5a2a');
+  // чаша со змеёй
+  ctx.fillStyle = '#d9a441';
+  ctx.fillRect(x + 72, 80, 18, 6);
+  ctx.fillRect(x + 79, 86, 4, 10);
+  for (const s of PLACES.heal.seats) cot(ctx, s.x, s.y);
 }
 
-function drawGate(ctx) {
-  const g = GATE;
-  ctx.fillStyle = '#8f8172';
-  ctx.fillRect(g.x - 26, g.y - 6, g.w + 52, g.h + 6);
-  ctx.fillStyle = '#a89a89';
-  ctx.fillRect(g.x - 30, g.y - 12, g.w + 60, 10);
-  ctx.fillStyle = '#2b2018';
-  ctx.beginPath();
-  ctx.moveTo(g.x, g.y + g.h);
-  ctx.lineTo(g.x, g.y + 26);
-  ctx.arc(g.x + g.w / 2, g.y + 26, g.w / 2, Math.PI, 0);
-  ctx.lineTo(g.x + g.w, g.y + g.h);
-  ctx.fill();
-  ctx.strokeStyle = '#6b4a2b';
-  ctx.lineWidth = 3;
-  for (let x = g.x + 12; x < g.x + g.w; x += 16) {
-    ctx.beginPath();
-    ctx.moveTo(x, g.y + 14);
-    ctx.lineTo(x, g.y + g.h);
-    ctx.stroke();
+function sandYard(ctx, random) {
+  const g = ctx.createLinearGradient(0, WALL.sand, 0, WALL.rail);
+  g.addColorStop(0, L.sandDark);
+  g.addColorStop(0.3, L.sand);
+  g.addColorStop(1, shade(L.sand, -0.06));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, WALL.sand, FIELD_W, WALL.rail - WALL.sand);
+  for (let i = 0; i < 1400; i++) {
+    ctx.fillStyle = random() < 0.5 ? 'rgba(120,80,40,.12)' : 'rgba(255,245,220,.18)';
+    ctx.fillRect(random() * FIELD_W, WALL.sand + random() * (WALL.rail - WALL.sand), 2, 2);
   }
-  ctx.beginPath();
-  ctx.moveTo(g.x, g.y + 40);
-  ctx.lineTo(g.x + g.w, g.y + 40);
-  ctx.stroke();
-  plaque(ctx, g.x + g.w / 2, g.y - 8, 'На арену', 14, '#7a2f24');
+  ctx.fillStyle = 'rgba(80,40,20,.18)';
+  ctx.fillRect(0, WALL.sand, FIELD_W, 10);
+}
+
+function railing(ctx) {
+  ctx.fillStyle = 'rgba(40,20,10,.25)';
+  ctx.fillRect(0, WALL.rail - 4, FIELD_W, 8);
+  ctx.fillStyle = L.front;
+  ctx.fillRect(0, WALL.front, FIELD_W, FIELD_H - WALL.front);
+  ctx.fillStyle = shade(L.front, 0.08);
+  for (let y = WALL.front + 12; y < FIELD_H; y += 14) ctx.fillRect(0, y, FIELD_W, 1);
+  ctx.fillStyle = L.railDark;
+  ctx.fillRect(0, WALL.front - 4, FIELD_W, 4);
+  for (let x = 14; x < FIELD_W; x += 22) {
+    ctx.fillStyle = L.rail;
+    ctx.fillRect(x, WALL.rail + 8, 5, WALL.front - WALL.rail - 8);
+  }
+  for (let x = 10; x < FIELD_W; x += 132) {
+    ctx.fillStyle = L.railDark;
+    ctx.fillRect(x, WALL.rail - 6, 12, WALL.front - WALL.rail + 2);
+    ctx.fillStyle = shade(L.rail, 0.15);
+    ctx.fillRect(x - 2, WALL.rail - 10, 16, 5);
+  }
+  ctx.fillStyle = L.rail;
+  ctx.fillRect(0, WALL.rail, FIELD_W, 8);
+  ctx.fillStyle = shade(L.rail, 0.2);
+  ctx.fillRect(0, WALL.rail, FIELD_W, 2);
+  ctx.fillStyle = L.rail;
+  ctx.fillRect(0, WALL.rail + 20, FIELD_W, 5);
+}
+
+export function paintLudus(ctx) {
+  signs = [];
+  const random = seeded(7);
+  // крыша и стена
+  ctx.fillStyle = L.roof;
+  ctx.fillRect(0, 0, FIELD_W, WALL.top);
+  ctx.fillStyle = shade(L.roof, 0.12);
+  for (let x = 0; x < FIELD_W; x += 46) ctx.fillRect(x, 6, 30, 6);
+  const wall = ctx.createLinearGradient(0, WALL.top, 0, WALL.floor);
+  wall.addColorStop(0, L.wallDark);
+  wall.addColorStop(1, L.wall);
+  ctx.fillStyle = wall;
+  ctx.fillRect(0, WALL.top, FIELD_W, WALL.floor - WALL.top);
+  ctx.fillStyle = L.trim;
+  ctx.fillRect(0, WALL.top, FIELD_W, 10);
+  ctx.fillStyle = shade(L.trim, -0.3);
+  ctx.fillRect(0, WALL.top + 10, FIELD_W, 3);
+  // плющ с крыши
+  for (const x of [120, 470, 830]) {
+    for (let k = 0; k < 9; k++) {
+      ctx.fillStyle = k % 2 ? '#4d6b2e' : '#3b5523';
+      ctx.fillRect(x + (random() - 0.5) * 30, WALL.top + k * 5, 6, 6);
+    }
+  }
+  // пол галереи
+  ctx.fillStyle = L.floor;
+  ctx.fillRect(0, WALL.floor, FIELD_W, WALL.step - WALL.floor);
+  ctx.fillStyle = L.floorLine;
+  for (let y = WALL.floor + 16; y < WALL.step; y += 16) ctx.fillRect(0, y, FIELD_W, 1);
+  ctx.fillStyle = 'rgba(0,0,0,.25)';
+  ctx.fillRect(0, WALL.floor, FIELD_W, 5);
+  ctx.fillStyle = L.step;
+  ctx.fillRect(0, WALL.step, FIELD_W, WALL.sand - WALL.step);
+  ctx.fillStyle = shade(L.floor, 0.18);
+  ctx.fillRect(0, WALL.step, FIELD_W, 2);
+  for (const i of BAYS.rest) bayRest(ctx, i);
+  bayTemple(ctx);
+  bayForge(ctx);
+  bayHeal(ctx);
+  for (const x of COLUMNS) pillar(ctx, x, WALL.top + 14, WALL.step);
+  sandYard(ctx, random);
+  railing(ctx);
+  plaque(ctx, (bayX(0) + bayX(1) + BAY_W) / 2, 72, 'Зона отдыха', 14, '#5d4426');
+  plaque(ctx, bayX(2) + BAY_W / 2, 72, 'Храм Фортуны', 14, '#7a5a2a');
+  plaque(ctx, bayX(3) + BAY_W / 2, 72, 'Кузница', 14, '#4e4640');
+  plaque(ctx, bayX(4) + BAY_W / 2, 72, 'Лазарет', 14, '#6b2f28');
+  const painted = signs;
+  signs = null;
+  return painted;
 }
 
 export function drawSigns(ctx, list) {
   for (const [x, y, text, size, tone] of list) plaque(ctx, x, y, text, size, tone);
 }
 
-export function paintLudus(ctx) {
-  signs = [];
-  const random = seeded(7);
-  sandFloor(ctx, random, 0, 0, FIELD_W, FIELD_H, SAND);
-  paving(ctx, random, 0, 286, FIELD_W, 36);
-  paving(ctx, random, 320, 0, 22, FIELD_H);
-  paving(ctx, random, 578, 0, 22, FIELD_H);
-  // двор с кругом для поединков
-  const y = PLACES.yard.walk;
-  sandFloor(ctx, random, y.x - 2, y.y - 24, y.w + 4, y.h + 30, '#dcc195');
-  ctx.strokeStyle = 'rgba(140,100,60,.35)';
-  ctx.lineWidth = 3;
-  ctx.setLineDash([10, 8]);
+function drawDummy(ctx, x, y, hit) {
+  ctx.fillStyle = 'rgba(60,30,10,.25)';
+  ctx.fillRect(x - 12, y - 2, 24, 5);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(hit * 30) * hit * 0.3);
+  ctx.fillStyle = '#4a2f1c';
+  ctx.fillRect(-2, -36, 4, 36);
+  ctx.fillRect(-10, -8, 4, 8);
+  ctx.fillRect(6, -8, 4, 8);
+  ctx.fillStyle = '#5c4a30';
   ctx.beginPath();
-  ctx.ellipse(y.x + y.w / 2, y.y + y.h / 2, y.w / 2 - 16, y.h / 2 - 30, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  drawTraining(ctx);
-  drawInfirmary(ctx);
-  drawRest(ctx, random);
-  drawForge(ctx);
-  drawTemple(ctx);
-  drawGate(ctx);
-  for (const [x, yy, h] of [[316, 250, 70], [604, 250, 70], [316, 560, 64], [604, 560, 64], [16, 330, 56],
-    [904, 330, 56]]) cypress(ctx, x, yy, h);
-  const painted = signs;
-  signs = null;
-  return painted;
+  ctx.arc(0, -30, 13, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#7d6a45';
+  ctx.beginPath();
+  ctx.arc(0, -30, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#3d3020';
+  ctx.beginPath();
+  ctx.arc(0, -30, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#2e2a26';
+  ctx.fillRect(-4, -48, 8, 6);
+  ctx.restore();
+}
+
+export function drawLudusLife(ctx, t, dummyHits) {
+  DUMMIES.forEach((d, i) => drawDummy(ctx, d.x, d.y, dummyHits[i] || 0));
+  // огонь в горне кузницы
+  const x = bayX(3) + 57, y = 190;
+  const flicker = 0.6 + 0.25 * Math.sin(t * 9) + 0.15 * Math.sin(t * 23);
+  const glow = ctx.createRadialGradient(x, y, 2, x, y, 46);
+  glow.addColorStop(0, 'rgba(255,190,80,' + (0.95 * flicker).toFixed(3) + ')');
+  glow.addColorStop(1, 'rgba(255,90,20,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x - 46, y - 46, 92, 92);
+  ctx.fillStyle = '#ffcf6b';
+  ctx.fillRect(x - 12, y + 18 - flicker * 6, 24, 6 + flicker * 6);
+  // факелы на колоннах
+  for (const cx of COLUMNS.slice(1, -1)) {
+    const f = 0.7 + 0.3 * Math.sin(t * 11 + cx);
+    ctx.fillStyle = '#4a2f1c';
+    ctx.fillRect(cx - 2, 120, 4, 14);
+    const tg = ctx.createRadialGradient(cx, 116, 1, cx, 116, 26);
+    tg.addColorStop(0, 'rgba(255,200,90,' + (0.6 * f).toFixed(3) + ')');
+    tg.addColorStop(1, 'rgba(255,120,40,0)');
+    ctx.fillStyle = tg;
+    ctx.fillRect(cx - 26, 90, 52, 52);
+    ctx.fillStyle = '#ffd47a';
+    ctx.fillRect(cx - 3, 112 - f * 4, 6, 6 + f * 4);
+  }
+}
+
+export function drawSoon(ctx, t) {
+  // табличка «скоро» у храма
+  const tx = bayX(2) + BAY_W / 2, ty = 106;
+  ctx.save();
+  ctx.translate(tx, ty);
+  ctx.rotate(-0.06);
+  const pulse = 1 + 0.04 * Math.sin(t * 3);
+  ctx.scale(pulse, pulse);
+  ctx.font = '900 13px ' + FONT;
+  ctx.fillStyle = '#e8b93c';
+  roundRect(ctx, -46, -12, 92, 24, 12);
+  ctx.fill();
+  ctx.fillStyle = '#3a2804';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('гача скоро', 0, 1);
+  ctx.restore();
 }
 
 function crowd(ctx, random, cx, cy, rx, ry, rows, gap) {
@@ -592,71 +539,14 @@ export function drawCrowd(ctx, people, t, roar) {
   }
 }
 
-export function drawLudusLife(ctx, t, dummyHits) {
-  DUMMIES.forEach((d, i) => drawDummy(ctx, d.x, d.y, dummyHits[i] || 0));
-  // огонь кузницы
-  const { house } = PLACES.forge;
-  const flicker = 0.55 + 0.25 * Math.sin(t * 9) + 0.15 * Math.sin(t * 23);
-  const fx = house.x + 68, fy = house.y + 58;
-  const glow = ctx.createRadialGradient(fx, fy, 2, fx, fy, 42);
-  glow.addColorStop(0, 'rgba(255,190,80,' + (0.9 * flicker).toFixed(3) + ')');
-  glow.addColorStop(1, 'rgba(255,90,20,0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(fx - 44, fy - 44, 88, 88);
-  // дым из трубы
-  for (let i = 0; i < 4; i++) {
-    const k = (t * 0.35 + i / 4) % 1;
-    ctx.fillStyle = 'rgba(90,90,95,' + (0.35 * (1 - k)).toFixed(3) + ')';
-    ctx.beginPath();
-    ctx.arc(house.x + house.w - 47 + Math.sin(t + i) * 6 * k, house.y - 12 - k * 40, 6 + k * 10, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // струи фонтана
-  const f = FOUNTAIN;
-  ctx.strokeStyle = 'rgba(190,230,255,.85)';
-  ctx.lineWidth = 2;
-  for (let i = 0; i < 4; i++) {
-    const side = i % 2 ? 1 : -1, spread = 10 + (i >> 1) * 7;
-    ctx.beginPath();
-    ctx.moveTo(f.x, f.y - 28);
-    ctx.quadraticCurveTo(f.x + side * spread, f.y - 44 - Math.sin(t * 5 + i) * 2, f.x + side * (spread + 8), f.y - 6);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = 'rgba(255,255,255,.35)';
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < 2; i++) {
-    const k = (t * 0.6 + i / 2) % 1;
-    ctx.beginPath();
-    ctx.ellipse(f.x, f.y, 8 + k * (f.r - 10), (8 + k * (f.r - 10)) * 0.55, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-}
-
-export function drawSoon(ctx, t) {
-  // табличка «скоро» на храме
-  const tx = TEMPLE.x + TEMPLE.w / 2, ty = TEMPLE.y + 120;
-  ctx.save();
-  ctx.translate(tx, ty);
-  ctx.rotate(-0.08);
-  ctx.font = '900 13px ' + FONT;
-  const pulse = 1 + 0.04 * Math.sin(t * 3);
-  ctx.scale(pulse, pulse);
-  ctx.fillStyle = '#e8b93c';
-  roundRect(ctx, -44, -12, 88, 24, 12);
-  ctx.fill();
-  ctx.fillStyle = '#3a2804';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('гача скоро', 0, 1);
-  ctx.restore();
-}
-
 // --- гладиатор ---
 
 export function drawGladiator(ctx, g, t, scene) {
   const fate = scene === 'arena' ? g.fate : null;
-  const lying = fate === 'down' || fate === 'dead';
+  const pose = scene === 'ludus' && !g.walking ? g.pose : null;
+  const lying = fate === 'down' || fate === 'dead' || pose === 'lie';
   const kneel = fate === 'yield';
+  const sit = pose === 'sit';
   const seed = hashOf(g.login);
   const skin = SKIN[seed % SKIN.length];
   const metal = METAL[Math.min(METAL.length - 1, g.armor)];
@@ -683,8 +573,8 @@ export function drawGladiator(ctx, g, t, scene) {
   ctx.scale(g.face < 0 ? -1 : 1, 1);
   if (fate === 'dead') ctx.globalAlpha = 0.75;
   const walk = g.walking && !lying && !kneel ? Math.sin(t * 12 + seed) : 0;
-  const bob = Math.abs(walk) * 1.2;
-  const low = kneel ? 6 : 0;
+  const bob = Math.abs(walk) * 1.2 + (sit ? Math.max(0, Math.sin(t * 1.5 + seed)) * 0.6 : 0);
+  const low = kneel ? 6 : sit ? 5 : 0;
   ctx.translate(0, -bob + low);
   // щит за спиной
   ctx.fillStyle = shade(metal, -0.3);
@@ -704,6 +594,12 @@ export function drawGladiator(ctx, g, t, scene) {
   if (kneel) {
     ctx.fillRect(-4, -10, 4, 5);
     ctx.fillRect(1, -6, 7, 4);
+  } else if (sit) {
+    ctx.fillRect(-3, -11, 10, 3.5);
+    ctx.fillRect(-3, -8, 10, 3);
+    ctx.fillRect(5, -9, 3.5, 7);
+    ctx.fillStyle = '#5a3a22';
+    ctx.fillRect(5, -3, 5, 2.5);
   } else {
     ctx.fillRect(-4 + walk * 2, -10, 3.5, 10);
     ctx.fillRect(1 - walk * 2, -10, 3.5, 10);
@@ -768,7 +664,7 @@ export function drawGladiator(ctx, g, t, scene) {
   ctx.fill();
   // меч
   const blade = BLADE[Math.min(BLADE.length - 1, g.weapon)];
-  if (!lying && !kneel) {
+  if (!lying && !kneel && !sit) {
     const swing = g.swing > 0 ? Math.sin((1 - g.swing / 0.3) * Math.PI) : 0;
     ctx.save();
     ctx.translate(6, -16);
@@ -809,8 +705,11 @@ export function drawGladiator(ctx, g, t, scene) {
 
 export function drawLabel(ctx, g, scene, highlight) {
   const fate = scene === 'arena' ? g.fate : null;
-  const lying = fate === 'down' || fate === 'dead';
-  const top = g.y - (lying ? 20 : 43) * FIGURE[scene];
+  const pose = scene === 'ludus' && !g.walking ? g.pose : null;
+  const lying = fate === 'down' || fate === 'dead' || pose === 'lie';
+  // на скамьях и койках соседи рядом — подписи через одну выше, чтобы не налезали
+  const stagger = pose && g.seat !== null && g.seat !== undefined && g.seat % 2 ? 15 : 0;
+  const top = g.y - (lying ? 20 : pose === 'sit' ? 37 : 43) * FIGURE[scene] - stagger;
   ctx.font = '700 12px ' + FONT;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';

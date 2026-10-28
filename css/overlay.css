@@ -166,7 +166,7 @@ body {
   100% { transform: translate(-50%, -50%) scale(.96); opacity: 0; }
 }
 
-.cards { position: absolute; left: 12px; bottom: 12px; z-index: 4; display: flex; gap: 10px; align-items: flex-end; }
+.cards { position: absolute; left: 12px; bottom: 66px; z-index: 4; display: flex; gap: 10px; align-items: flex-end; }
 .profile {
   width: 236px; padding: 9px 11px 10px; border-radius: 14px; background: rgba(23, 19, 31, .94);
   box-shadow: 0 0 0 2px var(--c, var(--accent)), 0 12px 30px rgba(0, 0, 0, .5); animation: card-in .35s ease-out;
@@ -213,3 +213,16 @@ body {
 .results li.none { color: var(--muted); font-size: 13px; border: 0; }
 .results .next { color: var(--muted); font-size: 15px; }
 .pause p { color: var(--muted); font-size: 16px; }
+
+/* команды на экране — на полу перед перилами */
+.commands {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; height: 54px; padding: 4px 12px;
+  display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 3px 14px;
+  background: linear-gradient(rgba(30, 16, 10, .55), rgba(30, 16, 10, .9));
+}
+.command { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.command code {
+  padding: 1px 7px; border-radius: 6px; background: var(--accent); color: var(--accent-ink);
+  font: 800 13.5px/1.35 "Segoe UI", system-ui, sans-serif;
+}
+.command small { font-size: 13px; color: #f1e3cc; }

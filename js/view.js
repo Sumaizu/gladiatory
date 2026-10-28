@@ -1,8 +1,8 @@
-import { ARMORS, STATS, WEAPONS, healPrice, maxHp, xpNeed } from './balance.js';
+import { ARMORS, STATS, WEAPONS, maxHp, xpNeed } from './balance.js';
 import { FIELD_H, FIELD_W, DUMMIES, PLACES } from './places.js';
 import { FONT, drawCrowd, drawGladiator, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
-import { play, setSound } from './sound.js';
+import { ambience, play, setSound } from './sound.js';
 
 const STAGE_WIDTH = 1280;
 const STAGE_HEIGHT = 720;
@@ -13,9 +13,18 @@ const FLOAT_TIME = 1.1;
 const PIXEL = 2.5;
 const BLOOD = ['#8f1414', '#a8191b', '#6e0d0f', '#c22a22'];
 const WHERE = {
-  train: 'трен', heal: 'лазарет', rest: 'отдых', forge: 'кузница', yard: 'двор',
+  train: 'трен', heal: 'лазарет', rest: 'отдых', forge: 'кузница',
   fight: 'в бою', down: 'пал', yield: 'сдался', dead: 'погиб',
 };
+
+const COMMANDS = {
+  ludus: [['трен', 'тренироваться: опыт'], ['лазарет', 'лечиться бесплатно'], ['отдых', 'сесть на скамью'],
+    ['оружие', 'купить меч получше'], ['доспех', 'купить доспех'], ['сила · ловкость · выносливость', 'вложить очко'],
+    ['проф', 'твоя карточка']],
+  battle: [['сдаюсь', 'сдаться и точно выжить, но награда меньше'], ['проф', 'твоя карточка'],
+    ['что угодно', 'вступить: в бой пойдёшь следующим']],
+};
+COMMANDS.results = COMMANDS.ludus;
 
 const $ = (id) => document.getElementById(id);
 
@@ -102,6 +111,8 @@ export class View {
       this.floats = [];
       this.keys = {};
       this.scene = null;
+      if (this.cardNodes) for (const box of this.cardNodes.values()) box.remove();
+      this.cardNodes = new Map();
     }
     if (!game) return;
     const scene = game.state === 'battle' ? 'arena' : 'ludus';
@@ -112,6 +123,7 @@ export class View {
       this.drops = [];
     }
     this._events(game);
+    this._noise(game, scene, demo);
     this.fade = Math.max(0, this.fade - dt);
     this.roar = Math.max(0, this.roar - dt * 0.8);
     for (let i = 0; i < this.dummyHits.length; i++) this.dummyHits[i] = Math.max(0, this.dummyHits[i] - dt);
@@ -121,6 +133,15 @@ export class View {
       this.domIn = DOM_EVERY;
       this._dom(game);
     }
+  }
+
+  // фон: гул трибун на арене, тихий лудус; последние секунды лудуса — отсчёт
+  _noise(game, scene, demo) {
+    const live = !demo && game.state !== 'stopped' && !game.paused;
+    ambience(live ? scene : null, live ? this.roar : 0);
+    const left = Math.ceil(game.timer);
+    if (live && game.state === 'ludus' && left <= 5 && left > 0 && left !== this.tick) play(left === 1 ? 'tickLast' : 'tick');
+    this.tick = left;
   }
 
   _events(game) {
@@ -159,10 +180,12 @@ export class View {
       sound('coin');
     } else if (e.type === 'join') {
       sound('join');
+    } else if (e.type === 'go') {
+      sound(e.place === 'heal' ? 'heal' : e.place === 'train' ? 'train' : 'step');
     } else if (e.type === 'phase') {
       this._banner(game, e.state);
       if (e.state === 'battle') sound('horn');
-      if (e.state === 'results') sound('cheer');
+      if (e.state === 'results') sound(game.results && game.results.champion ? 'champion' : 'cheer');
     }
   }
 
@@ -249,7 +272,9 @@ export class View {
       for (const g of figures) {
         if (g.place !== 'train' || g.walking || g.swing <= 0) continue;
         DUMMIES.forEach((d, i) => {
-          if (Math.hypot(d.x - g.x, d.y - g.y) < 46) this.dummyHits[i] = 0.4;
+          if (Math.hypot(d.x - g.x, d.y - g.y) >= 46) return;
+          if (this.dummyHits[i] < 0.2 && !this.quiet) play('thwack');
+          this.dummyHits[i] = 0.4;
         });
       }
       drawLudusLife(w, t, this.dummyHits);
@@ -346,17 +371,22 @@ export class View {
       node.replaceChildren();
       if (game.notice) {
         node.append(el('span', 'warn', game.notice));
-      } else if (game.state === 'ludus') {
-        for (const word of ['трен', 'лазарет', 'отдых', 'оружие', 'доспех', 'сила', 'ловкость', 'выносливость',
-          'проф']) node.append(el('code', '', word));
       } else if (game.state === 'battle') {
-        node.append(el('code', '', 'сдаюсь'), el('small', '', '— сдаться и точно выжить'));
-        if (game.waiting) node.append(el('small', '', ' · в лудусе ждут: ' + game.waiting));
+        node.append(el('small', '', game.waiting ? 'В лудусе ждут следующего боя: ' + game.waiting
+          : 'Бой до последнего на ногах'));
       } else if (game.state === 'results') {
         node.append(el('small', '', 'Награды розданы — скоро снова в лудус'));
       } else {
         node.append(el('small', '', 'Напиши в чат что угодно — и ты гладиатор'));
       }
+    });
+    this._set('commands', game.state, (node) => {
+      const list = COMMANDS[game.state] || COMMANDS.ludus;
+      node.replaceChildren(...list.map(([word, text]) => {
+        const item = el('span', 'command');
+        item.append(el('code', '', word), el('small', '', text));
+        return item;
+      }));
     });
   }
 
@@ -404,18 +434,35 @@ export class View {
     });
   }
 
+  // карточку не пересоздаём, а обновляем изнутри: иначе анимация появления мигает
   _cards(game) {
     const cards = game.cards.map((c) => game.members.get(c.login)).filter(Boolean);
-    const key = cards.map((g) => [g.login, g.level, Math.floor(g.xp), Math.round(g.hp), g.coins, g.str, g.agi, g.vit,
-      g.points, g.weapon, g.armor].join(':')).join('|');
-    this._set('cards', key, (node) => {
-      node.replaceChildren(...cards.map((g) => this._profile(g)));
-    });
+    const node = $('cards');
+    this.cardNodes = this.cardNodes || new Map();
+    for (const [login, box] of this.cardNodes) {
+      if (cards.some((g) => g.login === login)) continue;
+      box.remove();
+      this.cardNodes.delete(login);
+    }
+    for (const g of cards) {
+      let box = this.cardNodes.get(g.login);
+      const key = [g.level, Math.floor(g.xp), Math.round(g.hp), g.coins, g.str, g.agi, g.vit, g.points, g.weapon,
+        g.armor, g.fights].join(':');
+      if (!box) {
+        box = el('div', 'profile');
+        box.dataset.key = '';
+        this.cardNodes.set(g.login, box);
+      }
+      if (box.parentNode !== node) node.append(box);
+      if (box.dataset.key === key) continue;
+      box.dataset.key = key;
+      box.style.setProperty('--c', g.color);
+      box.replaceChildren(...this._profile(g));
+    }
   }
 
   _profile(g) {
-    const box = el('div', 'profile');
-    box.style.setProperty('--c', g.color);
+    const box = { parts: [], append(...items) { this.parts.push(...items); } };
     const top = el('div', 'top');
     top.append(el('span', 'who', g.name), el('span', 'lv', g.level + ' ур.'));
     const bar = (kind, part, text) => {
@@ -438,7 +485,7 @@ export class View {
       return p;
     };
     gear.append(line('Оружие', WEAPONS[g.weapon]), line('Доспех', ARMORS[g.armor]),
-      line('Монеты', String(g.coins) + ' · лазарет ' + healPrice(g.level)),
+      line('Монеты', String(g.coins)),
       line('Бои', g.fights + ' · побед ' + g.wins + ' · нокаутов ' + g.kos + ' · убийств ' + g.kills));
     box.append(top, bar('hp', g.hp / hpMax, Math.round(g.hp) + ' / ' + hpMax + ' здоровья'),
       bar('xp', g.xp / need, Math.floor(g.xp) + ' / ' + need + ' опыта'), stats);
@@ -446,7 +493,7 @@ export class View {
       box.append(el('div', 'gear points', 'Свободных очков: ' + g.points + ' — пиши «сила», «ловкость» или «выносливость»'));
     }
     box.append(gear);
-    return box;
+    return box.parts;
   }
 
   _results(game) {

@@ -1,6 +1,6 @@
 // все звуки синтезируются на лету — файлов нет
 const GAP = { hit: 0.07, crit: 0.1, miss: 0.12, down: 0.15, death: 0.4, horn: 1, level: 0.3, coin: 0.15, join: 0.2,
-  cheer: 1.5 };
+  cheer: 1.5, champion: 2, thwack: 0.09, heal: 0.4, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5 };
 
 let audio = null;
 let master = null;
@@ -92,11 +92,43 @@ const SOUNDS = {
   join(ac) {
     tone(ac, { freq: 440, to: 660, dur: 0.18, type: 'triangle', gain: 0.12 });
   },
+  thwack(ac) {
+    tone(ac, { freq: 180 + Math.random() * 40, to: 90, dur: 0.12, type: 'triangle', gain: 0.22 });
+    hiss(ac, { dur: 0.06, gain: 0.18, freq: 1200, q: 1.5 });
+  },
+  heal(ac) {
+    [659, 880, 1175].forEach((freq, i) => tone(ac, { freq, dur: 0.5, type: 'sine', gain: 0.1, at: i * 0.09 }));
+  },
+  train(ac) {
+    tone(ac, { freq: 330, dur: 0.12, type: 'square', gain: 0.05 });
+    tone(ac, { freq: 440, dur: 0.16, type: 'square', gain: 0.05, at: 0.1 });
+  },
+  step(ac) {
+    hiss(ac, { dur: 0.08, gain: 0.12, freq: 500, q: 0.8 });
+  },
+  tick(ac) {
+    tone(ac, { freq: 880, dur: 0.09, type: 'square', gain: 0.06 });
+  },
+  tickLast(ac) {
+    tone(ac, { freq: 1320, dur: 0.25, type: 'square', gain: 0.07 });
+  },
+  champion(ac) {
+    hiss(ac, { dur: 2.2, gain: 0.25, freq: 1100, q: 0.4 });
+    [392, 523, 659, 784, 1046].forEach((freq, i) => {
+      tone(ac, { freq, dur: i === 4 ? 0.9 : 0.22, type: 'sawtooth', gain: 0.07, at: i * 0.16 });
+      tone(ac, { freq: freq / 2, dur: i === 4 ? 0.9 : 0.22, type: 'square', gain: 0.04, at: i * 0.16 });
+    });
+  },
   cheer(ac) {
     hiss(ac, { dur: 1.6, gain: 0.25, freq: 1100, q: 0.4 });
     hiss(ac, { dur: 1.2, gain: 0.15, freq: 2400, q: 0.8, at: 0.1 });
   },
 };
+
+// вызывается по нажатию «Начать»: браузер разрешает звук только после действия человека
+export function unlock() {
+  if (enabled) context();
+}
 
 export function setSound(on, level) {
   enabled = Boolean(on);
@@ -117,9 +149,36 @@ export function play(name) {
 export function playAll(level) {
   const was = [enabled, volume];
   setSound(true, level);
-  ['horn', 'hit', 'crit', 'down', 'level', 'death'].forEach((name, i) => setTimeout(() => {
+  const names = ['horn', 'thwack', 'hit', 'crit', 'down', 'heal', 'level', 'death', 'champion'];
+  names.forEach((name, i) => setTimeout(() => {
     lastPlayed.delete(name);
     play(name);
-    if (i === 5) setSound(was[0], was[1] * 100);
+    if (i === names.length - 1) setSound(was[0], was[1] * 100);
   }, i * 450));
+}
+
+// фоновый шум: гул трибун на арене (громче, когда ревут), почти тишина в лудусе
+let bed = null;
+
+export function ambience(scene, roar = 0) {
+  if (!scene || !enabled || volume <= 0) {
+    if (bed) bed.amp.gain.setTargetAtTime(0, audio.currentTime, 0.4);
+    return;
+  }
+  const ac = context();
+  if (!ac) return;
+  if (!bed) {
+    const src = ac.createBufferSource(), filter = ac.createBiquadFilter(), amp = ac.createGain();
+    src.buffer = noiseBuffer;
+    src.loop = true;
+    filter.type = 'bandpass';
+    filter.Q.value = 0.6;
+    amp.gain.value = 0;
+    src.connect(filter).connect(amp).connect(master);
+    src.start();
+    bed = { filter, amp };
+  }
+  const arena = scene === 'arena';
+  bed.filter.frequency.setTargetAtTime(arena ? 650 + roar * 500 : 300, ac.currentTime, 0.3);
+  bed.amp.gain.setTargetAtTime(arena ? 0.07 + roar * 0.16 : 0.015, ac.currentTime, 0.3);
 }
