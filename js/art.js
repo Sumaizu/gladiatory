@@ -1,5 +1,6 @@
 // пиксельная графика как в Чатобороне: один пиксель рисунка — два пикселя поля, текстуры и спрайты с обводкой
 import { BAYS, BAY_W, COLUMNS, FIELD_H, FIELD_W, PLACES, WALL, bayX } from './places.js';
+import { tierOf } from './gacha.js';
 
 export const P = 2;
 const W = FIELD_W / P;
@@ -490,7 +491,7 @@ function muted(color) {
 export function lookOf(g, seed) {
   const helmet = HELMETS[seed % HELMETS.length];
   return {
-    color: muted(g.color), armor: Math.min(6, g.armor || 0), helmet,
+    color: muted(g.color), armor: tierOf(g.armor), helmet,
     skin: SKINS[(seed >>> 3) % SKINS.length], hair: HAIR[(seed >>> 6) % HAIR.length],
     shield: helmet === 'murmillo' || helmet === 'secutor' ? 'scutum' : helmet === 'bare' ? 'none' : 'parma',
   };

@@ -1,9 +1,10 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { GEAR_MAX, HEAL_RATE, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { HEAL_RATE, armorOf, damageOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
 import { inArena } from '../../../js/places.js';
+import { PRICE, RARITIES, SHOW_TIME, SPIN_TIME, spin } from '../../../js/gacha.js';
 
 const SETTINGS = clean({ ludus: 60, battle: 90, death: 0 });
 
@@ -160,7 +161,7 @@ test('оружие и доспех пока не продаются: коман�
   a.coins = 10000;
   g.feed('Brutus', 'оружие', { login: 'brutus' });
   g.feed('Brutus', 'доспех', { login: 'brutus' });
-  eq([a.weapon, a.armor, a.coins], [0, 0, 10000]);
+  eq([a.weapon, a.armor, a.coins], [null, null, 10000]);
 });
 
 test('бой не начнётся, пока гладиаторов меньше двух', () => {
@@ -319,13 +320,13 @@ test('сохранение: прогресс переживает перезап
   const g = game({ roster: new Roster(memory, 'k') });
   const [a] = join(g, 'Brutus');
   a.coins = 500;
-  a.weapon = 2;
+  a.weapon = { kind: 'weapon', rarity: 'epic', power: 11 };
   g.feed('Brutus', 'сила 2', { login: 'brutus' });
   a.hp = maxHp(a) / 2;
   g.stop();
   const again = game({ roster: new Roster(memory, 'k') });
   const [b] = join(again, 'Brutus');
-  eq([b.weapon, b.str, b.coins], [2, 2, 500]);
+  eq([b.weapon, b.str, b.coins], [{ kind: 'weapon', rarity: 'epic', power: 11 }, 2, 500]);
   eq(b.hp, Math.round(maxHp(b) / 2));
 });
 
@@ -391,6 +392,94 @@ test('испорченное сохранение не ломает игру', (
   eq(new Roster(memory, 'k').size, 0);
   memory.setItem('k', JSON.stringify({ alive: { x: { name: 'X', level: 'abc', hp: 7, weapon: 99 } }, fallen: [1, null] }));
   const r = new Roster(memory, 'k');
-  eq([r.get('x').level, r.get('x').hp, r.get('x').weapon], [1, 1, GEAR_MAX]);
+  eq([r.get('x').level, r.get('x').hp, r.get('x').weapon], [1, 1, null]);
   eq(r.fallen.length, 0);
+});
+
+const spinAll = (g) => {
+  for (let i = 0; i < 20 * 200 && (g.spinNow || g.spins.length); i++) g.step(0.05);
+};
+
+test('гача: 30 монет, гладиатор идёт к храму, приз выдаётся после прокрутки и он возвращается', () => {
+  const g = game({ settings: { ludus: 900 } });
+  const [a] = join(g, 'Brutus');
+  a.coins = 100;
+  g.feed('Brutus', 'трен', { login: 'brutus' });
+  g.feed('Brutus', 'гача', { login: 'brutus' });
+  eq([a.coins, a.place, g.spins.length], [100 - PRICE, 'temple', 1]);
+  g.step(0.1);
+  ok(g.spinNow && !g.spinNow.done, 'крутится');
+  for (let i = 0; i < 20 * SPIN_TIME + 4; i++) g.step(0.05);
+  ok(g.spinNow.done, 'приз выдан');
+  spinAll(g);
+  for (let i = 0; i < 20 * 2; i++) g.step(0.05);
+  eq(a.place, 'train', 'вернулся на тренировку');
+  ok(SHOW_TIME > 0);
+});
+
+test('гача: без денег нельзя, «гача все» — на все монеты, но не больше 10', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  a.coins = 29;
+  g.feed('A', 'гача', { login: 'a' });
+  eq(g.spins.length, 0);
+  ok(g.lines.some((l) => l.text.includes('30 монет')));
+  b.coins = PRICE * 3 + 5;
+  g.feed('B', 'гача все', { login: 'b' });
+  eq([g.spins.length, b.coins], [3, 5]);
+  b.coins = 10000;
+  g.feed('B', 'гача все', { login: 'b' });
+  eq(g.spins.length, 10);
+});
+
+test('гача: вещь надевается, только если лучше; оружие даёт урон, доспех режет урон', () => {
+  const g = game();
+  const [a] = join(g, 'A');
+  const base = damageOf(a);
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'epic', power: 11 } });
+  eq(damageOf(a), base + 11);
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'common', power: 2 } });
+  eq(a.weapon.power, 11, 'хуже — выброшено');
+  g._prize(a, { kind: 'item', item: { kind: 'armor', rarity: 'rare', power: 8 } });
+  eq(armorOf(a), 0.08);
+  g._prize(a, { kind: 'handful', coins: 12 });
+  eq(a.coins, START_COINS + 12);
+});
+
+test('гача: в бою бойцу нельзя, ждущему в лудусе можно', () => {
+  const g = game();
+  const [a] = join(g, 'A', 'B');
+  a.coins = 100;
+  g.next();
+  g.feed('A', 'гача', { login: 'a' });
+  eq(g.spins.length, 0);
+  const [late] = join(g, 'Late');
+  late.coins = 60;
+  g.feed('Late', 'гача', { login: 'late' });
+  eq(g.spins.length, 1);
+});
+
+test('гача: остановка игры возвращает монеты за недокрученное', () => {
+  const memory = new Memory();
+  const g = game({ roster: new Roster(memory, 'k') });
+  const [a] = join(g, 'A');
+  a.coins = PRICE * 4;
+  g.feed('A', 'гача 4', { login: 'a' });
+  g.step(0.1);
+  g.stop();
+  eq(new Roster(memory, 'k').get('a').coins, PRICE * 4);
+});
+
+test('гача: шансы как в Чатобороне', () => {
+  const random = rng(42), counts = {};
+  const n = 40000;
+  for (let i = 0; i < n; i++) {
+    const r = spin(random), key = r.item ? r.item.rarity : r.kind;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  const total = 0.132 + 0.075 + 0.0675 + 0.0075 + RARITIES.reduce((sum, x) => sum + x.chance, 0);
+  for (const [id, chance] of [['void', 0.132], ['common', 0.27], ['legendary', 0.06]]) {
+    const share = counts[id] / n, want = chance / total;
+    ok(Math.abs(share - want) < want * 0.12, id + ': ' + share.toFixed(3) + ' против ' + want.toFixed(3));
+  }
 });

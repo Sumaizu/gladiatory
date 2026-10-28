@@ -1,4 +1,5 @@
-import { ARMORS, STATS, WEAPONS, maxHp, xpNeed } from './balance.js';
+import { STATS, maxHp, xpNeed } from './balance.js';
+import { RARITIES, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
 import { FIELD_H, FIELD_W, DUMMIES, PLACES } from './places.js';
 import { FONT, drawCrowd, drawGladiator, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
@@ -20,12 +21,21 @@ const WHERE = {
 
 const COMMANDS = {
   ludus: [['трен', 'тренироваться: опыт'], ['лазарет', 'лечиться бесплатно'], ['отдых', 'сесть на скамью'],
-    ['сила · ловкость · выносливость', 'вложить очко'], ['проф', 'твоя карточка'],
-    ['что угодно', 'стать гладиатором']],
+    ['гача', '30 монет: оружие или доспех'], ['сила · ловкость · выносливость', 'вложить очко'],
+    ['проф', 'твоя карточка']],
   battle: [['сдаюсь', 'сдаться и точно выжить, но награда меньше'], ['проф', 'твоя карточка'],
     ['что угодно', 'вступить: в бой пойдёшь следующим']],
 };
 COMMANDS.results = COMMANDS.ludus;
+
+const ICONS = {
+  weapon: '<svg viewBox="0 0 16 16"><path d="M13 1h2v2L7.5 10.5 5.5 8.5z" fill="currentColor"/><path d="M3.5 9l3.5 3.5-1.2 1.2-1.2-1.2-1.6 1.6-1.2-1.2 1.6-1.6-1.2-1.2z" fill="currentColor"/></svg>',
+  armor: '<svg viewBox="0 0 16 16"><path d="M5 1.5 8 3l3-1.5 3.5 2-1 4-1.5-.5V14H4V7l-1.5.5-1-4z" fill="currentColor"/></svg>',
+  coins: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="currentColor"/><circle cx="8" cy="8" r="3.5" fill="none" stroke="#1e140e" stroke-width="1.5"/></svg>',
+  void: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/></svg>',
+};
+// ширина окна барабана = ширина .fortune (312) минус отступы (20)
+const REEL = { cells: 30, stop: 25, size: 44, width: 292 };
 
 const $ = (id) => document.getElementById(id);
 
@@ -181,6 +191,12 @@ export class View {
       sound('coin');
     } else if (e.type === 'join') {
       sound('join');
+    } else if (e.type === 'spin') {
+      this._reel(game);
+      sound('reel');
+    } else if (e.type === 'prize') {
+      const r = e.result, rank = r.item ? RARITIES.findIndex((x) => x.id === r.item.rarity) : -1;
+      sound(rank >= 3 ? 'jackpot' : rank >= 0 || r.coins ? 'coin' : 'miss');
     } else if (e.type === 'go') {
       sound(e.place === 'heal' ? 'heal' : e.place === 'train' ? 'train' : 'step');
     } else if (e.type === 'phase') {
@@ -360,6 +376,7 @@ export class View {
     this._feed(game);
     this._cards(game);
     this._results(game);
+    this._fortune(game);
     this._set('pause', String(game.paused), (node) => {
       node.hidden = !game.paused;
       $('pause-text').textContent = 'Стример поставил игру на паузу';
@@ -447,8 +464,8 @@ export class View {
     }
     for (const g of cards) {
       let box = this.cardNodes.get(g.login);
-      const key = [g.level, Math.floor(g.xp), Math.round(g.hp), g.coins, g.str, g.agi, g.vit, g.points, g.weapon,
-        g.armor, g.fights].join(':');
+      const key = [g.level, Math.floor(g.xp), Math.round(g.hp), g.coins, g.str, g.agi, g.vit, g.points,
+        JSON.stringify(g.weapon), JSON.stringify(g.armor), g.fights].join(':');
       if (!box) {
         box = el('div', 'profile');
         box.dataset.key = '';
@@ -485,7 +502,12 @@ export class View {
       p.append(label + ': ', el('b', '', value));
       return p;
     };
-    gear.append(line('Оружие', WEAPONS[g.weapon]), line('Доспех', ARMORS[g.armor]),
+    const gearLine = (label, item) => {
+      const p = line(label, item ? itemText(item) : 'нет — крути гачу');
+      if (item) p.lastChild.style.color = rarityOf(item.rarity).color;
+      return p;
+    };
+    gear.append(gearLine('Оружие', g.weapon), gearLine('Доспех', g.armor),
       line('Монеты', String(g.coins)),
       line('Бои', g.fights + ' · побед ' + g.wins + ' · нокаутов ' + g.kos + ' · убийств ' + g.kills));
     box.append(top, bar('hp', g.hp / hpMax, Math.round(g.hp) + ' / ' + hpMax + ' здоровья'),
@@ -495,6 +517,67 @@ export class View {
     }
     box.append(gear);
     return box.parts;
+  }
+
+  // --- гача ---
+
+  _cell(result) {
+    const cell = el('span', 'cell');
+    let color, icon;
+    if (result.item) {
+      color = rarityOf(result.item.rarity).color;
+      icon = result.item.kind;
+    } else {
+      color = outcomeOf(result.kind).color;
+      icon = result.coins ? 'coins' : 'void';
+    }
+    cell.style.setProperty('--c', color);
+    cell.innerHTML = ICONS[icon];
+    return cell;
+  }
+
+  _reel(game) {
+    const now = game.spinNow;
+    if (!now) return;
+    const strip = $('fortune-strip');
+    const cells = [];
+    for (let i = 0; i < REEL.cells; i++) cells.push(this._cell(i === REEL.stop ? now.result : spin(Math.random)));
+    strip.replaceChildren(...cells);
+    strip.style.transition = 'none';
+    strip.style.transform = 'translateX(0)';
+    void strip.offsetWidth;
+    const target = REEL.width / 2 - (REEL.stop * REEL.size + 20);
+    strip.style.transition = 'transform ' + now.spin.toFixed(2) + 's cubic-bezier(.12,.75,.2,1)';
+    strip.style.transform = 'translateX(' + target.toFixed(1) + 'px)';
+    this.reelId = now.id;
+  }
+
+  _fortune(game) {
+    const now = game.spinNow, box = $('fortune');
+    box.hidden = !now;
+    if (!now) return;
+    if (this.reelId !== now.id) this._reel(game);
+    const g = game.members.get(now.login);
+    $('fortune-who').textContent = (g ? g.name : now.login) + (now.done ? '' : ' крутит гачу…');
+    const prize = $('fortune-prize');
+    const key = now.id + ':' + now.done;
+    if (prize.dataset.key !== key) {
+      prize.dataset.key = key;
+      prize.replaceChildren();
+      prize.style.color = '';
+      const r = now.result;
+      if (now.done && r.item) {
+        prize.style.color = rarityOf(r.item.rarity).color;
+        prize.append(itemText(r.item), el('small', '', r.equipped ? 'надевает' : 'не лучше своего — выброшено'));
+      } else if (now.done && r.coins) {
+        prize.style.color = outcomeOf(r.kind).color;
+        prize.append('+' + r.coins + ' монет', el('small', '', outcomeOf(r.kind).name));
+      } else if (now.done) {
+        prize.append('Пустота');
+      }
+    }
+    const waiting = game.spins.length;
+    $('fortune-queue').textContent = waiting ? 'в очереди ещё ' + waiting : '';
   }
 
   _results(game) {

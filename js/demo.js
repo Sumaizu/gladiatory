@@ -1,10 +1,11 @@
 import { Game, Roster } from './engine.js';
+import { RARITIES, makeItem } from './gacha.js';
 
 const NAMES = ['Kitsune_Neko', 'Brutus', 'ЛысыйКабан', 'Spartak_88', 'MaximusTV', 'Ржавый_Гвоздь', 'Lupa', 'Crixus',
   'Феникс', 'Ironhide', 'Котлета', 'NightWolf', 'Варвар', 'Gannicus'];
 const COLORS = ['#ff6b5e', '#5fb4ff', '#7ee08a', '#ffc94d', '#c58cff', '#4fd6d6', '#ff8fc8', '#b8e05a', '#ff9d4d',
   '#8fa2ff', '#ffe08a', '#9ef0c8', '#f08a5d', '#a3c4ff'];
-const ACTIONS = ['трен', 'трен', 'трен', 'лазарет', 'отдых', 'сила', 'ловкость', 'выносливость', 'проф'];
+const ACTIONS = ['трен', 'трен', 'трен', 'лазарет', 'отдых', 'гача', 'гача', 'сила', 'ловкость', 'выносливость', 'проф'];
 
 // пример на странице до запуска: выдуманные игроки и короткие фазы
 export function demoGame(settings) {
@@ -13,8 +14,9 @@ export function demoGame(settings) {
   NAMES.forEach((name, i) => game.feed(name, 'привет', { login: 'demo' + i, color: COLORS[i] }));
   for (const g of game.members.values()) {
     g.level = 1 + Math.floor(Math.random() * 8);
-    g.weapon = Math.floor(Math.random() * 5);
-    g.armor = Math.floor(Math.random() * 5);
+    const any = () => RARITIES[Math.floor(Math.random() * RARITIES.length)];
+    g.weapon = Math.random() < 0.7 ? makeItem(Math.random, 'weapon', any()) : null;
+    g.armor = Math.random() < 0.6 ? makeItem(Math.random, 'armor', any()) : null;
     g.hp = g.hp * (0.5 + Math.random() * 0.5);
     g.coins = 40 + Math.floor(Math.random() * 200);
   }

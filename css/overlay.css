@@ -226,3 +226,28 @@ body {
   font: 800 13.5px/1.35 "Segoe UI", system-ui, sans-serif;
 }
 .command small { font-size: 13px; color: #f1e3cc; }
+
+/* гача над храмом Фортуны */
+.fortune {
+  position: absolute; left: 304px; top: 92px; z-index: 4; width: 312px; padding: 8px 10px 9px; border-radius: 14px;
+  background: rgba(30, 18, 12, .93); box-shadow: 0 0 0 2px #d9a441, 0 12px 30px rgba(0, 0, 0, .5); text-align: center;
+  animation: card-in .3s ease-out;
+}
+.fortune .who { font-size: 14px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fortune .reel {
+  position: relative; height: 46px; margin: 6px 0; overflow: hidden; border-radius: 8px; background: rgba(0, 0, 0, .35);
+}
+.fortune .strip { position: absolute; left: 0; top: 3px; display: flex; gap: 4px; will-change: transform; }
+.fortune .cell {
+  flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 7px;
+  border: 2px solid var(--c); background: color-mix(in srgb, var(--c) 22%, #1e140e); color: var(--c);
+}
+.fortune .cell svg { width: 24px; height: 24px; }
+.fortune .mark {
+  position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff3c4;
+  box-shadow: 0 0 8px #ffd34d;
+}
+.fortune .prize { min-height: 18px; font-size: 14px; font-weight: 800; }
+.fortune .prize small { display: block; font-size: 12px; font-weight: 600; color: var(--muted); }
+.fortune .queue { font-size: 12px; color: var(--muted); }
+.fortune .queue:empty { display: none; }

@@ -1,5 +1,6 @@
 import { maxHp } from './balance.js';
 import { ARENA, BAYS, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, bayX } from './places.js';
+import { tierOf } from './gacha.js';
 import { P, SPRITE, drawDummyArt, gladiatorSprite, lookOf, lyingSprite, paintLudusArt, swordSprite } from './art.js';
 
 const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
@@ -120,12 +121,12 @@ export function drawSoon(ctx, t) {
   ctx.scale(pulse, pulse);
   ctx.font = '900 13px ' + FONT;
   ctx.fillStyle = '#e8b93c';
-  roundRect(ctx, -46, -12, 92, 24, 12);
+  roundRect(ctx, -58, -12, 116, 24, 12);
   ctx.fill();
   ctx.fillStyle = '#3a2804';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('гача скоро', 0, 1);
+  ctx.fillText('гача · 30 монет', 0, 1);
   ctx.restore();
 }
 
@@ -284,7 +285,7 @@ export function drawGladiator(ctx, g, t, scene) {
     const swing = g.swing > 0 ? Math.sin((1 - g.swing / 0.3) * Math.PI) : 0;
     ctx.translate(SPRITE.hand[0] - SPRITE.x, SPRITE.hand[1] - SPRITE.foot - bob);
     ctx.rotate(0.5 + swing * 2);
-    ctx.drawImage(swordSprite(g.weapon || 0), -1, -11);
+    ctx.drawImage(swordSprite(tierOf(g.weapon)), -1, -11);
   }
   ctx.restore();
 }

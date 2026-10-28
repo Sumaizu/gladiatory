@@ -1,7 +1,8 @@
-import { BEATEN_HP, GEAR_MAX, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
+import { BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
   START_POINTS, STATS, TRAIN_XP, armorOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
+import { PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemText, spin } from './gacha.js';
 
 export const COMMANDS = new Map([
   ['!гладиаторы-пауза', 'pause'],
@@ -14,6 +15,7 @@ export const BOTS = [
   'pokemoncommunitygame', 'songlistbot', 'pretzelrocks', 'restreambot', 'commanderroot', 'frostytoolsdotcom',
 ];
 export const CARD_WORDS = new Set(['профиль', 'проф']);
+export const GACHA_WORDS = new Set(['гача', 'крутить']);
 export const YIELD_WORDS = new Set(['сдаюсь', 'сдаться', 'сдался']);
 export const MIN_FIGHTERS = 2;
 export const RESULTS_TIME = 12;
@@ -38,7 +40,7 @@ const INVISIBLE = /[​‌‍⁠﻿­͏⠀\u{E0000}]/gu;
 const IGNORED = new Set(BOTS);
 const SAVED = ['name', 'color', 'level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'armor', 'hp',
   'fights', 'wins', 'kos', 'kills', 'born'];
-const COUNTS = ['level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'armor', 'fights', 'wins', 'kos',
+const COUNTS = ['level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'fights', 'wins', 'kos',
   'kills'];
 
 const PLACE_BY_WORD = new Map();
@@ -62,7 +64,7 @@ export function readableColor(color, login) {
 
 export function newGladiator(login, name, color, now) {
   return { login, name, color, level: 1, xp: 0, coins: START_COINS, str: 0, agi: 0, vit: 0, points: START_POINTS,
-    weapon: 0, armor: 0, hp: 1, fights: 0, wins: 0, kos: 0, kills: 0, born: now };
+    weapon: null, armor: null, hp: 1, fights: 0, wins: 0, kos: 0, kills: 0, born: now };
 }
 
 export class Roster {
@@ -82,8 +84,8 @@ export class Roster {
           if (Number.isFinite(Number(entry[field]))) g[field] = Math.max(0, Math.trunc(Number(entry[field])));
         }
         g.level = Math.max(1, Math.min(LEVEL_MAX, g.level));
-        g.weapon = Math.min(GEAR_MAX, g.weapon);
-        g.armor = Math.min(GEAR_MAX, g.armor);
+        g.weapon = cleanItem(entry.weapon, 'weapon');
+        g.armor = cleanItem(entry.armor, 'armor');
         g.hp = Number.isFinite(Number(entry.hp)) ? Math.max(0.01, Math.min(1, Number(entry.hp))) : 1;
         this.data.set(login, g);
       }
@@ -108,7 +110,7 @@ export class Roster {
   // в хранилище здоровье лежит долей от максимума, чтобы не зависеть от формул
   put(g) {
     const entry = {};
-    for (const field of SAVED) entry[field] = g[field];
+    for (const field of SAVED) entry[field] = g[field] && typeof g[field] === 'object' ? Object.assign({}, g[field]) : g[field];
     entry.hp = Math.max(0.01, Math.min(1, g.hp / maxHp(g)));
     entry.hp = Math.round(entry.hp * 1000) / 1000;
     this.data.set(g.login, entry);
@@ -160,6 +162,8 @@ export class Game {
     this.endIn = null;
     this._carry = 0;
     this.roundStart = 0;
+    this.spins = [];
+    this.spinNow = null;
     this.lastRoundStart = 0;
     this._saveIn = SAVE_EVERY;
   }
@@ -186,6 +190,11 @@ export class Game {
   }
 
   stop() {
+    // недокрученные гачи возвращаем монетами
+    for (const s of this.spins.concat(this.spinNow && !this.spinNow.done ? [this.spinNow] : [])) {
+      const g = this.members.get(s.login);
+      if (g) g.coins += PRICE;
+    }
     this._saveAll();
     this.state = 'stopped';
     this.paused = false;
@@ -195,6 +204,8 @@ export class Game {
     this.cards = [];
     this.lines = [];
     this.endIn = null;
+    this.spins = [];
+    this.spinNow = null;
   }
 
   setPaused(paused) {
@@ -217,6 +228,8 @@ export class Game {
   resetAll() {
     this.roster.reset();
     this.members.clear();
+    this.spins = [];
+    this.spinNow = null;
     this.fighters = [];
     this.cards = [];
     this.results = null;
@@ -291,6 +304,10 @@ export class Game {
       this._yield(g);
       return;
     }
+    if (GACHA_WORDS.has(word)) {
+      this._gacha(g, arg);
+      return;
+    }
     if (this.state === 'battle' && g.fate) return;
     if (PLACE_BY_WORD.has(word)) this._goTo(g, PLACE_BY_WORD.get(word));
     else if (STAT_BY_WORD.has(word)) this._spend(g, STAT_BY_WORD.get(word), arg);
@@ -317,6 +334,77 @@ export class Game {
     }
     this._emit('go', { login: g.login, place });
     this._arrive(g, place, true);
+  }
+
+  // --- гача ---
+
+  _gacha(g, arg) {
+    if (this.state === 'battle' && g.fate) {
+      this._line(g.name + ': в бою не до гачи — после боя', 'warn');
+      return;
+    }
+    const queued = this.spins.filter((s) => s.login === g.login).length
+      + (this.spinNow && this.spinNow.login === g.login ? 1 : 0);
+    const afford = Math.floor(g.coins / PRICE);
+    const wanted = arg === 'все' || arg === 'всё' ? afford : Math.max(1, Math.trunc(Number(arg)) || 1);
+    const n = Math.min(wanted, afford, QUEUE_CAP - queued);
+    if (n <= 0) {
+      this._line(afford ? g.name + ': уже крутишь, подожди очереди'
+        : g.name + ': гача стоит ' + PRICE + ' монет, у тебя ' + g.coins, 'warn');
+      return;
+    }
+    g.coins -= n * PRICE;
+    for (let i = 0; i < n; i++) this.spins.push({ login: g.login });
+    this._line(g.name + ' крутит гачу' + (n > 1 ? ' ×' + n : '') + ' (−' + n * PRICE + ' монет)', 'buy');
+    if (g.place !== 'temple' && !g.fate) {
+      g.back = g.place;
+      this._arrive(g, 'temple', true);
+    }
+    this._keep(g);
+  }
+
+  _stepGacha(dt) {
+    if (!this.spinNow) {
+      while (this.spins.length && !this.members.has(this.spins[0].login)) this.spins.shift();
+      if (!this.spins.length) return;
+      const { login } = this.spins.shift(), rush = this.spins.length >= RUSH.queue;
+      this.spinNow = { id: ++this.eventId, login, result: spin(this.random), t: 0, done: false,
+        spin: rush ? RUSH.spin : SPIN_TIME, show: rush ? RUSH.show : SHOW_TIME };
+      this._emit('spin', { login, spinId: this.spinNow.id });
+    }
+    const s = this.spinNow, g = this.members.get(s.login);
+    s.t += dt;
+    if (!s.done && s.t >= s.spin) {
+      s.done = true;
+      if (g) this._prize(g, s.result);
+    }
+    if (s.t < s.spin + s.show) return;
+    this.spinNow = null;
+    const more = this.spins.some((next) => next.login === s.login);
+    if (g && !more && !g.fate && g.place === 'temple') {
+      const back = g.back === 'heal' && g.hp >= maxHp(g) ? 'train' : g.back || 'rest';
+      this._arrive(g, back === 'temple' ? 'rest' : back, true);
+    }
+  }
+
+  _prize(g, result) {
+    if (result.coins) {
+      g.coins += result.coins;
+      this._line(g.name + ': +' + result.coins + ' монет из гачи', 'buy');
+    } else if (result.item) {
+      const item = result.item, current = g[item.kind];
+      if (!current || item.power > current.power) {
+        g[item.kind] = item;
+        result.equipped = true;
+        this._line(g.name + ' надевает «' + itemText(item) + '»', 'level');
+      } else {
+        this._line(g.name + ': «' + itemText(item) + '» не лучше своего — выброшено', 'info');
+      }
+    } else {
+      this._line(g.name + ': в гаче пусто', 'info');
+    }
+    this._emit('prize', { login: g.login, result });
+    this._keep(g);
   }
 
   _spend(g, stat, arg) {
@@ -416,7 +504,7 @@ export class Game {
   _stroll(g, dt) {
     g.swing = Math.max(0, g.swing - dt);
     if (!g.walking) {
-      if (g.place === 'rest' || g.place === 'heal') return;
+      if (g.place === 'rest' || g.place === 'heal' || g.place === 'temple') return;
       g.wait -= dt;
       if (g.place === 'train' && g.swing <= 0 && this.random() < dt * 1.6) g.swing = 0.3;
       if (g.wait > 0) return;
@@ -722,6 +810,7 @@ export class Game {
   _tick(dt) {
     this.clock += dt;
     this.cards = this.cards.filter((card) => card.until > this.clock && this.members.has(card.login));
+    this._stepGacha(dt);
     if (this.state === 'ludus' || this.state === 'results') this._stepLudus(dt);
     else if (this.state === 'battle') {
       this._stepBattle(dt);
