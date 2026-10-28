@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { AGI_CAP, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, YIELD_CUT, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { AGI_CAP, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, YIELD_CUT, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { starOf } from '../../../js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
@@ -1649,4 +1649,51 @@ test('сеть бросают и вплотную, не только издал�
     thrown = g.events.some((e) => e.type === 'throw' && e.kind === 'net' && e.login === left.login);
   }
   ok(thrown, 'вплотную сеть тоже летит');
+});
+
+test('добили критом — гибнет в ' + CRIT_KILL + ' раза чаще', () => {
+  const g = game({ settings: { death: 10 } });
+  const [a, b] = join(g, 'A', 'B', 'C');
+  g.next();
+  const rate = (crit) => {
+    g.random = rng(21);
+    let dead = 0;
+    for (let i = 0; i < 6000; i++) {
+      b.fate = 'fight';
+      b.hp = -1;
+      b.bleedT = 0;
+      g._knockOut(b, a, crit);
+      if (b.fate === 'dead') dead++;
+    }
+    return dead / 6000;
+  };
+  const plain = rate(false), hard = rate(true);
+  ok(hard / plain > 1.35 && hard / plain < 1.65, plain + ' → ' + hard);
+});
+
+test('брошенное копьё: крит вдвое чаще, но промах на 20% чаще', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B', 'C');
+  g.next();
+  a.weapon = weapon('spear');
+  b.agi = 0;
+  b.shield = false;
+  const stats = (ranged) => {
+    g.random = rng(13);
+    let miss = 0, crit = 0;
+    const N = 8000;
+    for (let i = 0; i < N; i++) {
+      b.hp = 1e9;
+      b.fate = 'fight';
+      const was = g.events.length;
+      g._attack(a, b, { ranged });
+      const e = g.events[g.events.length - 1];
+      if (e.type === 'miss') miss++;
+      else if (e.type === 'hit' && e.crit) crit++;
+    }
+    return [miss / N, crit / N];
+  };
+  const [m0, c0] = stats(false), [m1, c1] = stats(true);
+  ok(Math.abs(m1 - m0 - SPEAR.miss) < 0.03, 'промах ' + m0 + ' → ' + m1);
+  ok(c1 / (1 - m1) > c0 / (1 - m0) * 1.7, 'крит ' + c0 + ' → ' + c1);
 });

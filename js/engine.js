@@ -1,4 +1,4 @@
-import { AFK_ROUNDS, TEAMS, BLEED, HIT_REWARD, YIELD_CUT, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
+import { AFK_ROUNDS, CRIT_KILL, TEAMS, BLEED, HIT_REWARD, YIELD_CUT, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, runOf, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
@@ -1277,12 +1277,14 @@ export class Game {
       a.jab = (a.jab || 0) + 1;
     }
     const stunned = d.stunT > 0;
-    if (!stunned && this.random() < dodgeOf(d)) {
+    // брошенное копьё промахивается чаще (и по запутанному в сети), зато чаще критует
+    const spear = ranged && typeOf(a).throw;
+    if (this.random() < (stunned ? 0 : dodgeOf(d)) + (spear ? SPEAR.miss : 0)) {
       this._emit('miss', { x: d.x, y: d.y, login: d.login });
       return;
     }
     // крит решается до щита: отбитый крит бьёт по щиту сильнее
-    const crit = this.random() < critOf(a);
+    const crit = this.random() < critOf(a) * (spear ? SPEAR.critMult : 1);
     if (this._blocked(d, crit)) return;
     // копьё пробивает часть брони, а брошенное — всю
     const pierce = typeOf(a).pierce || 0;
@@ -1295,7 +1297,7 @@ export class Game {
     if (!a.lion) a.hitsNow = (a.hitsNow || 0) + 1;
     this._emit('hit', { x: d.x, y: d.y, amount: dmg, crit, login: d.login, from: a.login, ranged });
     if (d.hp <= 0) {
-      this._knockOut(d, a);
+      this._knockOut(d, a, crit);
       return;
     }
     // парагона в испытании кровь не берёт
@@ -1312,12 +1314,12 @@ export class Game {
     }
   }
 
-  _knockOut(d, a) {
+  _knockOut(d, a, crit = false) {
     const hpMax = maxHp(d);
     // лев погибает всегда; от лап льва гибнут втрое чаще
     const chance = d.lion ? 1 : this.duel || d === this.boss ? 0
       : deathChance(this.settings.death / 100, -d.hp, hpMax) * (a.lion ? PIT.deathMult : 1)
-        * (d.bleedT > 0 ? BLEED.deathMult : 1);
+        * (d.bleedT > 0 ? BLEED.deathMult : 1) * (crit ? CRIT_KILL : 1);
     let dead = Boolean(d.lion) || chance > 0 && this.random() < (chance >= 1 ? 1 : Math.min(0.95, chance));
     // божественный амулет забирает смерть на себя и рассыпается
     const saved = dead && !d.lion && d.amulet;

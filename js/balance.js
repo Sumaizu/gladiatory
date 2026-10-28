@@ -84,8 +84,10 @@ export const SHIELD = { block: 0.35, breaks: 0.1, critBreaks: 2 };
 // Бросают с range (шанс chance в секунду) — пока сближаются, почти всегда успевают; а вплотную тоже, но реже (close)
 export const NET = { stun: 3, range: [50, 170], chance: 2.5, close: 0.5, speed: 320, focus: 6, max: 1, reload: 5, tear: 0.15 };
 // cool — сколько секунд после подбора копьё нельзя метнуть снова; копьё метают в израненного беглеца (low), а ещё —
-// в цель дальше far: каждую секунду с шансом farChance
-export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, pickup: 14, cool: 5, far: 110, farChance: 0.7 };
+// в цель дальше far: каждую секунду с шансом farChance. Брошенное копьё критует в critMult раз чаще, но промахивается
+// на miss чаще (прибавка к увороту цели)
+export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, pickup: 14, cool: 5, far: 100, farChance: 2,
+  critMult: 2, miss: 0.2 };
 
 export function damageOf(g) {
   return (DAMAGE_BASE + DAMAGE_PER_STR * g.str + (g.weapon ? g.weapon.power : 0)) * typeOf(g).dmg * (g.might || 1);
@@ -130,6 +132,9 @@ export function deathChance(base, overkill, hpMax) {
   if (base >= 1) return 1;
   return Math.min(0.9, base * (1 + OVERKILL.weight * Math.min(1, Math.max(0, overkill) / Math.max(1, hpMax))));
 }
+
+// добили критом — гибнет в CRIT_KILL раз чаще (как с кровотечением)
+export const CRIT_KILL = 1.5;
 
 // крит с шансом chance пускает кровь на time секунд: пока раненый бежит, теряет здоровье — за всё кровотечение
 // на бегу набегает share от максимума (около 15%), а двигается он на slow медленнее; свалили с кровотечением —
