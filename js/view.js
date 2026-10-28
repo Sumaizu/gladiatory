@@ -1,6 +1,6 @@
-import { ARMOR_SLOTS, SLOT_IDS, STATS, TEAMS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
+import { ARMOR_SLOTS, DUEL, SLOT_IDS, STATS, TEAMS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
 import { RARITIES, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
-import { FIELD_H, FIELD_W, DUMMIES, PLACES } from './places.js';
+import { ARENA, FIELD_H, FIELD_W, DUMMIES, PLACES } from './places.js';
 import { FONT, drawCrowd, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
 import { ambience, play, setSound } from './sound.js';
@@ -724,6 +724,7 @@ export class View {
     this._roster(game);
     this._feed(game);
     this._cards(game);
+    this._duelCards(game);
     this._results(game);
     this._fortune(game);
     this._set('pause', String(game.paused), (node) => {
@@ -884,6 +885,28 @@ export class View {
   }
 
   // карточка: сверху имя и уровень; ниже кукла со снаряжением, характеристики столбиком, здоровье, урон и мелкие цифры
+  // дуэль началась (ставки кончились) — по бокам профили бойцов: слева от левого, справа от правого, до конца боя
+  _duelCards(game) {
+    const d = game.state === 'battle' && game.duel && !game.duel.betting ? game.duel : null, box = $('duel-cards');
+    const sign = (g) => [g.login, g.color, g.level, g.paragon, g.str, g.agi, g.vit, g.fights, g.shield, g.nets, g.amulet,
+      JSON.stringify(g.weapon), JSON.stringify(g.gear)].join(':');
+    const key = d ? sign(d.left) + '|' + sign(d.right) : '';
+    if (box.dataset.key === key) return;
+    box.dataset.key = key;
+    box.replaceChildren();
+    if (!d) return;
+    const gap = 26, top = ARENA.cy + 10 - 112;
+    for (const [g, side] of [[d.left, 'left'], [d.right, 'right']]) {
+      const card = el('div', 'profile duel ' + side);
+      card.style.setProperty('--c', g.color);
+      card.style.top = top + 'px';
+      if (side === 'left') card.style.right = (FIELD_W - (ARENA.cx - DUEL.gap) + gap) + 'px';
+      else card.style.left = (ARENA.cx + DUEL.gap + gap) + 'px';
+      card.append(...this._profile(g));
+      box.append(card);
+    }
+  }
+
   _profile(g) {
     const top = el('div', 'top');
     const lv = el('span', 'lv');
