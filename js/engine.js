@@ -40,6 +40,9 @@ const FLEE = { critChance: 0.75, critTime: [2, 1.5], low: 0.25, lowTime: [3, 2],
   ignored: 220 };
 const RETARGET = [3.5, 3.5];
 const REVENGE = 0.35;
+// враг выше уровнем притягивает: за каждый уровень разницы цель «ближе» на per пикселей, не больше cap уровней
+const LEVEL_PULL = { per: 70, cap: 4 };
+const PICK_SOFT = 50;
 const CIRCLE = 0.3;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const INVISIBLE = /[​‌‍⁠﻿­͏⠀\u{E0000}]/gu;
@@ -663,22 +666,29 @@ export class Game {
   }
 
   // ищем ближайшего, но кого ещё мало кто бьёт: толпа распадается на поединки
-  // цель: ближе, слабее, не убегает и ещё не окружена другими
+  // цель: ближе, раненая, не убегает, ещё не окружена другими — и охотнее та, что выше уровнем
   _pickTarget(g, standing) {
     const hunted = new Map();
     for (const other of standing) if (other !== g && other.target) hunted.set(other.target, (hunted.get(other.target) || 0) + 1);
-    let best = [];
+    const best = [];
     for (const other of standing) {
       if (other === g) continue;
       const d = Math.hypot(other.x - g.x, other.y - g.y);
       const busy = (hunted.get(other) || 0) - (other.target === g ? 1 : 0);
       const weak = 1 - Math.max(0, other.hp) / maxHp(other);
-      best.push({ other, score: d + CROWDING * Math.max(0, busy) + (other.fleeT > 0 ? FLEE.ignored : 0) - weak * 70 });
+      const stronger = Math.min(LEVEL_PULL.cap, Math.max(0, other.level - g.level));
+      best.push({ other, score: d + CROWDING * Math.max(0, busy) + (other.fleeT > 0 ? FLEE.ignored : 0) - weak * 70
+        - stronger * LEVEL_PULL.per });
     }
     if (!best.length) return null;
-    best.sort((a, b) => a.score - b.score);
-    best = best.slice(0, 2);
-    return best[Math.floor(this.random() * best.length)].other;
+    // взвешенный выбор: чем лучше счёт, тем вероятнее, но шанс есть и у остальных
+    const top = Math.min(...best.map((b) => b.score));
+    let roll = this.random() * best.reduce((sum, b) => sum + (b.w = Math.exp((top - b.score) / PICK_SOFT)), 0);
+    for (const b of best) {
+      roll -= b.w;
+      if (roll < 0) return b.other;
+    }
+    return best[0].other;
   }
 
   _flee(g, time, why) {

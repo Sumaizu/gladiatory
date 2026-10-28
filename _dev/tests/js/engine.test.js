@@ -473,14 +473,15 @@ test('гача: остановка игры возвращает монеты з
   eq(new Roster(memory, 'k').get('a').coins, PRICE * 4);
 });
 
-test('гача: шансы как в Чатобороне', () => {
+test('гача: шансы редкостей как в Чатобороне, монет нет', () => {
   const random = rng(42), counts = {};
   const n = 40000;
   for (let i = 0; i < n; i++) {
     const r = spin(random), key = r.item ? r.item.rarity : r.kind;
     counts[key] = (counts[key] || 0) + 1;
   }
-  const total = 0.132 + 0.075 + 0.0675 + 0.0075 + RARITIES.reduce((sum, x) => sum + x.chance, 0);
+  const total = 0.132 + 0.04 + 0.05 + RARITIES.reduce((sum, x) => sum + x.chance, 0);
+  for (const id of ['handful', 'bag', 'chest']) eq(counts[id], undefined, 'монет из гачи нет');
   for (const [id, chance] of [['void', 0.132], ['common', 0.27], ['legendary', 0.06]]) {
     const share = counts[id] / n, want = chance / total;
     ok(Math.abs(share - want) < want * 0.12, id + ': ' + share.toFixed(3) + ' против ' + want.toFixed(3));
@@ -685,4 +686,21 @@ test('гача: щит и сеть без редкости; сетей не бо
   }
   ok(kinds.has('shield') && kinds.has('net'));
   eq(types, new Set(['sword', 'greatsword', 'spear']));
+});
+
+test('арена: врага выше уровнем выбирают чаще, чем равного или слабее', () => {
+  const g = game();
+  const [a, strong, equal, weak] = join(g, 'A', 'Strong', 'Equal', 'Weak');
+  a.level = 5;
+  strong.level = 8;
+  equal.level = 5;
+  weak.level = 2;
+  a.x = 400; a.y = 350;
+  strong.x = 520; strong.y = 350;
+  equal.x = 460; equal.y = 350;
+  weak.x = 400; weak.y = 410;
+  const picks = { strong: 0, equal: 0, weak: 0 };
+  g.random = rng(11);
+  for (let i = 0; i < 300; i++) picks[g._pickTarget(a, [a, strong, equal, weak]).login]++;
+  ok(picks.strong > picks.equal && picks.strong > picks.weak, JSON.stringify(picks));
 });
