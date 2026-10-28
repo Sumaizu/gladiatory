@@ -1,4 +1,4 @@
-import { AFK_ROUNDS, BLEED, HIT_REWARD, YIELD_CUT, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
+import { AFK_ROUNDS, TEAMS, BLEED, HIT_REWARD, YIELD_CUT, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
@@ -722,15 +722,29 @@ export class Game {
       ready.push(...pair);
       this.timer = DUEL.bet;
     }
+    for (const g of this.members.values()) g.team = null;
+    if (this.mode === 'teams') {
+      // змейкой по силе: 1 — красные, 2 и 3 — синие, 4 и 5 — красные…
+      const order = ready.slice().sort((a, b) => b.level - a.level || b.xp - a.xp);
+      order.forEach((g, i) => {
+        g.team = Math.floor((i + 1) / 2) % 2 === 0 ? 'red' : 'blue';
+      });
+    }
     const lions = this.mode === 'pit' ? this._lions(ready) : [];
     this.fighters = ready.concat(lions);
     const all = this.fighters, n = ready.length;
     const spots = this.duel ? [{ x: ARENA.cx - DUEL.gap, y: ARENA.cy + 10 }, { x: ARENA.cx + DUEL.gap, y: ARENA.cy + 10 }]
       : this._spots(all.length);
-    all.forEach((g, i) => {
-      g.hp = Math.min(g.hp, maxHp(g));
+    // в стенке красные начинают слева, синие справа
+    if (this.mode === 'teams') spots.sort((a, b) => a.x - b.x);
+    const side = this.mode === 'teams' ? all.slice().sort((a, b) => (a.team === 'red' ? 0 : 1) - (b.team === 'red' ? 0 : 1))
+      : all;
+    side.forEach((g, i) => {
       g.x = spots[i].x;
       g.y = spots[i].y;
+    });
+    all.forEach((g) => {
+      g.hp = Math.min(g.hp, maxHp(g));
       g.fate = 'fight';
       g.seat = null;
       g.pose = null;
@@ -793,6 +807,9 @@ export class Game {
     if (this.duel) {
       this._line('Дуэль! ' + this.duel.left.name + ' против ' + this.duel.right.name + '. Ставки: 1 — за '
         + this.duel.left.name + ', 2 — за ' + this.duel.right.name, 'battle');
+    } else if (this.mode === 'teams') {
+      const red = ready.filter((g) => g.team === 'red').length;
+      this._line('Стенка на стенку! Красные (' + red + ') против синих (' + (n - red) + ')', 'battle');
     } else if (this.boss) {
       this._line('Испытание парагона! ' + this.boss.name + ' (' + this.boss.level + ' ур.) против всех: ' + (n - 1) + ' '
         + plural(n - 1, 'гладиатор', 'гладиатора', 'гладиаторов'), 'champion');
@@ -877,7 +894,9 @@ export class Game {
 
   _rollMode() {
     const roll = this.random();
-    return roll < PIT.chance ? 'pit' : roll < PIT.chance + DUEL.chance ? 'duel' : 'ffa';
+    const rest = 1 - PIT.chance - DUEL.chance;
+    return roll < PIT.chance ? 'pit' : roll < PIT.chance + DUEL.chance ? 'duel'
+      : roll < PIT.chance + DUEL.chance + rest * TEAMS.share ? 'teams' : 'ffa';
   }
 
   // львы для «Ямы со львами»: не гладиаторы, в лудус и сохранение не попадают
@@ -913,6 +932,7 @@ export class Game {
     if (a === b) return false;
     if (this.mode === 'pit') return Boolean(a.lion) !== Boolean(b.lion);
     if (this.boss) return (a === this.boss) !== (b === this.boss);
+    if (this.mode === 'teams') return a.team !== b.team;
     return true;
   }
 
@@ -1290,7 +1310,8 @@ export class Game {
     const boss = this.boss;
     const over = this.mode === 'pit' ? !standing.some((g) => g.lion) || !standing.some((g) => !g.lion)
       : boss ? !standing.includes(boss) || standing.every((g) => g === boss)
-        : standing.length <= 1;
+        : this.mode === 'teams' ? new Set(standing.map((g) => g.team)).size <= 1
+          : standing.length <= 1;
     if (over) this.endIn = END_DELAY;
   }
 
@@ -1305,7 +1326,16 @@ export class Game {
       winner = share(l) >= share(r) ? l : r;
       duel.winner = winner;
     }
-    const champion = duel ? winner : !pit && !this.boss && standing.length === 1 ? standing[0] : null;
+    const teams = this.mode === 'teams';
+    const champion = duel ? winner : !pit && !this.boss && !teams && standing.length === 1 ? standing[0] : null;
+    // стенка: побеждает команда, у которой больше стоящих на ногах (поровну — у кого больше здоровья); ничья — никто
+    let winTeam = null;
+    if (teams) {
+      const score = (team) => standing.filter((g) => g.team === team)
+        .reduce((sum, g) => sum + 1000 + g.hp / maxHp(g), 0);
+      const red = score('red'), blue = score('blue');
+      winTeam = red > blue ? 'red' : blue > red ? 'blue' : null;
+    }
     const rows = [];
     for (const g of people) {
       const fate = g.fate;
@@ -1335,6 +1365,12 @@ export class Game {
         xp = Math.round((r.xp + PIT.reward.perKo.xp * g.kosNow) * bonus);
         coins = Math.round((r.coins + PIT.reward.perKo.coins * g.kosNow) * bonus);
         if (fate === 'fight') g.wins++;
+      } else if (teams && fate !== 'dead') {
+        const side = g.team === winTeam ? TEAMS.reward.win : TEAMS.reward.lose;
+        const r = fate === 'fight' ? side.standing : side.beaten;
+        xp = Math.round((r.xp + TEAMS.reward.perKo.xp * g.kosNow) * bonus);
+        coins = Math.round((r.coins + TEAMS.reward.perKo.coins * g.kosNow) * bonus);
+        if (g.team === winTeam) g.wins++;
       } else if (fate === 'fight' || fate === 'down' || fate === 'yield') {
         const r = fate === 'fight' ? REWARD.standing : REWARD.beaten;
         const mult = bonus * (g === champion ? REWARD.champion : 1);
@@ -1353,7 +1389,7 @@ export class Game {
         coins = Math.round(coins / YIELD_CUT);
       }
       const row = { login: g.login, name: g.name, color: g.color, fate, xp, coins, kos: g.kosNow, kills: g.killsNow,
-        hits: g.hitsNow || 0,
+        hits: g.hitsNow || 0, team: g.team || null,
         by: g.by, level: g.level, ups: 0, saved: Boolean(g.savedNow) };
       g.savedNow = false;
       if (fate === 'dead') {
@@ -1409,12 +1445,13 @@ export class Game {
       rows.sort((a, b) => (b.login === winner.login) - (a.login === winner.login));
     }
     this.results = { champion: champion ? champion.login : null, rows, fighters: n, ascended,
-      mode: duel ? 'duel' : pit ? 'pit' : boss ? 'paragon' : 'ffa', bettors, bets: duel ? [this.betsOn(1), this.betsOn(2)] : null,
+      mode: duel ? 'duel' : pit ? 'pit' : boss ? 'paragon' : teams ? 'teams' : 'ffa', winTeam, bettors, bets: duel ? [this.betsOn(1), this.betsOn(2)] : null,
       lions: lions.length, lionsDown: lions.filter((g) => g.fate !== 'fight').length };
     this.projectiles = [];
     for (const g of this.members.values()) {
       g.spearOut = null;
       g.stunT = 0;
+      g.team = null;
       g.bleedT = 0;
       g.bledBy = null;
     }
@@ -1437,6 +1474,8 @@ export class Game {
       const won = this.results.lionsDown === lions.length;
       this._line(won ? 'Львы повержены! Выжившие получают щедрую награду' : !standing.length ? 'Львы победили'
         : 'Время вышло — львы уходят в клетки', won ? 'champion' : 'battle');
+    } else if (teams) {
+      this._line(winTeam ? 'Стенку взяли ' + TEAMS.names[winTeam] + '!' : 'Стенка на стенку — ничья', 'champion');
     } else if (ascended) {
       this._line((ascended.stood ? ascended.name + ' выстоял против всех' : 'Гладиаторы одолели ' + ascended.name) + ' — он получает '
         + ascended.paragon + '-й парагон и начинает заново', 'champion');

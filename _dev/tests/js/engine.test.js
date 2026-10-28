@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { BLEED, YIELD_CUT, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { BLEED, TEAMS, YIELD_CUT, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { starOf } from '../../../js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
@@ -994,8 +994,8 @@ test('Дуэль: никто не гибнет, обоим опыт, побед�
   for (const m of others.filter((x) => !lucky.includes(x))) eq(m.coins, coins.get(m.login));
 });
 
-test('режимы боя: примерно 10% яма, 20% дуэль, остальное — все против всех', () => {
-  const counts = { pit: 0, duel: 0, ffa: 0 };
+test('режимы боя: примерно 10% яма, 20% дуэль, остальное — поровну все против всех и стенка', () => {
+  const counts = { pit: 0, duel: 0, ffa: 0, teams: 0 };
   const random = rng(31);
   for (let i = 0; i < 1000; i++) {
     const g = new Game(clean({ ludus: 60, battle: 90 }), new Roster(), { random, now: () => 1 });
@@ -1006,6 +1006,7 @@ test('режимы боя: примерно 10% яма, 20% дуэль, оста
   }
   ok(counts.pit > 60 && counts.pit < 140, JSON.stringify(counts));
   ok(counts.duel > 150 && counts.duel < 250, JSON.stringify(counts));
+  ok(counts.ffa > 280 && counts.teams > 280, JSON.stringify(counts));
 });
 
 test('гача: очередь идёт к храму заранее, каждый крутит, когда дошёл', () => {
@@ -1038,14 +1039,14 @@ test('режим следующего боя выбран заранее, в н�
   for (let i = 0; i < 60; i++) {
     while (g.state !== 'ludus') g.next();
     const planned = g.nextMode;
-    ok(['ffa', 'pit', 'duel'].includes(planned));
+    ok(['ffa', 'pit', 'duel', 'teams'].includes(planned));
     for (const m of g.members.values()) g.feed(m.name, 'трен', { login: m.login });
     g.next();
     eq(g.mode, planned);
     seen.add(planned);
     for (const m of g.members.values()) m.hp = 1e9;
   }
-  eq(seen, new Set(['ffa', 'pit', 'duel']));
+  eq(seen, new Set(['ffa', 'pit', 'duel', 'teams']));
 });
 
 test('ники стримеров узнаются по логину без учёта регистра', () => {
@@ -1370,4 +1371,48 @@ test('кровотечение замедляет на ' + BLEED.slow * 100 + '%
   const free = run(false), slow = run(true);
   ok(Math.abs(slow / free - (1 - BLEED.slow)) < 1e-9, free + ' → ' + slow);
   ok(b);
+});
+
+test('стенка на стенку: змейкой по силе — 1 красные, 2–3 синие, 4–5 красные…', () => {
+  const g = game({ mode: 'teams' });
+  const people = join(g, 'A', 'B', 'C', 'D', 'E', 'F', 'G');
+  people.forEach((m, i) => { m.level = 20 - i; });
+  g.next();
+  eq(people.map((m) => m.team), ['red', 'blue', 'blue', 'red', 'red', 'blue', 'blue']);
+  ok(g._enemy(people[0], people[1]));
+  no(g._enemy(people[0], people[3]), 'свои');
+  const reds = people.filter((m) => m.team === 'red'), blues = people.filter((m) => m.team === 'blue');
+  ok(Math.max(...reds.map((m) => m.x)) < Math.max(...blues.map((m) => m.x)), 'красные слева');
+});
+
+test('стенка на стенку: бой до последней команды, победителям больше, устоявшим ещё больше, смерть возможна', () => {
+  const g = game({ mode: 'teams', settings: { death: 100 } });
+  const people = join(g, 'A', 'B', 'C', 'D');
+  g.next();
+  const [a, b, c, d] = people;
+  // a — красные; b, c — синие; d — красные
+  b.hp = -5;
+  g._knockOut(b, a);
+  eq(b.fate, 'dead');
+  c.fate = 'yield';
+  g._checkEnd();
+  ok(g.endIn !== null, 'синих не осталось — конец');
+  fight(g);
+  const r = g.results;
+  eq([r.mode, r.winTeam], ['teams', 'red']);
+  const row = (m) => r.rows.find((x) => x.login === m.login);
+  const base = (x) => x.xp - 3 * x.hits;
+  ok(base(row(d)) >= TEAMS.reward.win.standing.xp, 'победитель устоял');
+  ok(base(row(d)) > base(row(c)) * 2, 'сдавшийся проигравший — меньше');
+  no(g.members.has('b'), 'погибший пропал');
+  eq(a.team, null, 'после боя команд нет');
+});
+
+test('режимы: стенка на стенку выпадает так же часто, как все против всех', () => {
+  const counts = { pit: 0, duel: 0, ffa: 0, teams: 0 };
+  const random = rng(41);
+  const g = new Game(clean({}), new Roster(), { random });
+  for (let i = 0; i < 4000; i++) counts[g._rollMode()]++;
+  ok(Math.abs(counts.teams - counts.ffa) < 250, JSON.stringify(counts));
+  ok(counts.teams > 1200, JSON.stringify(counts));
 });

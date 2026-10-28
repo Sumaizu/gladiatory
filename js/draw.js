@@ -1,4 +1,4 @@
-import { maxHp } from './balance.js';
+import { TEAMS, maxHp } from './balance.js';
 import { ARENA, BAYS, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, bayX } from './places.js';
 import { tierOf } from './gacha.js';
 import { RAINBOW, RAINBOW_CYCLE, RAINBOW_W, SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
@@ -461,8 +461,10 @@ export function drawLabel(ctx, g, scene, highlight) {
   ctx.fillStyle = highlight ? 'rgba(255,205,56,.92)' : 'rgba(20,16,30,.72)';
   roundRect(ctx, x0 - 5, top - 12, nameW + 10, 16, 6);
   ctx.fill();
-  const star = fate === 'dead' || g.lion ? null : starOf(g.login);
-  ctx.fillStyle = star ? starPaint(ctx, star, x0, nameW) : fate === 'dead' ? '#c9c2b8' : g.color || '#fff';
+  // в стенке на стенку ник — цвета команды
+  const team = fate && g.team ? TEAMS.colors[g.team] : null;
+  const star = fate === 'dead' || g.lion || team ? null : starOf(g.login);
+  ctx.fillStyle = team || (star ? starPaint(ctx, star, x0, nameW) : fate === 'dead' ? '#c9c2b8' : g.color || '#fff');
   if (highlight && fate !== 'dead') {
     // на жёлтой подложке выбранного светлые ники теряются — даём им тёмный контур
     ctx.lineWidth = 3;

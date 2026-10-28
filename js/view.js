@@ -1,4 +1,4 @@
-import { ARMOR_SLOTS, SLOT_IDS, STATS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
+import { ARMOR_SLOTS, SLOT_IDS, STATS, TEAMS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
 import { RARITIES, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
 import { FIELD_H, FIELD_W, DUMMIES, PLACES } from './places.js';
 import { FONT, drawCrowd, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
@@ -128,9 +128,10 @@ const ICONS = {
 };
 // ширина окна барабана = ширина .fortune (312) минус отступы (20)
 const ROLL = { speed: 18, wait: 2.5 };
-const MODE_NAMES = { ffa: 'Все против всех', pit: 'Яма со львами', duel: 'Дуэль', paragon: 'Испытание парагона' };
+const MODE_NAMES = { ffa: 'Все против всех', pit: 'Яма со львами', duel: 'Дуэль', paragon: 'Испытание парагона',
+  teams: 'Стенка на стенку' };
 const MODE_HINTS = { ffa: '— каждый сам за себя', pit: '— все вместе против львов', duel: '— двое случайных, остальные ставят',
-  paragon: '— один против всех' };
+  paragon: '— один против всех', teams: '— красные против синих' };
 const REEL = { cells: 30, stop: 25, size: 44, width: 292 };
 
 const $ = (id) => document.getElementById(id);
@@ -360,10 +361,14 @@ export class View {
     const pit = state === 'battle' && game.mode === 'pit', duel = state === 'battle' && game.duel;
     const boss = state === 'battle' && game.boss;
     const people = game.fighters.filter((g) => !g.lion).length, lions = game.fighters.length - people;
+    const teams = state === 'battle' && game.mode === 'teams';
+    const reds = teams ? game.fighters.filter((g) => g.team === 'red').length : 0;
     $('banner-title').textContent = duel ? (duel.betting ? 'ДУЭЛЬ' : 'В БОЙ!') : pit ? 'ЯМА СО ЛЬВАМИ' : boss ? 'ИСПЫТАНИЕ ПАРАГОНА'
+      : teams ? 'СТЕНКА НА СТЕНКУ'
       : state === 'battle' ? 'В БОЙ!' : 'ЛУДУС';
     $('banner-text').textContent = duel ? duel.left.name + ' против ' + duel.right.name
       + (duel.betting ? ' · ставки ' + Math.ceil(game.timer) + ' с' : '')
+      : teams ? 'Красные (' + reds + ') против синих (' + (people - reds) + ')'
       : boss ? boss.name + ' против всех · ' + (people - 1) + ' ' + plural(people - 1, 'гладиатор', 'гладиатора', 'гладиаторов')
       : pit ? lions + ' ' + plural(lions, 'лев', 'льва', 'львов') + ' против ' + people + ' '
       + plural(people, 'гладиатора', 'гладиаторов', 'гладиаторов')
@@ -614,7 +619,8 @@ export class View {
   _dom(game) {
     const state = game.state;
     const fightName = game.duel ? (game.duel.betting ? 'Арена · Дуэль: ставки' : 'Арена · Дуэль')
-      : game.mode === 'pit' ? 'Арена · Яма со львами' : game.boss ? 'Арена · Испытание парагона' : 'Арена · все против всех';
+      : game.mode === 'pit' ? 'Арена · Яма со львами' : game.boss ? 'Арена · Испытание парагона'
+        : game.mode === 'teams' ? 'Арена · Стенка на стенку' : 'Арена · все против всех';
     const phase = { ludus: 'Лудус · подготовка', battle: fightName, results: 'Итоги боя' }[state] || '';
     this._set('phase', state + phase, (node) => {
       node.textContent = phase;
@@ -652,7 +658,8 @@ export class View {
         node.append(el('small', '', 'Дуэль: ' + duel.left.name + ' против ' + duel.right.name + ' — никто не погибнет'));
       } else if (game.state === 'battle') {
         const what = game.mode === 'pit' ? 'Все вместе против львов — выжившим щедрая награда'
-          : game.boss ? 'Все против ' + game.boss.name + ' — выжившим много опыта' : 'Бой до последнего на ногах';
+          : game.boss ? 'Все против ' + game.boss.name + ' — выжившим много опыта'
+            : game.mode === 'teams' ? 'Красные против синих — победившей команде больше' : 'Бой до последнего на ногах';
         const off = [game.waiting && 'ждут следующего боя: ' + game.waiting,
           game.watching && 'смотрят со скамьи: ' + game.watching].filter(Boolean).join(' · ');
         node.append(el('small', '', off ? off[0].toUpperCase() + off.slice(1) : what));
@@ -687,7 +694,7 @@ export class View {
     list.sort((a, b) => (battle ? (fateOrder[a.fate] ?? 3) - (fateOrder[b.fate] ?? 3) : 0)
       || b.level - a.level || b.xp - a.xp || a.name.localeCompare(b.name));
     const bets = game.duel ? game.duel.bets : null;
-    const key = (bets ? Array.from(bets).join(',') : '') + list.map((g) => [g.login, g.color, g.paragon, g.level, g.points, g.coins, Math.round(g.hp / maxHp(g) * 20), battle ? g.fate : g.place,
+    const key = (bets ? Array.from(bets).join(',') : '') + list.map((g) => [g.login, g.color, g.team, g.paragon, g.level, g.points, g.coins, Math.round(g.hp / maxHp(g) * 20), battle ? g.fate : g.place,
       g.walking && !battle].join(':')).join('|');
     this._set('roster', key, (node) => {
       node.replaceChildren(...list.map((g) => {
@@ -702,8 +709,11 @@ export class View {
         // свободные очки характеристик — перед монетой, только если есть
         if (g.points > 0) gold.append(el('em', 'points', '+' + g.points));
         gold.append(el('i'), String(g.coins));
-        const name = nick('name', g.name, g.login);
-        if (!starOf(g.login)) name.style.color = g.color;
+        // в стенке на стенку во время боя ник — цвета команды
+        const team = battle && g.team ? TEAMS.colors[g.team] : null;
+        const name = team ? el('span', 'name', g.name) : nick('name', g.name, g.login);
+        if (team) name.style.color = team;
+        else if (!starOf(g.login)) name.style.color = g.color;
         const who = el('span', 'who');
         who.append(name);
         if (g.paragon) who.append(paragonTag(g.paragon));
@@ -937,6 +947,14 @@ export class View {
       } else if (r.mode === 'pit') {
         $('champion').textContent = r.lionsDown === r.lions ? 'Львы повержены! Выжившие получают щедрую награду'
           : r.rows.some((row) => row.fate === 'fight') ? 'Время вышло — львы уходят в клетки' : 'Львы победили';
+      } else if (r.mode === 'teams') {
+        if (r.winTeam) {
+          const team = el('b', '', r.winTeam === 'red' ? 'красные' : 'синие');
+          team.style.color = TEAMS.colors[r.winTeam];
+          $('champion').append('Стенку взяли ', team, '!');
+        } else {
+          $('champion').textContent = 'Стенка на стенку — ничья';
+        }
       } else if (r.mode === 'paragon' && r.ascended) {
         const up = r.ascended;
         $('champion').append(up.stood ? '' : 'Гладиаторы одолели ', nick('', up.name, up.login, 'b'),
@@ -950,8 +968,10 @@ export class View {
       const fill = (id, rows, describe) => {
         const items = rows.slice(0, 11).map((row) => {
           const li = el('li');
-          const name = nick('', row.name, row.login, 'b');
-          if (!starOf(row.login)) name.style.color = row.color;
+          const team = r.mode === 'teams' && row.team ? TEAMS.colors[row.team] : null;
+          const name = team ? el('b', '', row.name) : nick('', row.name, row.login, 'b');
+          if (team) name.style.color = team;
+          else if (!starOf(row.login)) name.style.color = row.color;
           li.append(name, describe(row));
           return li;
         });
