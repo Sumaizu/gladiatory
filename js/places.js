@@ -26,7 +26,7 @@ export const PLACES = {
     walk: { x: 560, y: 250, w: 320, h: 86 },
   },
   temple: {
-    name: 'Храм Фортуны', words: [],
+    name: 'Лудильня', words: [],
     walk: { x: 392, y: 252, w: 136, h: 34 },
   },
   train: {

@@ -375,7 +375,7 @@ export function paintLudusArt(ctx) {
   ctx.fillRect(0, 0, FIELD_W, FIELD_H);
   const signs = [];
   signs.push([(bayX(BAYS.rest[0]) + bayX(BAYS.rest[1]) + BAY_W) / 2, 72, 'Зона отдыха', 14, '#5d4426']);
-  signs.push([bayX(BAYS.temple[0]) + BAY_W / 2, 72, 'Храм Фортуны', 14, '#7a5a2a']);
+  signs.push([bayX(BAYS.temple[0]) + BAY_W / 2, 72, 'Лудильня', 14, '#7a5a2a']);
   signs.push([(bayX(BAYS.heal[0]) + bayX(BAYS.heal[1]) + BAY_W) / 2, 72, 'Лазарет', 14, '#6b2f28']);
   return signs;
 }

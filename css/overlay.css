@@ -245,7 +245,7 @@ body {
 }
 .command small { font-size: 13px; color: #f1e3cc; }
 
-/* гача над храмом Фортуны */
+/* гача над лудильней */
 .fortune {
   position: absolute; left: 304px; top: 92px; z-index: 4; width: 312px; padding: 8px 10px 9px; border-radius: 14px;
   background: rgba(30, 18, 12, .93); box-shadow: 0 0 0 2px #d9a441, 0 12px 30px rgba(0, 0, 0, .5); text-align: center;

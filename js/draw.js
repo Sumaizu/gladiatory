@@ -112,7 +112,7 @@ export function drawLudusLife(ctx, t, dummyHits) {
 }
 
 export function drawSoon(ctx, t) {
-  // табличка «скоро» у храма
+  // табличка «скоро» у лудильни
   const tx = bayX(2) + BAY_W / 2, ty = 106;
   ctx.save();
   ctx.translate(tx, ty);

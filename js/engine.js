@@ -41,7 +41,7 @@ const FLEE = { critChance: 0.75, critTime: [2, 1.5], low: 0.25, lowTime: [3, 2],
 const RETARGET = [3.5, 3.5];
 const REVENGE = 0.35;
 const GACHA_CLOSE = 5;
-// если до храма не дойти (застрял, увели), крутка всё равно начнётся через столько секунд
+// если до лудильни не дойти (застрял, увели), крутка всё равно начнётся через столько секунд
 const TEMPLE_WAIT = 12;
 // враг выше уровнем притягивает: за каждый уровень разницы цель «ближе» на per пикселей, не больше cap уровней
 const LEVEL_PULL = { per: 70, cap: 4 };
@@ -402,7 +402,7 @@ export class Game {
       }
       if (!this.spins.length) return;
       const head = this.spins[0], g = this.members.get(head.login);
-      // крутка начинается, когда гладиатор дошёл до храма
+      // крутка начинается, когда гладиатор дошёл до лудильни
       if (!g.fate && (g.place !== 'temple' || g.walking)) {
         if (g.place !== 'temple') this._toTemple(g);
         head.wait = (head.wait || 0) + dt;
