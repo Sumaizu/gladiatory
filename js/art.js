@@ -499,6 +499,7 @@ export function lookOf(g, seed) {
     helmet: head ? style : 'bare',
     skin: SKINS[(seed >>> 3) % SKINS.length], hair: HAIR[(seed >>> 6) % HAIR.length],
     shield: !shieldUp(g) ? 'none' : style === 'murmillo' || style === 'secutor' ? 'scutum' : 'parma',
+    design: (seed >>> 9) % 3,
     net: netUp(g) && !(g.netCool > 0),
   };
 }
@@ -561,11 +562,12 @@ function gladiatorArt(look, pose, dead) {
       p.line(back + 2, 31, back + 1, 35, legD);
     }
   }
-  // дальняя рука с наручем отведена назад — в ней меч
+  // руки в стойке и на ходу рисуются отдельно (draw.js) и двигаются вместе с оружием
+  const live = pose === 'stand' || pose === 'walk1' || pose === 'walk2';
   if (pose === 'kneel') {
     p.line(14, 13 + dy, 18, 5 + dy, skin, 2);
     p.rect(17, 0 + dy, 5, 4, '#f2eee4');
-  } else {
+  } else if (!live) {
     p.line(11, 13 + dy, 7, 19 + dy, GUARD, 2);
     p.line(11, 13 + dy, 9, 16 + dy, darker(GUARD, 1.3));
     p.rect(5, 18 + dy, 2, 2, skinD);
@@ -629,36 +631,10 @@ function gladiatorArt(look, pose, dead) {
       p.line(14, H, 15, H - 4, colorL);
     }
   }
-  // щит на ближней руке, на уровне груди
-  if (pose !== 'sit' && pose !== 'kneel') {
-    if (look.shield === 'parma') {
-      p.ellipse(18, 17 + dy, 4.2, 5.6, colorD);
-      p.ellipse(18.3, 17 + dy, 3.3, 4.7, color, colorD, colorL);
-      p.rect(18, 16 + dy, 2, 2, metal);
-      p.px(18, 16 + dy, metalL);
-    } else if (look.shield === 'scutum') {
-      for (let y = 11; y < 27; y++) for (let x = 16; x < 21; x++) {
-        const rim = y === 11 || y === 26 || x === 20;
-        p.px(x, y + dy, rim ? colorD : x === 16 ? colorL : color);
-      }
-      p.rect(18, 13 + dy, 1, 12, colorL);
-      p.rect(17, 18 + dy, 3, 2, metal);
-    } else {
-      // щита нет — видна ближняя рука, согнутая у груди
-      p.line(14, 12 + dy, 16, 16 + dy, skin, 2);
-      if (look.net) {
-        // свёрнутая сеть свисает из руки
-        for (let y = 15; y < 26; y++) {
-          const half = 1 + Math.min(3, (y - 15) * 0.45);
-          for (let x = Math.round(17 - half); x <= Math.round(17 + half); x++) {
-            p.px(x, y + dy, (x + y) % 2 ? '#cdbf9c' : '#9d8e68');
-          }
-        }
-        p.rect(16, 15 + dy, 2, 2, skin);
-      } else {
-        p.rect(16, 15 + dy, 2, 2, skinL);
-      }
-    }
+  if (pose === 'sit') {
+    // сидя ближняя рука лежит на колене
+    p.line(14, 12 + dy, 16, 17 + dy, skin, 2);
+    p.rect(16, 17 + dy, 2, 2, skinL);
   }
   if (!dead) return p.canvas();
   return p.canvas((c) => {
@@ -736,15 +712,103 @@ function weaponArt(type, tier) {
   return { canvas: p.canvas(), px: 1, py: 11 };
 }
 
-function netArt() {
-  const p = new Pix(16, 16);
-  for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) {
-    const inside = Math.hypot(i - 7.5, j - 7.5) < 7.8;
-    if (inside && ((i + j) % 4 === 0 || (i - j + 16) % 4 === 0)) p.px(i, j, (i + j) % 8 ? '#cdbf9c' : '#a8986f');
+// сеть: верёвочные ромбы, узлы темнее, по краю свинцовые грузила
+function meshArt(w, h, shape, cell = 4) {
+  const p = new Pix(w, h), rope = '#e6d7ae', ropeD = '#8a7550', lead = '#4e5257';
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!shape(x, y)) continue;
+    const a = (x + y) % cell === 0, b = (x - y + 400) % cell === 0;
+    if (a && b) p.px(x, y, ropeD);
+    else if (a || b) p.px(x, y, rope);
   }
+  // грузила по нижнему и боковым краям
+  for (let x = 1; x < w - 1; x += 4) for (let y = h - 1; y >= 0; y--) {
+    if (!shape(x, y)) continue;
+    p.rect(x, y - 1, 2, 2, lead);
+    break;
+  }
+  return p;
+}
+
+function netArt() {
+  const p = meshArt(20, 20, (x, y) => Math.hypot(x - 9.5, y - 9.5) < 9.6 + Math.sin(x * 1.7 + y) * 0.6);
   return p.canvas();
 }
 
+// накинутая на гладиатора сеть: свисает сверху и расходится книзу
+function netOverArt() {
+  const p = meshArt(26, 40, (x, y) => Math.abs(x - 12.5) < 5 + y * 0.22 && y > 1, 3);
+  p.rect(10, 0, 6, 2, '#a8956a');
+  return p.canvas();
+}
+
+// сеть в руке: свёрнутый моток с петлёй сверху и грузилами снизу
+function netHandArt() {
+  const p = meshArt(9, 13, (x, y) => y >= 2 && Math.abs(x - 4) <= 1 + Math.min(3, (y - 2) * 0.5), 2);
+  p.rect(3, 0, 3, 1, '#a8956a');
+  p.px(3, 1, '#a8956a');
+  p.px(5, 1, '#a8956a');
+  return p.canvas();
+}
+
+// щиты: круглая парма или высокий скутум, по три рисунка на каждый; цвет — игрока
+function shieldArt(shape, design, color) {
+  const rim = '#a8743c', rimD = '#6e4a22', boss = '#d8b46a';
+  const c = color, cD = darker(color, 0.7), cL = darker(color, 1.25);
+  if (shape === 'parma') {
+    const p = new Pix(11, 13);
+    p.ellipse(5.5, 6.5, 5.4, 6.4, rimD);
+    p.ellipse(5.5, 6.5, 4.5, 5.5, rim);
+    p.ellipse(5.5, 6.5, 3.6, 4.6, c, cD, cL);
+    if (design === 0) {
+      // лучи от умбона
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        p.line(5.5, 6.5, 5.5 + Math.cos(a) * 3.4, 6.5 + Math.sin(a) * 4.3, cL);
+      }
+    } else if (design === 1) {
+      p.rect(5, 2, 1, 9, boss);
+      p.rect(2, 6, 7, 1, boss);
+    } else {
+      for (let a = 0; a < 28; a++) {
+        const t = a / 28 * Math.PI * 2;
+        p.px(5.5 + Math.cos(t) * 2.6, 6.5 + Math.sin(t) * 3.4, a % 3 ? '#7fb069' : '#5d8a4a');
+      }
+    }
+    p.ellipse(5.5, 6.5, 1.3, 1.3, boss, rimD);
+    return p.canvas();
+  }
+  const p = new Pix(9, 17);
+  for (let y = 0; y < 17; y++) for (let x = 0; x < 9; x++) {
+    const edge = x === 0 || x === 8 || y === 0 || y === 16;
+    p.px(x, y, edge ? rimD : x === 1 || y === 1 ? rim : x <= 2 ? cL : x >= 7 ? cD : c);
+  }
+  if (design === 0) {
+    // крылья орла
+    p.line(4, 7, 1, 3, boss);
+    p.line(4, 7, 7, 3, boss);
+    p.line(4, 9, 1, 13, boss);
+    p.line(4, 9, 7, 13, boss);
+  } else if (design === 1) {
+    // молнии
+    for (const [x0, y0] of [[2, 2], [5, 9]]) {
+      p.line(x0, y0, x0 + 2, y0 + 2, '#f2c94c');
+      p.line(x0 + 2, y0 + 2, x0, y0 + 3, '#f2c94c');
+      p.line(x0, y0 + 3, x0 + 2, y0 + 5, '#f2c94c');
+    }
+  } else {
+    for (const y of [3, 13]) p.rect(1, y, 7, 1, boss);
+    p.rect(4, 2, 1, 13, boss);
+  }
+  p.rect(3, 7, 3, 3, boss);
+  p.px(4, 8, rimD);
+  return p.canvas();
+}
+
+export const shieldSprite = (shape, design, color) => remember(['shield', shape, design, color].join(':'),
+  () => shieldArt(shape, design, color));
+export const netOverSprite = () => remember('net-over', netOverArt);
+export const netHandSprite = () => remember('net-hand', netHandArt);
 export const netSprite = () => remember('net', netArt);
 
 // лев в профиль, смотрит вправо: лапы на y = 23, центр x = 18. frame: stand, walk1, walk2, pounce, dead
@@ -810,7 +874,7 @@ function silhouette(canvas) {
 }
 
 export function gladiatorSprite(look, pose, dead = false, flash = false) {
-  const key = ['g5', look.color, gearKey(look), look.helmet, look.shield, look.net, look.skin, look.hair, pose, dead, flash].join(':');
+  const key = ['g6', look.color, gearKey(look), look.helmet, look.shield, look.net, look.skin, look.hair, pose, dead, flash].join(':');
   return remember(key, () => {
     const art = remember(key.replace(/:(true|false)$/, ':false'), () => gladiatorArt(look, pose, dead));
     return flash ? silhouette(art) : art;

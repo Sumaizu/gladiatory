@@ -1,7 +1,7 @@
 import { maxHp } from './balance.js';
 import { ARENA, BAYS, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, bayX } from './places.js';
 import { tierOf } from './gacha.js';
-import { LION, P, SPRITE, drawDummyArt, lionSprite, gladiatorSprite, lookOf, lyingSprite, netSprite, paintLudusArt, weaponSprite } from './art.js';
+import { LION, P, SPRITE, darker, drawDummyArt, lionSprite, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, paintLudusArt, shieldSprite, weaponSprite } from './art.js';
 
 const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
 const SKIN = ['#f0c79e', '#e2b48a', '#c98f62', '#a86e46', '#7d4f32'];
@@ -249,6 +249,93 @@ export function drawCrowd(ctx, people, t, roar) {
 
 // --- гладиатор ---
 
+// --- руки: рисуются поверх фигуры от плеча к кисти и двигаются вместе с оружием ---
+
+const lerp = (a, b, k) => a + (b - a) * k;
+const at = (p, q, k) => [lerp(p[0], q[0], k), lerp(p[1], q[1], k)];
+const SHOULDER = { far: [11, 13], near: [15, 13] };
+// точки в координатах спрайта гладиатора (ступни на y = 39, центр x = 12)
+const GRIP = {
+  sword: { idle: [8, 19], hit: [20, 14], turn: [0.5, 2.1] },
+  spear: { idle: [12, 18], hit: [19, 17], turn: [1.35, 1.45] },
+  greatsword: { idle: [16, 19], hit: [19, 16], turn: [0.3, 2.4] },
+  none: { idle: [9, 19], hit: [9, 19], turn: [0, 0] },
+};
+
+function limb(ctx, from, to, color, guard = null) {
+  const n = Math.max(2, Math.ceil(Math.hypot(to[0] - from[0], to[1] - from[1]) * 1.5));
+  for (let i = 0; i <= n; i++) {
+    const k = i / n;
+    ctx.fillStyle = guard && k < 0.55 ? guard : color;
+    ctx.fillRect(Math.round(lerp(from[0], to[0], k)) - 1, Math.round(lerp(from[1], to[1], k)) - 1, 2, 2);
+  }
+}
+
+function fist(ctx, p, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(p[0]) - 1, Math.round(p[1]) - 1, 3, 3);
+  ctx.fillStyle = darker(color, 0.75);
+  ctx.fillRect(Math.round(p[0]) - 1, Math.round(p[1]) + 1, 3, 1);
+}
+
+function drawArms(ctx, g, look, bob) {
+  const skin = look.skin, skinD = darker(skin, 0.8), guard = '#3f3833';
+  const swing = g.swing > 0 ? Math.sin((1 - g.swing / 0.3) * Math.PI) : 0;
+  ctx.save();
+  ctx.translate(-SPRITE.x, -SPRITE.foot - bob);
+  const type = g.spearOut ? 'none' : g.weapon ? g.weapon.type : 'fists';
+  if (type === 'fists') {
+    // кулаки: дальний чуть выше, ближний ниже; бьют по очереди
+    const jab = (g.jab || 0) % 2;
+    const far = jab === 0 ? at([16, 14], [23, 13], swing) : [16, 14];
+    const near = jab === 1 ? at([18, 17], [24, 15], swing) : [18, 17];
+    limb(ctx, SHOULDER.far, far, skinD);
+    fist(ctx, far, skinD);
+    limb(ctx, SHOULDER.near, near, skin);
+    fist(ctx, near, skin);
+    ctx.restore();
+    return;
+  }
+  const grip = GRIP[type] || GRIP.sword, hand = at(grip.idle, grip.hit, swing);
+  const weaponAt = () => {
+    if (type === 'none') return;
+    const art = weaponSprite(type, tierOf(g.weapon));
+    ctx.save();
+    ctx.translate(Math.round(hand[0]), Math.round(hand[1]));
+    ctx.rotate(lerp(grip.turn[0], grip.turn[1], swing));
+    ctx.drawImage(art.canvas, -art.px, -art.py);
+    ctx.restore();
+  };
+  if (type === 'greatsword') {
+    // двуручник — обеими руками перед собой
+    limb(ctx, SHOULDER.far, [hand[0] - 1, hand[1]], skinD, guard);
+    weaponAt();
+    limb(ctx, SHOULDER.near, [hand[0], hand[1] + 1], skin);
+    fist(ctx, [hand[0], hand[1] + 1], skin);
+    ctx.restore();
+    return;
+  }
+  limb(ctx, SHOULDER.far, hand, skinD, guard);
+  weaponAt();
+  fist(ctx, hand, skinD);
+  // ближняя рука: щит, моток сети или пустая у груди
+  if (look.shield !== 'none') {
+    const pos = [17 + swing, 17];
+    limb(ctx, SHOULDER.near, pos, skin);
+    const art = shieldSprite(look.shield, look.design, look.color);
+    ctx.drawImage(art, Math.round(pos[0] - art.width / 2 + 1), Math.round(pos[1] - art.height / 2));
+  } else if (look.net) {
+    const pos = [17, 16];
+    limb(ctx, SHOULDER.near, pos, skin);
+    ctx.drawImage(netHandSprite(), Math.round(pos[0]) - 4, Math.round(pos[1]) - 1);
+    fist(ctx, pos, skin);
+  } else {
+    limb(ctx, SHOULDER.near, [17, 17], skin);
+    fist(ctx, [17, 17], skin);
+  }
+  ctx.restore();
+}
+
 function drawLion(ctx, g, t) {
   const dead = g.fate !== 'fight';
   const frame = dead ? 'dead' : g.swing > 0 ? 'pounce' : g.walking ? (Math.sin(t * 9 + g.x) > 0 ? 'walk1' : 'walk2') : 'stand';
@@ -304,35 +391,14 @@ export function drawGladiator(ctx, g, t, scene) {
   ctx.scale(g.face < 0 ? -1 : 1, 1);
   const bob = g.walking ? (frame === 'walk1' ? 1 : 0) : 0;
   ctx.drawImage(sprite, -SPRITE.x, -SPRITE.foot - bob);
-  // оружие в дальней руке: в бою и на тренировке им машут; брошенного копья в руке нет
-  if ((frame === 'stand' || frame === 'walk1' || frame === 'walk2') && !g.weapon) {
-    // без оружия — кулак, при ударе выбрасывается вперёд
-    const punch = g.swing > 0 ? Math.sin((1 - g.swing / 0.3) * Math.PI) : 0;
-    ctx.fillStyle = look.skin;
-    ctx.fillRect(SPRITE.hand[0] - SPRITE.x - 1 + punch * 9, SPRITE.hand[1] - SPRITE.foot - bob - 1 - punch * 4, 3, 3);
-  } else if ((frame === 'stand' || frame === 'walk1' || frame === 'walk2') && !g.spearOut) {
-    const type = g.weapon.type;
-    const art = weaponSprite(type, tierOf(g.weapon));
-    const swing = g.swing > 0 ? Math.sin((1 - g.swing / 0.3) * Math.PI) : 0;
-    ctx.translate(SPRITE.hand[0] - SPRITE.x, SPRITE.hand[1] - SPRITE.foot - bob);
-    if (type === 'spear') {
-      ctx.translate(swing * 9, 0);
-      ctx.rotate(1.25);
-    } else if (type === 'greatsword') {
-      ctx.rotate(-0.2 + swing * 2.6);
-    } else {
-      ctx.rotate(0.5 + swing * 2);
-    }
-    ctx.drawImage(art.canvas, -art.px, -art.py);
-  }
+  if (frame === 'stand' || frame === 'walk1' || frame === 'walk2') drawArms(ctx, g, look, bob);
   ctx.restore();
   if (scene === 'arena' && g.stunT > 0 && g.fate === 'fight') {
     // накинутая сеть
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(P, P);
-    ctx.drawImage(netSprite(), -9, -38, 18, 22);
-    ctx.drawImage(netSprite(), -9, -20, 18, 20);
+    ctx.drawImage(netOverSprite(), -13, -41);
     ctx.restore();
   }
 }

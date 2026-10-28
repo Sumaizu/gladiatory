@@ -583,7 +583,10 @@ export class Game {
     if (!g.walking) {
       if (g.place === 'rest' || g.place === 'heal' || g.place === 'temple') return;
       g.wait -= dt;
-      if (g.place === 'train' && g.swing <= 0 && this.random() < dt * 1.6) g.swing = 0.3;
+      if (g.place === 'train' && g.swing <= 0 && this.random() < dt * 1.6) {
+        g.swing = 0.3;
+        g.jab = (g.jab || 0) + 1;
+      }
       if (g.wait > 0) return;
       const p = this._spot(g, g.place);
       g.tx = p.x;
@@ -748,7 +751,10 @@ export class Game {
   // ставка зрителя: последняя считается; бойцы не ставят
   _bet(g, side) {
     const d = this.duel;
-    if (g === d.left || g === d.right) return;
+    if (g === d.left || g === d.right) {
+      this._line(g.name + ': участники дуэли не ставят', 'warn');
+      return;
+    }
     const was = d.bets.get(g.login);
     d.bets.set(g.login, side);
     if (was !== side) this._emit('bet', { login: g.login, side });
@@ -1067,7 +1073,10 @@ export class Game {
   }
 
   _attack(a, d, { mult = 1, ranged = false } = {}) {
-    if (!ranged) a.swing = 0.3;
+    if (!ranged) {
+      a.swing = 0.3;
+      a.jab = (a.jab || 0) + 1;
+    }
     const stunned = d.stunT > 0;
     if (!stunned && this.random() < dodgeOf(d)) {
       this._emit('miss', { x: d.x, y: d.y, login: d.login });
