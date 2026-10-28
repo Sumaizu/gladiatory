@@ -105,9 +105,10 @@ export function deathChance(base, overkill, hpMax) {
   return Math.min(0.9, base * (1 + Math.max(0, overkill) / Math.max(1, hpMax)));
 }
 
-// «Волчья яма»: вместо обычного боя все гладиаторы против львов. Лев — как гладиатор 5 уровня без вещей, но с когтями
+// «Яма со львами»: вместо обычного боя все гладиаторы против львов. Лев — как гладиатор 5 уровня без вещей, но с когтями.
+// Львов столько, сколько на арене гладиаторов veteran уровня и выше, но хотя бы один
 export const PIT = {
-  chance: 0.1, ratio: 3, deathMult: 3,
+  chance: 0.1, veteran: 5, deathMult: 3,
   lion: { level: 5, str: 4, agi: 3, vit: 4 },
   reward: { standing: { xp: 100, coins: 80 }, beaten: { xp: 70, coins: 55 }, perKo: { xp: 20, coins: 15 } },
 };

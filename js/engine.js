@@ -667,7 +667,7 @@ export class Game {
       ready.push(...pair);
       this.timer = DUEL.bet;
     }
-    const lions = this.mode === 'pit' ? this._lions(Math.ceil(ready.length / PIT.ratio)) : [];
+    const lions = this.mode === 'pit' ? this._lions(Math.max(1, ready.filter((g) => g.level >= PIT.veteran).length)) : [];
     this.fighters = ready.concat(lions);
     const all = this.fighters, n = ready.length;
     const spots = this.duel ? [{ x: ARENA.cx - DUEL.gap, y: ARENA.cy + 10 }, { x: ARENA.cx + DUEL.gap, y: ARENA.cy + 10 }]
@@ -721,7 +721,7 @@ export class Game {
       this._line('Дуэль! ' + this.duel.left.name + ' против ' + this.duel.right.name + '. Ставки: 1 — за '
         + this.duel.left.name + ', 2 — за ' + this.duel.right.name, 'battle');
     } else if (this.mode === 'pit') {
-      this._line('Волчья яма! ' + lions.length + ' ' + plural(lions.length, 'лев', 'льва', 'львов') + ' против ' + n + ' '
+      this._line('Яма со львами! ' + lions.length + ' ' + plural(lions.length, 'лев', 'льва', 'львов') + ' против ' + n + ' '
         + plural(n, 'гладиатора', 'гладиаторов', 'гладиаторов'), 'battle');
     } else {
       this._line('Бой начинается! На арене ' + n + ' ' + plural(n, 'гладиатор', 'гладиатора', 'гладиаторов'), 'battle');
@@ -790,7 +790,7 @@ export class Game {
     return roll < PIT.chance ? 'pit' : roll < PIT.chance + DUEL.chance ? 'duel' : 'ffa';
   }
 
-  // львы для «Волчьей ямы»: не гладиаторы, в лудус и сохранение не попадают
+  // львы для «Ямы со львами»: не гладиаторы, в лудус и сохранение не попадают
   _lions(count) {
     const lions = [];
     for (let i = 0; i < count; i++) {

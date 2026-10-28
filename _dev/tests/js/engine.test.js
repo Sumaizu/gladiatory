@@ -813,12 +813,22 @@ test('стартовый капитал — 100 монет', () => {
   eq(START_COINS, 100);
 });
 
-test('Волчья яма: львов втрое меньше, все бьют львов, а львы — гладиаторов', () => {
+test('Яма со львами: нет гладиаторов 5 уровня — выходит один лев', () => {
+  const g = game({ mode: 'pit' });
+  join(g, 'A', 'B', 'C', 'D', 'E', 'F', 'G');
+  g.next();
+  eq(g.fighters.filter((f) => f.lion).length, 1);
+});
+
+test('Яма со львами: по льву на каждого 5 уровня и выше, все бьют львов, а львы — гладиаторов', () => {
   const g = game({ mode: 'pit' });
   const people = join(g, 'A', 'B', 'C', 'D', 'E', 'F', 'G');
+  g.members.get('a').level = 5;
+  g.members.get('b').level = 9;
+  g.members.get('c').level = 4;
   g.next();
   const lions = g.fighters.filter((f) => f.lion);
-  eq(lions.length, 3);
+  eq(lions.length, 2);
   for (const l of lions) eq([l.level, l.name], [5, 'Лев']);
   for (let i = 0; i < 20 * 6; i++) g.step(0.05);
   for (const e of g.events.filter((x) => x.type === 'hit')) {
@@ -832,7 +842,7 @@ test('Волчья яма: львов втрое меньше, все бьют �
   no(Array.from(g.members.keys()).some((k) => k.startsWith('lion')), 'львы не попали в лудус');
 });
 
-test('Волчья яма: от льва гибнут втрое чаще, выжившие получают много опыта и золота', () => {
+test('Яма со львами: от льва гибнут втрое чаще, выжившие получают много опыта и золота', () => {
   const g = game({ mode: 'pit', settings: { death: 20 } });
   const [a, b] = join(g, 'A', 'B', 'C');
   g.next();

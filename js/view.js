@@ -58,7 +58,7 @@ const ICONS = {
 };
 // ширина окна барабана = ширина .fortune (312) минус отступы (20)
 const ROLL = { speed: 18, wait: 2.5 };
-const MODE_NAMES = { ffa: 'Все против всех', pit: 'Волчья яма', duel: 'Дуэль' };
+const MODE_NAMES = { ffa: 'Все против всех', pit: 'Яма со львами', duel: 'Дуэль' };
 const MODE_HINTS = { ffa: '— каждый сам за себя', pit: '— все вместе против львов', duel: '— двое случайных, остальные ставят' };
 const REEL = { cells: 30, stop: 25, size: 44, width: 292 };
 
@@ -268,7 +268,7 @@ export class View {
     box.className = 'banner ' + state;
     const pit = state === 'battle' && game.mode === 'pit', duel = state === 'battle' && game.duel;
     const people = game.fighters.filter((g) => !g.lion).length, lions = game.fighters.length - people;
-    $('banner-title').textContent = duel ? (duel.betting ? 'ДУЭЛЬ' : 'В БОЙ!') : pit ? 'ВОЛЧЬЯ ЯМА'
+    $('banner-title').textContent = duel ? (duel.betting ? 'ДУЭЛЬ' : 'В БОЙ!') : pit ? 'ЯМА СО ЛЬВАМИ'
       : state === 'battle' ? 'В БОЙ!' : 'ЛУДУС';
     $('banner-text').textContent = duel ? duel.left.name + ' против ' + duel.right.name
       + (duel.betting ? ' · ставки ' + Math.ceil(game.timer) + ' с' : '')
@@ -458,7 +458,7 @@ export class View {
   _dom(game) {
     const state = game.state;
     const fightName = game.duel ? (game.duel.betting ? 'Арена · Дуэль: ставки' : 'Арена · Дуэль')
-      : game.mode === 'pit' ? 'Арена · Волчья яма' : 'Арена · все против всех';
+      : game.mode === 'pit' ? 'Арена · Яма со львами' : 'Арена · все против всех';
     const phase = { ludus: 'Лудус · подготовка', battle: fightName, results: 'Итоги боя' }[state] || '';
     this._set('phase', state + phase, (node) => {
       node.textContent = phase;
