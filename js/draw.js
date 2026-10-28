@@ -710,6 +710,16 @@ export function drawLabel(ctx, g, scene, highlight) {
   // на скамьях и койках соседи рядом — подписи через одну выше, чтобы не налезали
   const stagger = pose && g.seat !== null && g.seat !== undefined && g.seat % 2 ? 15 : 0;
   const top = g.y - (lying ? 20 : pose === 'sit' ? 37 : 43) * FIGURE[scene] - stagger;
+  // на скамьях и койках имя не пишем — только полоску здоровья; имя видно у тех, кто ходит и тренируется
+  if (pose && !highlight) {
+    const part = Math.max(0, Math.min(1, g.hp / maxHp(g)));
+    const bw = 24, bx = g.x - bw / 2, by = top + 4 + stagger;
+    ctx.fillStyle = 'rgba(20,16,30,.8)';
+    ctx.fillRect(bx - 1, by - 1, bw + 2, 5);
+    ctx.fillStyle = part > 0.5 ? '#4ade80' : part > 0.25 ? '#fbbf24' : '#f87171';
+    ctx.fillRect(bx, by, bw * part, 3);
+    return;
+  }
   ctx.font = '700 12px ' + FONT;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
