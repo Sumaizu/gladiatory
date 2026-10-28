@@ -11,7 +11,7 @@ const DOM_EVERY = 0.2;
 const FADE = 0.7;
 const FLOAT_TIME = 1.1;
 // мир рисуется в низком разрешении и растягивается крупными пикселями — как в Domina
-const PIXEL = P;
+const PIXEL = 1;
 const BLOOD = ['#8f1414', '#a8191b', '#6e0d0f', '#c22a22'];
 const WHERE = {
   train: 'трен', heal: 'лазарет', rest: 'отдых',

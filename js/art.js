@@ -4,7 +4,7 @@ import { BAYS, BAY_W, COLUMNS, FIELD_H, FIELD_W, PLACES, WALL, bayX } from './pl
 export const P = 2;
 const W = FIELD_W / P;
 const H = FIELD_H / P;
-const OUT = '#1c120c';
+const OUT = '#3a2416';
 
 // --- шум и цвет ---
 
@@ -119,107 +119,6 @@ function remember(key, make) {
 
 // --- текстуры лудуса ---
 
-const WY = { top: WALL.top / P, floor: WALL.floor / P, step: WALL.step / P, sand: WALL.sand / P, rail: WALL.rail / P,
-  front: WALL.front / P };
-
-function texel(x, y) {
-  if (y < WY.top) {
-    // балки крыши
-    const row = Math.floor(y / 7), k = 0.8 + 0.3 * noise(x * 0.25, y * 3, 4, 3 + row);
-    return tone(rgb('#3a2418'), (y % 7 === 6 ? 0.55 : k) * (0.75 + y / WY.top * 0.3));
-  }
-  if (y < WY.floor) {
-    // каменная кладка
-    const row = Math.floor((y - WY.top) / 10), off = row % 2 ? 11 : 0, bx = Math.floor((x + off) / 22);
-    const mortar = (y - WY.top) % 10 === 0 || (x + off) % 22 === 0;
-    const shadow = Math.min(1, 0.55 + (y - WY.top) / 40);
-    if (mortar) return tone(rgb('#4a2f20'), shadow);
-    const k = (0.84 + 0.28 * hash(bx, row, 5)) * (0.9 + 0.2 * fbm(x, y, 9)) * (hash(x, y, 7) > 0.97 ? 0.85 : 1);
-    return tone(rgb('#7a5238'), k * shadow);
-  }
-  if (y < WY.step) {
-    // терракотовая плитка галереи
-    const row = Math.floor((y - WY.floor) / 8), off = row % 2 ? 8 : 0;
-    const grout = (y - WY.floor) % 8 === 0 || (x + off) % 16 === 0;
-    if (grout) return rgb('#5c3824');
-    const k = (0.86 + 0.22 * hash(Math.floor((x + off) / 16), row, 9)) * (0.92 + 0.14 * fbm(x, y, 11));
-    const dark = y - WY.floor < 3 ? 0.7 : 1;
-    return tone(rgb('#99623f'), k * dark);
-  }
-  if (y < WY.sand) return y === WY.step ? rgb('#c79a6c') : tone(rgb('#5e3a24'), 0.9 + 0.2 * hash(x, y, 13));
-  if (y < WY.front) {
-    // песок: шум, лёгкая рябь, камешки, тень от галереи
-    const n = fbm(x, y, 21);
-    let k = 0.9 + 0.17 * n + 0.025 * Math.sin(x * 0.18 + y * 0.9 + n * 7);
-    if (y < WY.sand + 8) k *= 0.78 + (y - WY.sand) / 8 * 0.22;
-    if (hash(x, y, 23) > 0.993) k *= 0.8;
-    if (hash(x, y, 29) > 0.996) k *= 1.12;
-    return tone(rgb('#e2c497'), k);
-  }
-  // доски пола у перил
-  const row = Math.floor((y - WY.front) / 6);
-  if ((y - WY.front) % 6 === 0) return rgb('#22130b');
-  const seam = Math.floor((x + row * 37) / 64);
-  if ((x + row * 37) % 64 === 0) return rgb('#22130b');
-  const grain = 0.85 + 0.25 * noise(x * 0.12, y * 2.5, 3, 31 + seam);
-  return tone(rgb('#4a2c1a'), grain * (0.9 + 0.15 * hash(seam, row, 33)));
-}
-
-function column(h) {
-  const w = 14, p = new Pix(w + 6, h);
-  const top = rgb('#c98b6b'), low = rgb('#e6c9ad'), mid = Math.floor(h * 0.55);
-  for (let y = 5; y < h - 5; y++) {
-    for (let x = 3; x < w + 3; x++) {
-      const u = (x - 3 + 0.5) / w;
-      let k = 0.62 + 0.5 * Math.sin(Math.PI * u) - (u > 0.35 && u < 0.45 ? -0.12 : 0);
-      if ((x - 3) % 3 === 2) k *= 0.88;
-      k *= 0.95 + 0.08 * hash(x, y, 41);
-      p.px(x, y, hex(tone(y < mid ? top : low, k)));
-    }
-  }
-  for (const y0 of [0, h - 5]) {
-    for (let y = y0; y < y0 + 5; y++) {
-      for (let x = 0; x < w + 6; x++) {
-        const k = (y === y0 ? 1.15 : y === y0 + 4 ? 0.7 : 0.95) * (0.92 + 0.1 * hash(x, y, 43));
-        p.px(x, y, hex(tone(rgb('#d9b392'), k)));
-      }
-    }
-  }
-  return p.outline('#2a1a10').canvas();
-}
-
-function door(w, h) {
-  const p = new Pix(w, h);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const plank = Math.floor(x / 5), seam = x % 5 === 0;
-      const k = seam ? 0.6 : (0.8 + 0.25 * noise(x * 3, y * 0.3, 2, 51 + plank));
-      const arch = y < 6 && Math.hypot(x - w / 2, (y - 6) * 1.6) > w / 2;
-      if (arch) continue;
-      p.px(x, y, hex(tone(rgb('#4a2c1c'), k)));
-    }
-  }
-  for (const y of [8, Math.floor(h / 2), h - 6]) {
-    p.rect(1, y, w - 2, 1, '#2a1a10');
-    for (let x = 2; x < w - 1; x += 4) p.px(x, y, '#9a8a70');
-  }
-  p.px(Math.floor(w / 2) - 1, Math.floor(h / 2) + 3, '#c9a24a');
-  p.px(Math.floor(w / 2) + 1, Math.floor(h / 2) + 3, '#c9a24a');
-  return p.outline('#2a1a10').canvas();
-}
-
-function bench(w) {
-  const p = new Pix(w, 8);
-  for (let x = 0; x < w; x++) {
-    const k = 0.85 + 0.25 * noise(x, 0, 6, 61);
-    p.px(x, 0, hex(tone(rgb('#a8714a'), k * 1.15)));
-    p.px(x, 1, hex(tone(rgb('#8a5a38'), k)));
-    p.px(x, 2, hex(tone(rgb('#6b4329'), k)));
-  }
-  for (const x of [2, w - 5]) p.rect(x, 3, 3, 5, '#4e2f1c');
-  return p.outline().canvas();
-}
-
 function cot() {
   const p = new Pix(22, 8);
   p.rect(0, 3, 22, 2, '#6b4329');
@@ -270,7 +169,7 @@ function statue() {
   for (let k = 0; k < 4; k++) p.line(24 - Math.cos(k * 0.785) * 5, 28 - Math.sin(k * 0.785) * 5,
     24 + Math.cos(k * 0.785) * 5, 28 + Math.sin(k * 0.785) * 5, '#b8862e');
   p.px(24, 28, '#f2c94c');
-  return p.outline('#2a1a10').canvas();
+  return p.outline().canvas();
 }
 
 function shelf() {
@@ -300,70 +199,178 @@ function plant() {
   return p.outline().canvas();
 }
 
-function railing() {
-  const h = WY.front - WY.rail + 2, p = new Pix(W, h);
-  for (let x = 0; x < W; x++) {
-    const k = 0.85 + 0.25 * noise(x, 0, 9, 81);
-    p.px(x, 0, hex(tone(rgb('#a8714a'), k * 1.1)));
-    for (let y = 1; y < 4; y++) p.px(x, y, hex(tone(rgb('#7a4a2a'), k * (1 - y * 0.06))));
-    p.px(x, 10, hex(tone(rgb('#7a4a2a'), k)));
-    p.px(x, 11, hex(tone(rgb('#5a361f'), k)));
-    if (x % 11 >= 8) for (let y = 4; y < h - 1; y++) if (y < 10 || y > 11) p.px(x, y, hex(tone(rgb('#6b3f22'), k)));
-  }
-  for (let x = 4; x < W; x += 66) {
-    p.rect(x, 0, 6, h, '#55321b');
-    p.rect(x + 1, 0, 2, h, '#6e4428');
-  }
-  return p.outline('#22130b').canvas();
+
+// мягкие текстуры в полном разрешении: плавные градиенты и едва заметный шум, без швов кладки
+const BAY_RECTS = COLUMNS.slice(0, -1).map((x, i) => ({ x: x + 13, w: COLUMNS[i + 1] - x - 26 }));
+
+function smoothstep(a, b, v) {
+  const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
 }
 
-function ivy(seed) {
-  const p = new Pix(16, 30);
-  for (let i = 0; i < 60; i++) {
-    const y = hash(i, seed, 91) * 30, spread = 2 + y * 0.18;
-    p.px(8 + (hash(i, seed, 93) - 0.5) * spread * 2, y, hash(i, seed, 95) > 0.5 ? '#5a8a34' : '#3d6325');
+function texel(x, y) {
+  const grain = 1 + (hash(x, y, 3) - 0.5) * 0.025;
+  if (y < WALL.top) {
+    const beam = (y % 14) < 2 ? 0.9 : 1;
+    return tone(rgb('#3d291c'), (0.8 + y / WALL.top * 0.25) * beam * grain);
   }
-  return p.canvas();
+  if (y < WALL.floor) {
+    // стена: тёплая штукатурка, тень под крышей и в нишах
+    let k = 0.82 + 0.18 * smoothstep(WALL.top, WALL.top + 70, y);
+    k *= 0.96 + 0.08 * noise(x, y, 70, 5);
+    if (y < WALL.top + 12) k *= y < WALL.top + 3 ? 1.12 : 1.04;
+    const inBay = BAY_RECTS.some((b) => x > b.x && x < b.x + b.w) && y > WALL.top + 30;
+    if (inBay) k *= 0.86 - 0.05 * smoothstep(WALL.floor - 40, WALL.floor, y);
+    return tone(rgb('#76533b'), k * grain);
+  }
+  if (y < WALL.step) {
+    // пол галереи: плавный, с еле заметными полосами
+    let k = 0.86 + 0.14 * smoothstep(WALL.floor, WALL.step, y);
+    if ((y - WALL.floor) % 16 === 0) k *= 0.95;
+    if (y < WALL.floor + 6) k *= 0.8 + 0.2 * smoothstep(WALL.floor, WALL.floor + 6, y);
+    k *= 0.97 + 0.06 * noise(x, y, 50, 9);
+    return tone(rgb('#9a6f4e'), k * grain);
+  }
+  if (y < WALL.sand) {
+    const k = y < WALL.step + 2 ? 1.18 : 0.78;
+    return tone(rgb('#8a6447'), k * grain);
+  }
+  if (y < WALL.front) {
+    // песок: светлый, с мягкой тенью от галереи и лёгкими разводами
+    let k = 0.84 + 0.16 * smoothstep(WALL.sand, WALL.sand + 40, y);
+    k *= 0.97 + 0.05 * noise(x, y, 90, 21) + 0.025 * noise(x, y, 24, 22);
+    k *= 1 - 0.05 * Math.pow(Math.abs(x - FIELD_W / 2) / (FIELD_W / 2), 2);
+    return tone(rgb('#ead8b2'), k * grain);
+  }
+  let k = 0.85 + 0.1 * noise(x * 0.15, y, 6, 31);
+  if ((y - WALL.front) % 12 === 0) k *= 0.85;
+  return tone(rgb('#4d3121'), k * grain);
 }
 
-// возвращает таблички для чёткого слоя
+function softColumn(ctx, cx) {
+  const top = WALL.top + 12, bottom = WALL.step, w = 24, mid = top + (bottom - top) * 0.52;
+  const body = (y0, y1, base) => {
+    const g = ctx.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0);
+    g.addColorStop(0, darker(base, 0.78));
+    g.addColorStop(0.38, darker(base, 1.08));
+    g.addColorStop(0.62, base);
+    g.addColorStop(1, darker(base, 0.7));
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - w / 2, y0, w, y1 - y0);
+  };
+  ctx.fillStyle = 'rgba(40,20,10,.18)';
+  ctx.fillRect(cx - w / 2 + 6, top, w, bottom - top);
+  body(top + 8, mid, '#c99278');
+  body(mid, bottom - 8, '#ddc6ae');
+  for (const [y, h] of [[top, 9], [bottom - 9, 9]]) {
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, '#e2c4a6');
+    g.addColorStop(1, '#a9876a');
+    ctx.fillStyle = g;
+    ctx.fillRect(cx - w / 2 - 5, y, w + 10, h);
+  }
+}
+
+function softDoor(ctx, x, y, w, h) {
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, '#3a2519');
+  g.addColorStop(1, '#4d3324');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(0,0,0,.12)';
+  for (let i = 1; i < 4; i++) ctx.fillRect(x + i * w / 4, y + 2, 1, h - 2);
+  ctx.fillStyle = '#5e4130';
+  ctx.fillRect(x - 3, y - 4, w + 6, 4);
+}
+
+function softBench(ctx, x, y, w) {
+  ctx.fillStyle = 'rgba(40,20,10,.2)';
+  ctx.fillRect(x + 3, y + 5, w, 9);
+  const g = ctx.createLinearGradient(0, y - 4, 0, y + 4);
+  g.addColorStop(0, '#a77a56');
+  g.addColorStop(1, '#6e4a31');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y - 4, w, 7);
+  ctx.fillStyle = '#5a3b27';
+  ctx.fillRect(x + 6, y + 3, 5, 10);
+  ctx.fillRect(x + w - 11, y + 3, 5, 10);
+}
+
+function softRailing(ctx) {
+  const top = WALL.rail, bottom = WALL.front;
+  ctx.fillStyle = 'rgba(40,20,10,.16)';
+  ctx.fillRect(0, top - 8, FIELD_W, 10);
+  for (let x = 16; x < FIELD_W; x += 22) {
+    const g = ctx.createLinearGradient(x, 0, x + 6, 0);
+    g.addColorStop(0, '#7d5539');
+    g.addColorStop(1, '#5a3a26');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, top + 6, 6, bottom - top - 6);
+  }
+  const rail = (y, h) => {
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, '#a3734f');
+    g.addColorStop(1, '#6a4630');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, y, FIELD_W, h);
+  };
+  rail(top, 9);
+  rail(top + 22, 6);
+  for (let x = 8; x < FIELD_W; x += 132) {
+    const g = ctx.createLinearGradient(x, 0, x + 14, 0);
+    g.addColorStop(0, '#8a603f');
+    g.addColorStop(1, '#55382a');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, top - 12, 14, bottom - top + 12);
+    ctx.fillStyle = '#a3734f';
+    ctx.fillRect(x - 2, top - 16, 18, 5);
+  }
+}
+
+// возвращает таблички для чёткого слоя; фон рисуется в полном разрешении поля
 export function paintLudusArt(ctx) {
-  const img = ctx.createImageData(W, H);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) img.data.set([...texel(x, y), 255], (y * W + x) * 4);
+  const img = ctx.createImageData(FIELD_W, FIELD_H);
+  for (let y = 0; y < FIELD_H; y++) {
+    for (let x = 0; x < FIELD_W; x++) img.data.set([...texel(x, y), 255], (y * FIELD_W + x) * 4);
   }
   ctx.putImageData(img, 0, 0);
-  const put = (canvas, x, y) => ctx.drawImage(canvas, Math.round(x), Math.round(y));
-  // зона отдыха
+  ctx.imageSmoothingEnabled = false;
+  const put = (canvas, x, y) => ctx.drawImage(canvas, Math.round(x), Math.round(y), canvas.width * P, canvas.height * P);
   for (const i of BAYS.rest) {
-    const x = bayX(i) / P;
-    put(door(30, 66), x + 25, WY.floor - 66);
-    put(amphora('#a8582f'), x + 6, WY.floor - 14);
-    put(amphora('#8f4a26'), x + 64, WY.floor - 14);
+    const x = bayX(i);
+    softDoor(ctx, x + 50, WALL.floor - 128, 56, 128);
+    put(amphora('#9a5a36'), x + 12, WALL.floor - 28);
+    put(amphora('#86502f'), x + 128, WALL.floor - 28);
   }
-  for (const y of [262, 286]) {
-    for (const i of BAYS.rest) put(bench(BAY_W / P - (y === 286 ? 14 : 6)), bayX(i) / P + (y === 286 ? 9 : 3), y / P - 3);
+  for (const i of BAYS.rest) {
+    softBench(ctx, bayX(i) + 6, 262 - 2, BAY_W - 12);
+    softBench(ctx, bayX(i) + 18, 286 - 2, BAY_W - 28);
   }
-  // храм Фортуны
-  const tx = bayX(BAYS.temple[0]) / P;
-  ctx.fillStyle = '#2e1c13';
-  ctx.fillRect(tx + 10, 42, BAY_W / P - 20, WY.floor - 42);
-  ctx.fillStyle = 'rgba(255,200,90,.10)';
-  ctx.fillRect(tx + 10, 42, BAY_W / P - 20, WY.floor - 42);
-  put(statue(), tx + BAY_W / P / 2 - 15, WY.floor - 58);
-  put(plant(), tx + 12, WY.floor - 18);
-  put(plant(), tx + BAY_W / P - 26, WY.floor - 18);
-  // лазарет: полки, двери, койки
+  const tx = bayX(BAYS.temple[0]);
+  const glow = ctx.createRadialGradient(tx + BAY_W / 2, 150, 10, tx + BAY_W / 2, 150, 110);
+  glow.addColorStop(0, 'rgba(255,210,140,.16)');
+  glow.addColorStop(1, 'rgba(255,210,140,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(tx, WALL.top, BAY_W, WALL.floor - WALL.top);
+  put(statue(), tx + BAY_W / 2 - 30, WALL.floor - 116);
+  put(plant(), tx + 18, WALL.floor - 36);
+  put(plant(), tx + BAY_W - 46, WALL.floor - 36);
   for (const i of BAYS.heal) {
-    const x = bayX(i) / P;
-    put(door(24, 60), x + 28, WY.floor - 60);
-    put(shelf(), x + 2, 58);
-    put(shelf(), x + 54, 58);
+    const x = bayX(i);
+    softDoor(ctx, x + 56, WALL.floor - 118, 48, 118);
+    put(shelf(), x + 4, 112);
+    put(shelf(), x + 108, 112);
   }
-  for (const s of PLACES.heal.seats) if (s.y < WALL.step) put(cot(), s.x / P - 11, s.y / P - 3);
-  for (const cx of COLUMNS) put(column(WY.step - WY.top - 6), cx / P - 10, WY.top + 6);
-  for (const [x, s] of [[60, 1], [235, 2], [415, 3]]) put(ivy(s), x, WY.top - 2);
-  put(railing(), 0, WY.rail - 1);
+  for (const s of PLACES.heal.seats) if (s.y < WALL.step) put(cot(), s.x - 22, s.y - 6);
+  for (const cx of COLUMNS) softColumn(ctx, cx);
+  softRailing(ctx);
+  // тёплая дымка поверх всего, как на старой плёнке
+  const haze = ctx.createLinearGradient(0, 0, 0, FIELD_H);
+  haze.addColorStop(0, 'rgba(120,60,30,.10)');
+  haze.addColorStop(0.5, 'rgba(255,220,170,.04)');
+  haze.addColorStop(1, 'rgba(60,30,15,.12)');
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, 0, FIELD_W, FIELD_H);
   const signs = [];
   signs.push([(bayX(BAYS.rest[0]) + bayX(BAYS.rest[1]) + BAY_W) / 2, 72, 'Зона отдыха', 14, '#5d4426']);
   signs.push([bayX(BAYS.temple[0]) + BAY_W / 2, 72, 'Храм Фортуны', 14, '#7a5a2a']);
@@ -614,29 +621,29 @@ function gladiatorArt(look, pose, dead) {
 
 // лежит на спине, голова слева: в лазарете под одеялом, на арене — без
 function lyingArt(look, blanket, dead) {
-  const p = new Pix(36, 12);
+  const p = new Pix(25, 11);
   const skin = look.skin, skinD = darker(skin, 0.78), metal = METALS[look.armor], metalD = darker(metal, 0.7);
-  p.rect(21, 7, 11, 2, skin);
-  p.rect(21, 9, 11, 1, skinD);
-  p.rect(32, 6, 2, 4, '#5a3a22');
-  p.rect(16, 6, 6, 4, '#ebe0c8');
-  p.rect(16, 6, 1, 4, look.armor >= 4 ? '#c9a24a' : '#5a3a22');
-  for (let x = 7; x < 16; x++) for (let y = 5; y < 10; y++) p.px(x, y, y === 5 ? darker(skin, 1.1) : y === 9 ? skinD : skin);
-  if (look.armor >= 3) p.rect(7, 5, 9, 4, metal);
-  p.rect(9, 9, 10, 1, skinD);
-  p.ellipse(4, 7, 3.6, 3.4, skin, skinD, darker(skin, 1.1));
+  p.rect(15, 6, 7, 2, skin);
+  p.rect(15, 8, 7, 1, skinD);
+  p.rect(22, 5, 2, 4, '#5a3a22');
+  p.rect(12, 5, 4, 4, '#ebe0c8');
+  p.rect(12, 5, 1, 4, look.armor >= 4 ? '#c9a24a' : '#5a3a22');
+  for (let x = 6; x < 12; x++) for (let y = 4; y < 9; y++) p.px(x, y, y === 4 ? darker(skin, 1.1) : y === 8 ? skinD : skin);
+  if (look.armor >= 3) p.rect(6, 4, 6, 4, metal);
+  p.ellipse(3.5, 6, 3.2, 3.2, skin, skinD, darker(skin, 1.1));
   if (look.helmet === 'bare') {
-    p.rect(1, 4, 3, 6, look.hair);
-    p.rect(3, 4, 1, 6, look.color);
+    p.rect(0, 3, 3, 6, look.hair);
+    p.rect(2, 3, 1, 6, look.color);
   } else {
-    p.rect(0, 4, 4, 7, metal);
-    p.rect(0, 4, 1, 7, metalD);
-    p.rect(0, 6, 1, 3, look.color);
+    p.rect(0, 3, 3, 6, metal);
+    p.rect(0, 3, 1, 6, metalD);
+    p.rect(0, 5, 1, 2, look.color);
   }
   if (blanket) {
-    for (let x = 12; x < 35; x++) for (let y = 4; y < 10; y++) {
-      p.px(x, y, y === 4 ? '#fbf6ea' : (x + y) % 5 === 0 ? '#d2c3a8' : '#e9dfcc');
+    for (let x = 8; x < 24; x++) for (let y = 3; y < 9; y++) {
+      p.px(x, y, y === 3 ? '#fbf6ea' : (x + y) % 5 === 0 ? '#d2c3a8' : '#e9dfcc');
     }
+    p.rect(8, 3, 1, 6, '#d2c3a8');
   }
   p.outline();
   if (!dead) return p.canvas();

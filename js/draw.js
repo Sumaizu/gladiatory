@@ -271,8 +271,8 @@ export function drawGladiator(ctx, g, t, scene) {
     ctx.fillRect(-9, 3, 14, 1);
   }
   if (lying) {
-    if (g.face < 0) ctx.scale(-1, 1);
-    ctx.drawImage(lyingSprite(look, pose === 'lie', fate === 'dead'), -18, pose === 'lie' ? -13 : -11);
+    if (g.face < 0 && pose !== 'lie') ctx.scale(-1, 1);
+    ctx.drawImage(lyingSprite(look, pose === 'lie', fate === 'dead'), -12, pose === 'lie' ? -9 : -10);
     ctx.restore();
     return;
   }
