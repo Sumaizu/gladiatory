@@ -867,7 +867,7 @@ export class View {
     }
   }
 
-  // карточка: сверху имя и уровень; слева кукла со снаряжением, справа здоровье, урон, монеты, характеристики и бои
+  // карточка: сверху имя и уровень; ниже кукла со снаряжением, характеристики столбиком и здоровье, урон, монеты, бои
   _profile(g) {
     const top = el('div', 'top');
     const lv = el('span', 'lv');
@@ -900,24 +900,18 @@ export class View {
       const item = g.gear && g.gear[id];
       slot(id, ARMOR_SLOTS[id].label, id === 'body' ? 'armor' : id, item && rarityOf(item.rarity).color);
     }
-    const info = el('div', 'info');
-    const hp = el('div', 'hp'), fill = el('i');
-    fill.style.width = (Math.max(0, Math.min(1, g.hp / hpMax)) * 100).toFixed(1) + '%';
-    hp.append(fill);
-    const row = (...items) => {
-      const node = el('div', 'row');
-      node.append(...items);
-      return node;
-    };
-    const stats = row(...STATS.map((stat) => chip(iconImg(statIcon(stat.id), 'ico small'), String(g[stat.id]), stat.name, ' small')));
-    const small = el('div', 'small-line');
-    small.append('крит ' + Math.round(critOf(g) * 100) + '% · броня ' + Math.round(armorOf(g) * 100) + '%', el('br'),
-      'боёв: ' + g.fights);
-    info.append(chip(iconImg('images/heart.png'), Math.round(g.hp) + '/' + Math.round(hpMax), 'Здоровье'), hp,
-      row(chip(iconImg('images/might.png'), String(Math.round(damageOf(g))), 'Урон'), chip(el('i', 'coin'), String(g.coins), 'Монеты')),
-      stats, small);
+    // характеристики столбиком, под ними крит и броня; справа здоровье, урон, монеты и бои
+    const stats = el('div', 'col stats');
+    stats.append(...STATS.map((stat) => chip(iconImg(statIcon(stat.id), 'ico small'), String(g[stat.id]), stat.name, ' small')),
+      el('div', 'small-line', 'крит ' + Math.round(critOf(g) * 100) + '%'),
+      el('div', 'small-line', 'броня ' + Math.round(armorOf(g) * 100) + '%'));
+    const info = el('div', 'col info');
+    info.append(chip(iconImg('images/heart.png'), String(Math.round(hpMax)), 'Максимум здоровья'),
+      chip(iconImg('images/might.png'), String(Math.round(damageOf(g))), 'Урон'),
+      chip(el('i', 'coin'), String(g.coins), 'Монеты'),
+      el('div', 'small-line', 'боёв: ' + g.fights));
     const body = el('div', 'body');
-    body.append(doll, info);
+    body.append(doll, stats, info);
     return [top, body];
   }
 
