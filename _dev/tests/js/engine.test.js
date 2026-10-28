@@ -857,7 +857,7 @@ test('Яма со львами: лев на каждых ' + PIT.per + ' гла�
     g.next();
     return g.fighters.filter((f) => f.lion).length;
   };
-  eq([lionsFor(2), lionsFor(7), lionsFor(30)], [1, 2, PIT.max]);
+  eq([lionsFor(2), lionsFor(7), lionsFor(30)], [1, 3, PIT.max]);
 });
 
 test('Яма со львами: чем сильнее команда, тем сильнее львы', () => {
@@ -882,7 +882,7 @@ test('Яма со львами: все бьют львов, а львы — гл
   const people = join(g, 'A', 'B', 'C', 'D', 'E', 'F', 'G');
   g.next();
   const lions = g.fighters.filter((f) => f.lion);
-  eq(lions.length, 2);
+  eq(lions.length, 3);
   for (const l of lions) eq([l.level, l.name], [5, 'Лев']);
   for (let i = 0; i < 20 * 6; i++) g.step(0.05);
   for (const e of g.events.filter((x) => x.type === 'hit')) {
@@ -896,7 +896,7 @@ test('Яма со львами: все бьют львов, а львы — гл
   no(Array.from(g.members.keys()).some((k) => k.startsWith('lion')), 'львы не попали в лудус');
 });
 
-test('Яма со львами: от льва гибнут втрое чаще, выжившие получают много опыта и золота', () => {
+test('Яма со львами: от льва гибнут чаще (×' + PIT.deathMult + '), выжившие получают много опыта и золота', () => {
   const g = game({ mode: 'pit', settings: { death: 20 } });
   const [a, b] = join(g, 'A', 'B', 'C');
   g.next();
@@ -910,7 +910,7 @@ test('Яма со львами: от льва гибнут втрое чаще, 
     if (a.fate === 'dead') dead++;
   }
   const share = dead / 2000;
-  ok(share > 0.5 && share < 0.75, 'шанс гибели от льва ' + share.toFixed(2));
+  ok(share > 0.32 && share < 0.5, 'шанс гибели от льва ' + share.toFixed(2));
   a.fate = 'fight';
   a.hp = maxHp(a);
   g.random = rng(3);
@@ -1240,4 +1240,14 @@ test('парагон только тем, кто провёл хотя бы ' + 
   g.next();
   eq(g.members.get('a').fights, PARAGON.fights);
   eq(g.nextMode, 'paragon');
+});
+
+test('Яма со львами: раненым выходят львы слабее', () => {
+  const mightFor = (part) => {
+    const g = game({ mode: 'pit' });
+    for (const m of join(g, 'A', 'B', 'C', 'D')) m.hp = maxHp(m) * part;
+    g.next();
+    return g.fighters.find((f) => f.lion).might;
+  };
+  ok(mightFor(0.4) < mightFor(1) * 0.8);
 });

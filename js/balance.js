@@ -123,7 +123,7 @@ export function powerOf(g) {
 // Сила стороны — (сумма урона в секунду) × (сумма живучести). Толпа бьёт слаженнее, поэтому доля растёт от strength[0]
 // при grow[0] бойцах до strength[1] при grow[1] и больше. Подобрано симуляцией: игроки побеждают ~9 боёв из 10, но с потерями
 export const PIT = {
-  chance: 0.1, deathMult: 3, per: 3, max: 6, strength: [0.51, 0.62], grow: [3, 8], might: [0.4, 12], tilt: [2.5, 1.07],
+  chance: 0.1, deathMult: 2, per: 2.5, max: 6, strength: [0.47, 0.58], grow: [3, 8], might: [0.4, 12], tilt: [2.5, 1.07],
   lion: { level: 5, str: 4, agi: 3, vit: 4 },
   reward: { standing: { xp: 100, coins: 80 }, beaten: { xp: 70, coins: 55 }, perKo: { xp: 20, coins: 15 } },
 };

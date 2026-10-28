@@ -874,9 +874,10 @@ export class Game {
     // сила стороны — (сумма урона в секунду) × (сумма живучести); львы получают strength от силы гладиаторов
     let dps = 0, ehp = 0;
     for (const g of people) {
-      const p = powerOf(Object.assign({}, g, { hp: maxHp(g) }));
+      // раненый выходит с тем здоровьем, что есть, — львы под него слабее
+      const p = powerOf(g);
       dps += p.dps;
-      ehp += p.ehp;
+      ehp += p.ehp * Math.max(0.1, Math.min(1, g.hp / maxHp(g)));
     }
     const lions = [];
     for (let i = 0; i < count; i++) {
