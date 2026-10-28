@@ -5,7 +5,7 @@ import { BLEED, RUN_PER_AGI, runOf, TEAMS, YIELD_CUT, DUEL, HEAL_RATE, HIT_REWAR
 import { starOf } from '../../../js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
 import { inArena } from '../../../js/places.js';
-import { DIVINE, PRICE, RARITIES, rarityOf, SHOW_TIME, SPIN_TIME, spin } from '../../../js/gacha.js';
+import { DIVINE, OUTCOMES, PRICE, RARITIES, rarityOf, SHOW_TIME, SPIN_TIME, spin } from '../../../js/gacha.js';
 
 const SETTINGS = clean({ ludus: 60, battle: 90, death: 0 });
 
@@ -534,9 +534,9 @@ test('гача: редкости в пропорциях Чатобороны, �
     const r = spin(random), key = r.item ? r.item.rarity : r.kind;
     counts[key] = (counts[key] || 0) + 1;
   }
-  const total = 0.04 + 0.05 + RARITIES.reduce((sum, x) => sum + x.chance, 0);
+  const total = OUTCOMES.concat(RARITIES).reduce((sum, x) => sum + x.chance, 0);
   for (const id of ['handful', 'bag', 'chest', 'void']) eq(counts[id], undefined, 'монет и пустоты из гачи нет');
-  for (const [id, chance] of [['shield', 0.04], ['common', 0.27], ['legendary', 0.06]]) {
+  for (const [id, chance] of [['shield', 0.064], ['net', 0.08], ['common', 0.27], ['legendary', 0.06]]) {
     const share = counts[id] / n, want = chance / total;
     ok(Math.abs(share - want) < want * 0.12, id + ': ' + share.toFixed(3) + ' против ' + want.toFixed(3));
   }
