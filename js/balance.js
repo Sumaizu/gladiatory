@@ -37,10 +37,11 @@ export const MOVE_SPEED = 70;
 export const REACH = 36;
 export const BODY = 28;
 
+// выстоявшие получают чуть больше сдавшихся, но не в разы — чтобы чемпион не улетал по уровню
 export const REWARD = {
-  standing: { xp: 40, coins: 25, xpPerKo: 15, coinsPerKo: 8 },
-  beaten: { xp: 15, coins: 18, xpPerKo: 10, coinsPerKo: 5 },
-  champion: 1.5,
+  standing: { xp: 30, coins: 25, xpPerKo: 8, coinsPerKo: 8 },
+  beaten: { xp: 25, coins: 18, xpPerKo: 8, coinsPerKo: 5 },
+  champion: 1.25,
 };
 
 export const xpNeed = (level) => Math.round(40 * Math.pow(level, 1.4));
