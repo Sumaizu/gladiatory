@@ -203,6 +203,8 @@ export class Game {
     this.state = 'ludus';
     this.paused = false;
     this.timer = this.settings.ludus;
+    // режим следующего боя известен заранее — его пишут сверху лудуса
+    this.nextMode = this.forceMode || this._rollMode();
     this.fighters = [];
     this.endIn = null;
     this.notice = '';
@@ -642,8 +644,8 @@ export class Game {
     this.timer = this.settings.battle;
     this.endIn = null;
     this.cards = [];
-    const roll = this.random();
-    this.mode = this.forceMode || (roll < PIT.chance ? 'pit' : roll < PIT.chance + DUEL.chance ? 'duel' : 'ffa');
+    this.mode = this.forceMode || this.nextMode || this._rollMode();
+    this.nextMode = null;
     this.duel = null;
     if (this.mode === 'duel') {
       // двое случайных: первый встаёт слева (ставка «1»), второй справа (ставка «2»)
@@ -767,6 +769,11 @@ export class Game {
     d.right.target = d.left;
     this._line('Ставки сделаны: за ' + d.left.name + ' — ' + a + ', за ' + d.right.name + ' — ' + b + '. Бой!', 'battle');
     this._emit('phase', { state: 'battle', mode: 'duel', fight: true });
+  }
+
+  _rollMode() {
+    const roll = this.random();
+    return roll < PIT.chance ? 'pit' : roll < PIT.chance + DUEL.chance ? 'duel' : 'ffa';
   }
 
   // львы для «Волчьей ямы»: не гладиаторы, в лудус и сохранение не попадают

@@ -44,6 +44,8 @@ const ICONS = {
 };
 // ширина окна барабана = ширина .fortune (312) минус отступы (20)
 const ROLL = { speed: 18, wait: 2.5 };
+const MODE_NAMES = { ffa: 'Все против всех', pit: 'Волчья яма', duel: 'Дуэль' };
+const MODE_HINTS = { ffa: '— каждый сам за себя', pit: '— все вместе против львов', duel: '— двое случайных, остальные ставят' };
 const REEL = { cells: 30, stop: 25, size: 44, width: 292 };
 
 const $ = (id) => document.getElementById(id);
@@ -466,7 +468,7 @@ export class View {
 
   _status(game) {
     const duel = game.duel;
-    const key = game.state + '|' + game.mode + '|' + game.notice + '|' + (game.state === 'battle' ? game.waiting : '')
+    const key = game.state + '|' + game.mode + '|' + game.nextMode + '|' + game.notice + '|' + (game.state === 'battle' ? game.waiting : '')
       + '|' + (duel ? duel.betting : '');
     this._set('status', key, (node) => {
       node.replaceChildren();
@@ -482,6 +484,9 @@ export class View {
         node.append(el('small', '', game.waiting ? 'В лудусе ждут следующего боя: ' + game.waiting : what));
       } else if (game.state === 'results') {
         node.append(el('small', '', 'Награды розданы — скоро снова в лудус'));
+      } else if (game.state === 'ludus' && game.nextMode) {
+        node.append(el('small', '', 'Дальше:'), el('b', 'next-mode ' + game.nextMode, MODE_NAMES[game.nextMode]),
+          el('small', '', MODE_HINTS[game.nextMode]));
       } else {
         node.append(el('small', '', 'Напиши в чат что угодно — и ты гладиатор'));
       }

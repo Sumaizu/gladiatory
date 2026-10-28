@@ -963,3 +963,20 @@ test('гача: очередь идёт к храму заранее, кажды
   }
   eq(starts, ['a:на месте', 'b:на месте']);
 });
+
+test('режим следующего боя выбран заранее, в начале лудуса, и бой идёт именно в нём', () => {
+  const g = new Game(clean({ ludus: 60, battle: 20 }), new Roster(), { random: rng(5), now: () => 1 });
+  g.open();
+  join(g, 'A', 'B', 'C');
+  const seen = new Set();
+  for (let i = 0; i < 60; i++) {
+    while (g.state !== 'ludus') g.next();
+    const planned = g.nextMode;
+    ok(['ffa', 'pit', 'duel'].includes(planned));
+    g.next();
+    eq(g.mode, planned);
+    seen.add(planned);
+    for (const m of g.members.values()) m.hp = 1e9;
+  }
+  eq(seen, new Set(['ffa', 'pit', 'duel']));
+});
