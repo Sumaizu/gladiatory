@@ -534,10 +534,12 @@ test('гача: редкости в пропорциях Чатобороны, �
     const r = spin(random), key = r.item ? r.item.rarity : r.kind;
     counts[key] = (counts[key] || 0) + 1;
   }
-  const total = OUTCOMES.concat(RARITIES).reduce((sum, x) => sum + x.chance, 0);
+  // щит, сеть и амулет — прямо доля круток, остальное делят редкости в пропорциях Чатобороны
+  const items = 1 - OUTCOMES.reduce((sum, x) => sum + x.chance, 0), rare = RARITIES.reduce((sum, x) => sum + x.chance, 0);
   for (const id of ['handful', 'bag', 'chest', 'void']) eq(counts[id], undefined, 'монет и пустоты из гачи нет');
-  for (const [id, chance] of [['shield', 0.1567], ['net', 0.1567], ['common', 0.27], ['legendary', 0.06]]) {
-    const share = counts[id] / n, want = chance / total;
+  for (const [id, want] of [['shield', 0.15], ['net', 0.15], ['amulet', 0.03], ['common', items * 0.27 / rare],
+    ['legendary', items * 0.06 / rare]]) {
+    const share = counts[id] / n;
     ok(Math.abs(share - want) < want * 0.12, id + ': ' + share.toFixed(3) + ' против ' + want.toFixed(3));
   }
 });
@@ -1554,4 +1556,22 @@ test('оружие из гачи той же редкости или выше з
   a.gear.body = { kind: 'armor', slot: 'body', rarity: 'epic', power: 19 };
   g._prize(a, { kind: 'item', item: { kind: 'armor', slot: 'body', rarity: 'epic', power: 17 } });
   eq(a.gear.body.power, 19, 'доспех — по-прежнему только если крепче');
+});
+
+test('гача: с мечом или копьём и пустой второй рукой щит и сеть выпадают вдвое чаще (по 30%)', () => {
+  const share = (owner) => {
+    const random = rng(9), counts = {};
+    for (let i = 0; i < 30000; i++) {
+      const r = spin(random, owner);
+      counts[r.kind] = (counts[r.kind] || 0) + 1;
+    }
+    return [(counts.shield || 0) / 30000, (counts.net || 0) / 30000, (counts.amulet || 0) / 30000];
+  };
+  const free = { shield: false, nets: 0, amulet: false };
+  for (const type of ['sword', 'spear']) {
+    const [sh, net, am] = share(Object.assign({ weapon: { type } }, free));
+    ok(Math.abs(sh - 0.3) < 0.02 && Math.abs(net - 0.3) < 0.02 && Math.abs(am - 0.03) < 0.01, type + ': ' + [sh, net, am]);
+  }
+  eq(share(Object.assign({ weapon: { type: 'greatsword' } }, free)).slice(0, 2), [0, 0], 'с двуручником — никогда');
+  eq(share(Object.assign({ weapon: { type: 'sword' } }, free, { shield: true })).slice(0, 2), [0, 0], 'рука занята — никогда');
 });

@@ -8,12 +8,13 @@ export const RUSH = { queue: 6, spin: 0.5, show: 0.7 };
 export const QUEUE_CAP = 10;
 export const SPREAD = 0.15;
 
-// веса: при свободной второй руке щит и сеть выпадают по 15% (вес 0.1567 от суммы всех весов ≈ 1.045), амулет — 3%
+// chance — прямо доля круток: щит и сеть по 15%, амулет 3%; остальное — оружие и доспехи по редкостям.
+// Щит и сеть — только при свободной второй руке; у кого в руке меч или копьё, а второй вещи нет, — вдвое чаще (offhand)
 export const OUTCOMES = [
-  { id: 'shield', name: 'Щит', color: '#d9a441', chance: 0.1567 },
-  { id: 'net', name: 'Сеть', color: '#a8c4b0', chance: 0.1567 },
+  { id: 'shield', name: 'Щит', color: '#d9a441', chance: 0.15, offhand: 2 },
+  { id: 'net', name: 'Сеть', color: '#a8c4b0', chance: 0.15, offhand: 2 },
   // спасает от смерти один раз и рассыпается; пока он есть, второй не выпадает
-  { id: 'amulet', name: 'Божественный амулет', color: '#ff3b47', chance: 0.0313 },
+  { id: 'amulet', name: 'Божественный амулет', color: '#ff3b47', chance: 0.03 },
 ];
 
 // weapon — прибавка к урону, armor — процент, на который режется входящий урон
@@ -68,13 +69,14 @@ export function spin(random, owner = null) {
     : o.id !== 'shield' && o.id !== 'net' || offhandFree(owner)));
   // у кого ещё нет оружия, тому первая же гача гарантированно даёт оружие
   if (owner && !owner.weapon) return { kind: 'item', item: makeItem(random, 'weapon', pick(RARITIES, random)) };
-  const roll = pick(outcomes.concat(RARITIES), random);
-  if (roll.coins) {
-    const [low, high] = roll.coins;
-    return { kind: roll.id, coins: low + Math.floor(random() * (high - low + 1)) };
+  // меч или копьё и пустая вторая рука — щит и сеть вдвое чаще
+  const oneHand = owner && owner.weapon && (owner.weapon.type === 'sword' || owner.weapon.type === 'spear');
+  let roll = random();
+  for (const o of outcomes) {
+    roll -= o.chance * (oneHand && o.offhand ? o.offhand : 1);
+    if (roll < 0) return { kind: o.id };
   }
-  if (OUTCOMES.includes(roll)) return { kind: roll.id };
-  return { kind: 'item', item: makeItem(random, random() < 0.5 ? 'weapon' : 'armor', roll) };
+  return { kind: 'item', item: makeItem(random, random() < 0.5 ? 'weapon' : 'armor', pick(RARITIES, random)) };
 }
 
 const adjective = (rarity, gender) => (!rarity ? '' : gender === 'n' ? rarity.n : gender === 'f' ? rarity.f
