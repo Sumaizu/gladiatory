@@ -322,14 +322,15 @@ test('сохранение: прогресс переживает перезап
   a.coins = 500;
   a.weapon = { kind: 'weapon', rarity: 'epic', power: 11, type: 'spear' };
   a.shield = true;
-  a.nets = 2;
+  a.nets = 1;
+  a.shield = false;
   g.feed('Brutus', 'сила 2', { login: 'brutus' });
   a.hp = maxHp(a) / 2;
   g.stop();
   const again = game({ roster: new Roster(memory, 'k') });
   const [b] = join(again, 'Brutus');
   eq([b.weapon, b.str, b.coins, b.shield, b.nets], [{ kind: 'weapon', rarity: 'epic', power: 11, type: 'spear' }, 2, 500,
-    true, 2]);
+    false, 1]);
   eq(b.hp, Math.round(maxHp(b) / 2));
 });
 
@@ -669,23 +670,31 @@ test('сеть: одноразовая, оглушает и цель добив�
   ok(NET.stun >= 2);
 });
 
-test('гача: щит и сеть без редкости; сетей не больше трёх, второй щит не нужен', () => {
+test('гача: щит и сеть без редкости, занимают вторую руку; пока она занята или двуручник — не выпадают', () => {
   const g = game();
-  const [a] = join(g, 'A');
+  const [a, b, c] = join(g, 'A', 'B', 'C');
   g._prize(a, { kind: 'shield' });
   ok(a.shield);
-  g._prize(a, { kind: 'shield' });
-  ok(g.lines.some((l) => l.text.includes('второй щит')));
-  for (let i = 0; i < 5; i++) g._prize(a, { kind: 'net' });
-  eq(a.nets, NET.max);
+  g._prize(a, { kind: 'net' });
+  eq(a.nets, 0, 'с щитом сеть не берётся');
+  g._prize(b, { kind: 'net' });
+  g._prize(b, { kind: 'net' });
+  eq(b.nets, NET.max);
+  c.weapon = weapon('greatsword');
   const random = rng(9), kinds = new Set(), types = new Set();
   for (let i = 0; i < 4000; i++) {
     const r = spin(random);
     kinds.add(r.kind);
     if (r.item && r.item.kind === 'weapon') types.add(r.item.type);
   }
-  ok(kinds.has('shield') && kinds.has('net'));
+  ok(kinds.has('shield') && kinds.has('net'), 'свободной руке выпадают');
   eq(types, new Set(['sword', 'greatsword', 'spear']));
+  for (const owner of [a, b, c]) {
+    for (let i = 0; i < 3000; i++) {
+      const r = spin(random, owner);
+      ok(r.kind !== 'shield' && r.kind !== 'net', owner.name + ': ' + r.kind);
+    }
+  }
 });
 
 test('арена: врага выше уровнем выбирают чаще, чем равного или слабее', () => {

@@ -1,5 +1,5 @@
 import { BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
-  START_POINTS, STATS, TRAIN_XP, NET, SHIELD, SPEAR, armorOf, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
+  START_POINTS, STATS, TRAIN_XP, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
 import { PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemText, spin } from './gacha.js';
@@ -380,7 +380,7 @@ export class Game {
       while (this.spins.length && !this.members.has(this.spins[0].login)) this.spins.shift();
       if (!this.spins.length) return;
       const { login } = this.spins.shift(), rush = this.spins.length >= RUSH.queue;
-      this.spinNow = { id: ++this.eventId, login, result: spin(this.random), t: 0, done: false,
+      this.spinNow = { id: ++this.eventId, login, result: spin(this.random, this.members.get(login)), t: 0, done: false,
         spin: rush ? RUSH.spin : SPIN_TIME, show: rush ? RUSH.show : SHOW_TIME };
       this._emit('spin', { login, spinId: this.spinNow.id });
     }
@@ -405,13 +405,17 @@ export class Game {
       this._line(g.name + ': +' + result.coins + ' монет из гачи', 'buy');
     } else if (result.kind === 'shield') {
       result.equipped = !g.shield;
-      if (g.shield) this._line(g.name + ': второй щит не нужен — выброшен', 'info');
-      else this._line(g.name + ' берёт щит' + (typeOf(g).hands === 2 ? ' — заработает, когда в руке не двуручник' : ''), 'level');
-      g.shield = true;
+      result.equipped = !g.shield && !(g.nets > 0);
+      if (result.equipped) {
+        g.shield = true;
+        this._line(g.name + ' берёт щит', 'level');
+      } else {
+        this._line(g.name + ': вторая рука занята — щит выброшен', 'info');
+      }
     } else if (result.kind === 'net') {
-      result.equipped = g.nets < NET.max;
-      if (result.equipped) g.nets++;
-      this._line(g.name + (result.equipped ? ' берёт сеть (сетей: ' + g.nets + ')' : ': больше ' + NET.max + ' сетей не унести — выброшена'),
+      result.equipped = !g.shield && !(g.nets > 0);
+      if (result.equipped) g.nets = 1;
+      this._line(g.name + (result.equipped ? ' берёт сеть' : ': вторая рука занята — сеть выброшена'),
         result.equipped ? 'level' : 'info');
     } else if (result.item) {
       const item = result.item, current = g[item.kind];
@@ -788,7 +792,7 @@ export class Game {
         g.cool = attackEvery(g);
         continue;
       }
-      if (g.nets > 0 && !(t.stunT > 0) && d >= NET.range[0] && d <= NET.range[1] && this.random() < dt * NET.chance) {
+      if (netUp(g) && !(t.stunT > 0) && d >= NET.range[0] && d <= NET.range[1] && this.random() < dt * NET.chance) {
         g.nets--;
         this._throw(g, t, 'net');
         continue;

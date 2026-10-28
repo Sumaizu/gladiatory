@@ -60,8 +60,11 @@ export const typeOf = (g) => WEAPON_TYPES[g.weapon && g.weapon.type] || WEAPON_T
 export const reachOf = (g) => REACH * typeOf(g).reach;
 export const twoHanded = (g) => typeOf(g).hands === 2;
 export const shieldUp = (g) => Boolean(g.shield) && !twoHanded(g);
+export const netUp = (g) => g.nets > 0 && !g.shield && !twoHanded(g);
+// вторая рука: щит или сеть. Занята или в руках двуручник — ни щит, ни сеть из гачи не выпадают
+export const offhandFree = (g) => !g.shield && !(g.nets > 0) && !twoHanded(g);
 export const SHIELD = { block: 0.25, breaks: 0.08 };
-export const NET = { stun: 3, range: [50, 170], chance: 1.2, speed: 320, focus: 6, max: 3 };
+export const NET = { stun: 3, range: [50, 170], chance: 1.2, speed: 320, focus: 6, max: 1 };
 export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, pickup: 14 };
 
 export function damageOf(g) {

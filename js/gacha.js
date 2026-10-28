@@ -1,5 +1,5 @@
 // гача в храме Фортуны: шансы редкостей как в Чатобороне, монет не выпадает; щит и сеть — без редкости
-import { WEAPON_TYPES } from './balance.js';
+import { WEAPON_TYPES, offhandFree } from './balance.js';
 export const PRICE = 30;
 export const SPIN_TIME = 2.2;
 export const SHOW_TIME = 3;
@@ -44,8 +44,10 @@ export function makeItem(random, kind, rarity, type = null) {
   return item;
 }
 
-export function spin(random) {
-  const roll = pick(OUTCOMES.concat(RARITIES), random);
+// owner — кто крутит: щит и сеть выпадают, только если его вторая рука свободна
+export function spin(random, owner = null) {
+  const outcomes = owner && !offhandFree(owner) ? OUTCOMES.filter((o) => o.id !== 'shield' && o.id !== 'net') : OUTCOMES;
+  const roll = pick(outcomes.concat(RARITIES), random);
   if (roll.coins) {
     const [low, high] = roll.coins;
     return { kind: roll.id, coins: low + Math.floor(random() * (high - low + 1)) };

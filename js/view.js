@@ -569,8 +569,8 @@ export class View {
       return p;
     };
     gear.append(gearLine('Оружие', g.weapon), gearLine('Доспех', g.armor),
-      line('Щит', g.shield ? (twoHanded(g) ? 'есть, но с двуручником не работает' : 'есть') : 'нет'),
-      line('Сети', String(g.nets || 0)),
+      line('Вторая рука', g.shield ? 'щит' + (twoHanded(g) ? ' (с двуручником не работает)' : '')
+        : g.nets > 0 ? 'сеть' + (twoHanded(g) ? ' (с двуручником не работает)' : '') : 'свободна'),
       line('Монеты', String(g.coins)),
       line('Бои', g.fights + ' · побед ' + g.wins + ' · нокаутов ' + g.kos + ' · убийств ' + g.kills));
     box.append(top, bar('hp', g.hp / hpMax, Math.round(g.hp) + ' / ' + hpMax + ' здоровья'),

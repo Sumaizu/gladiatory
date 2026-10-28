@@ -1,7 +1,7 @@
 // пиксельная графика как в Чатобороне: один пиксель рисунка — два пикселя поля, текстуры и спрайты с обводкой
 import { BAYS, BAY_W, COLUMNS, FIELD_H, FIELD_W, PLACES, WALL, bayX } from './places.js';
 import { tierOf } from './gacha.js';
-import { shieldUp } from './balance.js';
+import { netUp, shieldUp } from './balance.js';
 
 export const P = 2;
 const W = FIELD_W / P;
@@ -495,6 +495,7 @@ export function lookOf(g, seed) {
     color: muted(g.color), armor: tierOf(g.armor), helmet,
     skin: SKINS[(seed >>> 3) % SKINS.length], hair: HAIR[(seed >>> 6) % HAIR.length],
     shield: !shieldUp(g) ? 'none' : helmet === 'murmillo' || helmet === 'secutor' ? 'scutum' : 'parma',
+    net: netUp(g),
   };
 }
 
@@ -624,7 +625,18 @@ function gladiatorArt(look, pose, dead) {
     } else {
       // щита нет — видна ближняя рука, согнутая у груди
       p.line(14, 12 + dy, 16, 16 + dy, skin, 2);
-      p.rect(16, 15 + dy, 2, 2, skinL);
+      if (look.net) {
+        // свёрнутая сеть свисает из руки
+        for (let y = 15; y < 26; y++) {
+          const half = 1 + Math.min(3, (y - 15) * 0.45);
+          for (let x = Math.round(17 - half); x <= Math.round(17 + half); x++) {
+            p.px(x, y + dy, (x + y) % 2 ? '#cdbf9c' : '#9d8e68');
+          }
+        }
+        p.rect(16, 15 + dy, 2, 2, skin);
+      } else {
+        p.rect(16, 15 + dy, 2, 2, skinL);
+      }
     }
   }
   if (!dead) return p.canvas();
@@ -727,7 +739,7 @@ function silhouette(canvas) {
 }
 
 export function gladiatorSprite(look, pose, dead = false, flash = false) {
-  const key = ['g4', look.color, look.armor, look.helmet, look.shield, look.skin, look.hair, pose, dead, flash].join(':');
+  const key = ['g4', look.color, look.armor, look.helmet, look.shield, look.net, look.skin, look.hair, pose, dead, flash].join(':');
   return remember(key, () => {
     const art = remember(key.replace(/:(true|false)$/, ':false'), () => gladiatorArt(look, pose, dead));
     return flash ? silhouette(art) : art;
