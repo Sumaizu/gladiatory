@@ -2,7 +2,7 @@ import { TEAMS, maxHp } from './balance.js';
 import { ARENA, BAYS, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, bayX } from './places.js';
 import { tierOf } from './gacha.js';
 import { RAINBOW, RAINBOW_CYCLE, RAINBOW_W, SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
-import { LION, P, SPRITE, darker, drawDummyArt, lionSprite, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, paintLudusArt, shieldSprite, weaponSprite } from './art.js';
+import { LION, P, SPRITE, darker, drawDummyArt, lionSprite, sandTexel, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, paintLudusArt, shieldSprite, weaponSprite } from './art.js';
 
 const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
 const SKIN = ['#f0c79e', '#e2b48a', '#c98f62', '#a86e46', '#7d4f32'];
@@ -202,27 +202,26 @@ export function paintArena(ctx) {
   ctx.beginPath();
   ctx.ellipse(a.cx, a.cy, a.rx + 12, a.ry + 12, 0, 0, Math.PI * 2);
   ctx.fill();
-  // песок
-  const grad = ctx.createRadialGradient(a.cx, a.cy - 40, 40, a.cx, a.cy, a.rx);
-  grad.addColorStop(0, '#ecd3a6');
-  grad.addColorStop(1, '#cfae7c');
-  ctx.fillStyle = grad;
+  // песок — как в лудусе: тёплый, в дымке, светлее к середине; у стены мягкая тень
+  const sand = document.createElement('canvas');
+  sand.width = FIELD_W;
+  sand.height = FIELD_H;
+  const sctx = sand.getContext('2d'), img = sctx.createImageData(FIELD_W, FIELD_H);
+  for (let y = Math.floor(a.cy - a.ry); y <= a.cy + a.ry; y++) {
+    for (let x = Math.floor(a.cx - a.rx); x <= a.cx + a.rx; x++) {
+      const dx = (x + 0.5 - a.cx) / a.rx, dy = (y + 0.5 - a.cy) / a.ry, d = dx * dx + dy * dy;
+      if (d > 1.02 || x < 0 || y < 0 || x >= FIELD_W || y >= FIELD_H) continue;
+      const edge = Math.sqrt(d), [r, g, b] = sandTexel(x, y, 0.85 - 0.6 * edge * edge);
+      const shade = 1 - 0.13 * Math.pow(Math.max(0, edge - 0.78) / 0.22, 1.6) - 0.04 * Math.max(0, -dy);
+      img.data.set([r * shade, g * shade, b * shade, 255], (y * FIELD_W + x) * 4);
+    }
+  }
+  sctx.putImageData(img, 0, 0);
+  ctx.save();
   ctx.beginPath();
   ctx.ellipse(a.cx, a.cy, a.rx, a.ry, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.save();
   ctx.clip();
-  for (let i = 0; i < 1800; i++) {
-    ctx.fillStyle = random() < 0.5 ? 'rgba(120,80,40,.10)' : 'rgba(255,245,220,.16)';
-    ctx.fillRect(a.cx - a.rx + random() * a.rx * 2, a.cy - a.ry + random() * a.ry * 2, 2, 2);
-  }
-  ctx.strokeStyle = 'rgba(150,110,60,.18)';
-  ctx.lineWidth = 2;
-  for (let r = 40; r < a.rx; r += 34) {
-    ctx.beginPath();
-    ctx.ellipse(a.cx, a.cy, r, r * a.ry / a.rx, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
+  ctx.drawImage(sand, 0, 0);
   ctx.restore();
   // знамёна по стене
   for (let i = 0; i < 12; i++) {

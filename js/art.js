@@ -210,6 +210,19 @@ function smoothstep(a, b, v) {
   return t * t * (3 - 2 * t);
 }
 
+// песок как в Domina: тёплый персиково-золотой, в лёгкой дымке, с крупными мягкими разводами и редкими крупинками
+// (крупинки — по 2×2, как пиксели спрайтов). haze — насколько светлее «дымка» в этом месте (0…1)
+export function sandTexel(x, y, haze = 0.5) {
+  const base = rgb('#eccb94'), light = rgb('#f6e2b8');
+  const t = Math.max(0, Math.min(1, haze * 0.75 + (noise(x, y, 230, 41) - 0.5) * 0.5));
+  const c = base.map((v, i) => v + (light[i] - v) * t);
+  let k = 0.965 + 0.05 * noise(x, y, 120, 42) + 0.025 * noise(x, y, 46, 43);
+  const speck = hash(x >> 1, y >> 1, 44);
+  if (speck < 0.014) k *= 0.9 + 0.04 * hash(x >> 1, y >> 1, 45);
+  else if (speck > 0.993) k *= 1.04;
+  return tone(c, k);
+}
+
 function texel(x, y) {
   const grain = 1 + (hash(x, y, 3) - 0.5) * 0.025;
   if (y < WALL.top) {
@@ -238,11 +251,10 @@ function texel(x, y) {
     return tone(rgb('#8a6447'), k * grain);
   }
   if (y < WALL.front) {
-    // песок: светлый, с мягкой тенью от галереи и лёгкими разводами
-    let k = 0.84 + 0.16 * smoothstep(WALL.sand, WALL.sand + 40, y);
-    k *= 0.97 + 0.05 * noise(x, y, 90, 21) + 0.025 * noise(x, y, 24, 22);
-    k *= 1 - 0.05 * Math.pow(Math.abs(x - FIELD_W / 2) / (FIELD_W / 2), 2);
-    return tone(rgb('#ead8b2'), k * grain);
+    // песок: мягкая тень от галереи сверху, к середине светлее, по краям дымка гуще
+    const shade = 0.86 + 0.14 * smoothstep(WALL.sand, WALL.sand + 46, y);
+    const haze = 0.75 - 0.5 * Math.pow(Math.abs(x - FIELD_W / 2) / (FIELD_W / 2), 2);
+    return tone(sandTexel(x, y, haze), shade);
   }
   let k = 0.85 + 0.1 * noise(x * 0.15, y, 6, 31);
   if ((y - WALL.front) % 12 === 0) k *= 0.85;
@@ -932,53 +944,61 @@ export const netHandSprite = () => remember('net-hand2', netHandArt);
 export const netSprite = () => remember('net2', netArt);
 
 // лев в профиль, смотрит вправо: лапы на y = 23, центр x = 18. frame: stand, walk1, walk2, pounce, dead
+// лев как в Domina: светлое кремовое тело, вытянутое и поджарое, тёмная лохматая грива, длинный хвост с кисточкой
 function lionArt(frame) {
   const p = new Pix(38, 25);
-  const fur = '#c8964f', furD = '#a5763a', furL = '#e2bb7c', mane = '#6e3c1a', maneL = '#8f5426', maneD = '#4e2810';
+  const fur = '#e8dcc5', furD = '#c6b498', furL = '#f6efe2', belly = '#d9cab0';
+  const mane = '#3d2d24', maneD = '#251a14', maneL = '#5c4536', nose = '#2a1a12';
   const dead = frame === 'dead';
   const lift = frame === 'pounce' ? -3 : 0;
-  // хвост с кисточкой
-  p.line(7, 11, 3, 6, furD, 2);
-  p.line(3, 6, 1, 9, furD);
-  p.rect(0, 9, 3, 3, maneD);
-  // лапы: дальние темнее
-  const legs = frame === 'walk1' ? [[9, 7], [12, 14], [25, 22], [28, 30]] : frame === 'walk2' ? [[9, 11], [12, 10], [25, 26],
-    [28, 26]] : frame === 'pounce' ? [[9, 8], [12, 11], [26, 31], [29, 33]] : [[9, 9], [12, 12], [25, 25], [28, 28]];
+  // хвост: длинный, тонкий, кисточка тёмная
+  p.line(6, 12, 3, 13, furD);
+  p.line(3, 13, 1, 12, furD);
+  p.rect(0, 10, 2, 2, mane);
+  p.px(0, 12, maneD);
+  // лапы: тонкие, дальние темнее
+  const legs = frame === 'walk1' ? [[9, 6], [12, 15], [25, 22], [28, 31]] : frame === 'walk2' ? [[9, 12], [12, 9], [25, 27],
+    [28, 25]] : frame === 'pounce' ? [[9, 7], [12, 10], [26, 31], [29, 34]] : [[9, 9], [12, 12], [25, 25], [28, 28]];
   if (!dead) {
     legs.forEach(([hip, foot], i) => {
       const far = i % 2 === 0, c = far ? furD : fur, top = i >= 2 ? 15 + lift : 15;
-      p.line(hip, top, foot, 22, c, 3);
-      p.rect(foot - 1, 23, 4, 1, far ? maneD : furD);
+      p.line(hip, top, foot, 22, c, 2);
+      p.rect(foot - 1, 23, 3, 1, far ? '#9c8a70' : furD);
     });
   }
-  // туловище
+  // туловище: длинное и низкое, светлая спина, тень снизу
   for (let y = 9; y < 18; y++) {
-    for (let x = 6; x < 29; x++) {
-      const dx = (x + 0.5 - 17) / 11.5, dy = (y + 0.5 - 13 - (x > 20 ? lift * 0.5 : 0)) / 4.6;
+    for (let x = 5; x < 30; x++) {
+      const dx = (x + 0.5 - 17.5) / 12.5, dy = (y + 0.5 - 13.2 - (x > 20 ? lift * 0.5 : 0)) / 3.9;
       if (dx * dx + dy * dy > 1) continue;
-      p.px(x, y, y < 11 ? furD : y > 15 ? furL : fur);
+      p.px(x, y, dy < -0.45 ? furL : dy > 0.5 ? belly : dy > 0.15 ? furD : fur);
     }
   }
-  // грива и голова
+  // грива: крупная, тёмная, с рваным краем
   const hx = 29, hy = 9 + lift;
-  p.ellipse(hx - 1, hy, 6.2, 6.6, mane, maneD, maneL);
-  for (let i = 0; i < 10; i++) p.px(hx - 6 + (i % 5) * 2, hy - 5 + Math.floor(i / 5) * 9, maneL);
-  p.ellipse(hx + 2, hy + 1, 3.6, 3.4, fur, furD, furL);
+  p.ellipse(hx - 2, hy + 0.5, 6.4, 7, mane, maneD, maneL);
+  for (let i = 0; i < 16; i++) {
+    const a = i / 16 * Math.PI * 2, r = 6.8 + (i % 3);
+    p.px(hx - 2 + Math.cos(a) * r, hy + 0.5 + Math.sin(a) * r * 1.05, i % 2 ? maneD : mane);
+  }
+  for (let i = 0; i < 8; i++) p.px(hx - 6 + (i % 4) * 3, hy - 4 + Math.floor(i / 4) * 8, maneL);
+  // морда: светлая, вытянутая вперёд, тёмный нос и глаз
+  p.ellipse(hx + 2.5, hy + 1.5, 3.2, 2.9, fur, furD, furL);
   p.rect(hx + 4, hy + 1, 3, 3, furL);
-  p.px(hx + 6, hy + 1, '#2a1a10');
-  p.px(hx + 3, hy - 1, '#2a1a10');
-  p.rect(hx + 4, hy + 4, 2, 1, '#7a2a20');
-  p.px(hx, hy - 4, furD);
+  p.px(hx + 6, hy + 1, nose);
+  p.px(hx + 3, hy - 0, nose);
+  p.rect(hx + 4, hy + 4, 2, 1, '#8a3a2a');
+  p.px(hx + 1, hy - 2, maneL);
+  p.outline('#4a3a2e');
   if (!dead) return p.canvas();
-  // мёртвый лев лежит на боку: лапы вытянуты, всё темнее
-  p.rect(10, 18, 18, 2, furD);
+  // мёртвый лев лежит на боку: всё темнее и серее
   return p.canvas((c) => {
     const [r, g, b] = rgb(c), l = (r + g + b) / 3;
     return hex([l * 0.6 + r * 0.2, l * 0.55 + g * 0.15, l * 0.5 + b * 0.1]);
   });
 }
 
-export const lionSprite = (frame) => remember('lion:' + frame, () => lionArt(frame));
+export const lionSprite = (frame) => remember('lion2:' + frame, () => lionArt(frame));
 export const LION = { x: 18, foot: 23 };
 
 function silhouette(canvas) {
