@@ -947,8 +947,8 @@ export const netSprite = () => remember('net2', netArt);
 // лев как в Domina, в высоком разрешении: один пиксель рисунка — один пиксель поля (у людей — два).
 // Светлое кремовое поджарое тело, тёмная лохматая грива, тонкие лапы, длинный хвост с кисточкой; свет сверху слева
 const LION_W = 112, LION_H = 64, LION_GROUND = 61;
-const FUR = ['#a8937a', '#c3b090', '#dccdb2', '#ebe0ca', '#f7f0e2'];
-const MANE = ['#1d1510', '#2c2019', '#463428', '#6b5242'];
+const FUR = ['#a48a6c', '#c4ab86', '#dcc7a5', '#ebdcc0', '#f6ecdb'];
+const MANE = ['#21160f', '#33241a', '#4b3424', '#6e4e34'];
 
 function lionArt(frame) {
   const p = new Pix(LION_W, LION_H);
@@ -1030,30 +1030,66 @@ function lionArt(frame) {
     }
   }
   [1, 3].forEach((i) => drawLeg(legs[i], i));
-  // грива: крупная, тёмная, с рваным краем и прядями
-  const mx = 84, my = 25 + down + (pounce ? -5 : 0);
-  for (let y = my - 20; y <= my + 22; y++) {
-    for (let x = mx - 18; x <= mx + 12; x++) {
-      const dx = x + 0.5 - mx, dy = y + 0.5 - my, a = Math.atan2(dy, dx), d = Math.hypot(dx / 13, dy / 16.5);
-      const edge = 1 + 0.09 * Math.sin(a * 9 + 1.3) + 0.07 * Math.sin(a * 17) + (hash(Math.round(a * 30), 0, 73) - 0.5) * 0.14;
-      if (d > edge) continue;
-      const strand = Math.sin(a * 14 + d * 6) * 0.5 + 0.5, light = -dx * 0.03 - dy * 0.04;
-      const v = 1.4 + strand * 0.9 + light + (hash(x, y, 74) - 0.5) * 0.8 - (d > 0.85 ? 0.6 : 0);
+  // грива: крупная тёмная масса вокруг головы и шеи, спускается на грудь; пряди расходятся от головы,
+  // по краю — острые лохмы (кроме переда, где морда)
+  const mx = 87, my = 24 + down + (pounce ? -5 : 0);
+  const maneR = (a) => {
+    const base = Math.hypot(Math.cos(a) * 14, Math.sin(a) * (Math.sin(a) > 0 ? 20 : 15)) / Math.hypot(Math.cos(a), Math.sin(a));
+    return base * (1 + 0.06 * Math.sin(a * 5 + 0.7));
+  };
+  const front = (a) => Math.cos(a) > 0.55 && Math.sin(a) < 0.5;
+  for (let y = my - 24; y <= my + 26; y++) {
+    for (let x = mx - 22; x <= mx + 18; x++) {
+      const dx = x + 0.5 - mx, dy = y + 0.5 - my, a = Math.atan2(dy, dx), d = Math.hypot(dx, dy), R = maneR(a);
+      // лохмы: острые зубцы по краю
+      const tuft = front(a) ? 0 : 3.2 * Math.max(0, Math.sin(a * 11 + 0.4)) ** 3 + 1.6 * Math.max(0, Math.sin(a * 23 + 2)) ** 4;
+      if (d > R + tuft) continue;
+      const strand = Math.sin(a * 22 + d * 0.55 + hash(Math.round(a * 22), 0, 75) * 3);
+      const lightSide = (-dx * 0.6 - dy * 0.8) / (R || 1);
+      let v = 1.2 + strand * 0.7 + lightSide * 1.1 + (hash(x, y, 76) - 0.5) * 0.5;
+      if (d > R - 2) v -= 0.6;
       p.px(x, y, MANE[Math.max(0, Math.min(MANE.length - 1, Math.round(v)))]);
     }
   }
-  // голова: светлая, вытянутая морда вперёд
-  const hx = 95, hy = 26 + down + (pounce ? -6 : 0);
-  blob(hx, hy, 8.5, 7.5, (x, y, dy) => furAt(x, y, dy, 0.1));
-  blob(hx + 6.5, hy + 3, 5.5, 4.2, (x, y, dy) => furAt(x, y, dy * 0.8, 0.4));
-  blob(hx - 4, hy - 8, 2.4, 2.4, (x, y, dy) => furAt(x, y, dy, -0.5));
-  p.rect(hx + 10, hy + 1, 2, 2, '#2a1a12');
-  p.px(hx + 11, hy + 1, '#4a3424');
-  p.rect(hx + 1, hy - 2, 2, 1, '#1a120c');
-  p.px(hx + 2, hy - 3, FUR[1]);
-  p.line(hx + 6, hy + 6, hx + 11, hy + 5, '#7d3326');
-  p.px(hx + 5, hy + 6, FUR[0]);
-  for (const [x, y] of [[hx + 7, hy + 2], [hx + 8, hy + 3], [hx + 7, hy + 4]]) p.px(x, y, FUR[2]);
+  // голова в профиль: округлый лоб, вытянутая морда, нижняя челюсть; морда теплее тела
+  const FACE = ['#b89a76', '#d3b892', '#e7d3b2', '#f4e8d3'];
+  const faceAt = (x, y, ny, bias = 0) => {
+    const v = 2 - ny * 1.3 + bias + (hash(x, y, 77) - 0.5) * 0.5;
+    return FACE[Math.max(0, Math.min(FACE.length - 1, Math.round(v)))];
+  };
+  const hx = 96, hy = 21 + down + (pounce ? -6 : 0);
+  blob(hx - 0.5, hy - 0.5, 6.5, 6.8, (x, y, dy) => faceAt(x, y, dy));
+  // морда: от лба вперёд и чуть вниз, с переносицей
+  for (let x = hx; x <= hx + 12; x++) {
+    const t = (x - hx) / 12, top = hy - 3 + t * 2.2, bot = hy + 6 - t * 1.2 - (t > 0.85 ? (t - 0.85) * 12 : 0);
+    for (let y = Math.floor(top); y <= bot; y++) {
+      const ny = ((y + 0.5) - (top + bot) / 2) / ((bot - top) / 2 || 1);
+      p.px(x, y, y < top + 1.2 ? FACE[3] : faceAt(x, y, ny, 0.2));
+    }
+  }
+  // нижняя челюсть и подбородок — в тени
+  for (let x = hx - 1; x <= hx + 8; x++) {
+    const t = (x - hx + 1) / 9, top = hy + 5, bot = hy + 8.5 - t * 2.5;
+    for (let y = Math.floor(top); y <= bot; y++) p.px(x, y, faceAt(x, y, 0.8, -0.3));
+  }
+  // нос, пасть, глаз под тёмным надбровьем, ухо
+  p.rect(hx + 11, hy - 1, 2, 2, '#2a1a12');
+  p.px(hx + 12, hy + 1, '#2a1a12');
+  p.px(hx + 11, hy - 1, '#5a4030');
+  p.line(hx + 4, hy + 5, hx + 11, hy + 3, '#5a2a1e');
+  p.px(hx + 4, hy + 5, '#3a1c14');
+  for (const [x, y] of [[hx + 7, hy + 2], [hx + 9, hy + 2], [hx + 8, hy + 3]]) p.px(x, y, FACE[1]);
+  // надбровье тёмное, глаз миндалевидный с бликом, под глазом и на щеке — тень
+  p.line(hx + 1, hy - 4, hx + 6, hy - 3, FACE[0]);
+  p.rect(hx + 3, hy - 2, 3, 2, '#1a120c');
+  p.px(hx + 2, hy - 1, '#1a120c');
+  p.px(hx + 4, hy - 2, '#e8d9c0');
+  p.line(hx + 2, hy, hx + 5, hy + 1, FACE[1]);
+  p.line(hx - 2, hy + 1, hx, hy + 4, FACE[1]);
+  // кончик носа скруглён
+  p.px(hx + 13, hy - 1, FACE[2]);
+  blob(hx - 3, hy - 6, 2, 2.2, (x, y, dy) => (dy > 0.2 ? FACE[0] : FACE[2]));
+  p.px(hx - 3, hy - 5, '#7a5a44');
   p.outline('#3a2c22');
   if (!dead) return p.canvas();
   // мёртвый лев: лежит, всё темнее и серее
@@ -1063,7 +1099,7 @@ function lionArt(frame) {
   });
 }
 
-export const lionSprite = (frame) => remember('lion3:' + frame, () => lionArt(frame));
+export const lionSprite = (frame) => remember('lion4:' + frame, () => lionArt(frame));
 // точка опоры спрайта льва: середина туловища на уровне лап; scale — во сколько пикселей поля один пиксель рисунка
 export const LION = { x: 56, foot: LION_GROUND, scale: 1 };
 
