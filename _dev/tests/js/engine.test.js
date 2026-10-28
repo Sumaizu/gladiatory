@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { BLEED, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { BLEED, YIELD_CUT, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { starOf } from '../../../js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
@@ -1314,4 +1314,19 @@ test('щит, отбивший удар, который был бы критом
   };
   const plain = breaks(false), hard = breaks(true);
   ok(hard > plain * 1.6 && hard < plain * 2.5, plain + ' → ' + hard);
+});
+
+test('сдался командой — награда за бой втрое меньше, чем у поваленного', () => {
+  const g = game();
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  g.next();
+  g.feed('A', 'сдаюсь', { login: 'a' });
+  b.fate = 'down';
+  g._checkEnd();
+  fight(g);
+  const ra = g.results.rows.find((r) => r.login === 'a'), rb = g.results.rows.find((r) => r.login === 'b');
+  eq(ra.fate, 'yield');
+  eq(ra.xp, Math.round((rb.xp - 3 * rb.hits + 3 * ra.hits) / YIELD_CUT));
+  ok(ra.coins < rb.coins);
+  ok(c);
 });

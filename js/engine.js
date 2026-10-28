@@ -1,4 +1,4 @@
-import { AFK_ROUNDS, BLEED, HIT_REWARD, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
+import { AFK_ROUNDS, BLEED, HIT_REWARD, YIELD_CUT, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
@@ -1325,6 +1325,11 @@ export class Game {
       if (fate !== 'dead' && g !== this.boss) {
         xp += HIT_REWARD.xp * (g.hitsNow || 0);
         coins += HIT_REWARD.coins * (g.hitsNow || 0);
+      }
+      // сдался сам — награда втрое меньше
+      if (fate === 'yield') {
+        xp = Math.round(xp / YIELD_CUT);
+        coins = Math.round(coins / YIELD_CUT);
       }
       const row = { login: g.login, name: g.name, color: g.color, fate, xp, coins, kos: g.kosNow, kills: g.killsNow,
         hits: g.hitsNow || 0,

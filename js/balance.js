@@ -120,6 +120,9 @@ export const BLEED = { chance: 0.2, time: 5, rate: 0.03, deathMult: 1.5 };
 // за каждый удар по врагу — к итогам боя
 export const HIT_REWARD = { xp: 3, coins: 2 };
 
+// сдался командой «сдаюсь» — вся награда за бой во столько раз меньше
+export const YIELD_CUT = 3;
+
 // кто столько раундов (лудус + бой) подряд ничего не писал в чат — афк и садится на скамью
 export const AFK_ROUNDS = 3;
 
