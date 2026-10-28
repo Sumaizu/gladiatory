@@ -3,21 +3,25 @@ export const START_POINTS = 3;
 export const POINTS_PER_LEVEL = 2;
 export const LEVEL_MAX = 99;
 
-export const HP_BASE = 150;
-export const HP_PER_LEVEL = 6;
+// баланс характеристик подобран боями 1 на 1 сборок с упором в одну характеристику на 5, 10 и 20 уровнях:
+// сила, ловкость и выносливость примерно равны по пользе на всех уровнях
+export const HP_BASE = 200;
+export const HP_PER_LEVEL = 3;
 export const HP_PER_VIT = 25;
 export const DAMAGE_BASE = 10;
-export const DAMAGE_PER_STR = 2;
+export const DAMAGE_PER_STR = 2.5;
 export const SPREAD = 0.15;
 export const ATTACK_EVERY = 1.25;
-export const HASTE_PER_AGI = 0.04;
+// скорость ударов от ловкости с убывающей отдачей: первые очки дают больше, после HASTE_SOFT — заметно меньше
+export const HASTE_PER_AGI = 0.06;
+export const HASTE_SOFT = 15;
 // ловкость ускоряет и бег: +RUN_PER_AGI к скорости за очко
 export const RUN_PER_AGI = 0.02;
 export const DODGE_BASE = 0.05;
-export const DODGE_PER_AGI = 0.012;
+export const DODGE_PER_AGI = 0.014;
 export const DODGE_MAX = 0.35;
 export const CRIT_BASE = 0.05;
-export const CRIT_PER_AGI = 0.006;
+export const CRIT_PER_AGI = 0.007;
 export const CRIT_HIT = 1.75;
 
 export const STATS = [
@@ -89,11 +93,12 @@ export function damageOf(g) {
 // множитель скорости бега от ловкости
 export const runOf = (g) => 1 + RUN_PER_AGI * (g.agi || 0);
 
-export const attackEvery = (g) => ATTACK_EVERY * typeOf(g).rate / (1 + HASTE_PER_AGI * g.agi);
+export const attackEvery = (g) => ATTACK_EVERY * typeOf(g).rate / (1 + HASTE_PER_AGI * g.agi / (1 + g.agi / HASTE_SOFT));
 export const dodgeOf = (g) => Math.min(DODGE_MAX, DODGE_BASE + DODGE_PER_AGI * g.agi);
-// ловкость сверх потолка уворота уходит в крит: каждое такое очко даёт ещё столько крита, сколько давало бы уворота
-export const AGI_CAP = Math.round((DODGE_MAX - DODGE_BASE) / DODGE_PER_AGI);
-export const critOf = (g) => CRIT_BASE + CRIT_PER_AGI * g.agi + DODGE_PER_AGI * Math.max(0, (g.agi || 0) - AGI_CAP)
+// ловкость сверх потолка уворота уходит в крит: каждое такое очко даёт ещё CRIT_OVERCAP крита
+export const AGI_CAP = Math.ceil((DODGE_MAX - DODGE_BASE) / DODGE_PER_AGI);
+export const CRIT_OVERCAP = 0.007;
+export const critOf = (g) => CRIT_BASE + CRIT_PER_AGI * g.agi + CRIT_OVERCAP * Math.max(0, (g.agi || 0) - AGI_CAP)
   + typeOf(g).crit;
 // доспех из гачи режет входящий урон на свой процент
 // снаряжение по слотам: share — какая доля «брони» редкости приходится на вещь; вместе режут урон, но не больше ARMOR_CAP

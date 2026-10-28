@@ -1298,12 +1298,13 @@ export class Game {
       this._knockOut(d, a);
       return;
     }
-    if (crit && this.random() < BLEED.chance) {
+    // парагона в испытании кровь не берёт
+    if (crit && d !== this.boss && this.random() < BLEED.chance) {
       if (!(d.bleedT > 0)) this._emit('bleed', { login: d.login, x: d.x, y: d.y });
       d.bleedT = BLEED.time;
       d.bledBy = a;
     }
-    if (crit && !d.lion && this.random() < FLEE.critChance) this._flee(d, FLEE.critTime[0] + this.random() * FLEE.critTime[1], 'crit');
+    if (crit && !d.lion && d !== this.boss && this.random() < FLEE.critChance) this._flee(d, FLEE.critTime[0] + this.random() * FLEE.critTime[1], 'crit');
     // ударили сбоку — может развернуться на обидчика
     else if (d.target !== a && !(d.fleeT > 0) && this.random() < REVENGE) {
       d.target = a;

@@ -1604,10 +1604,28 @@ test('копейщик может метнуть копьё и в далёкую
 test('ловкость сверх потолка уворота даёт больше крита', () => {
   const at = (agi) => critOf({ agi, weapon: weapon('sword') });
   const before = at(AGI_CAP) - at(AGI_CAP - 1), after = at(AGI_CAP + 1) - at(AGI_CAP);
-  ok(after > before * 2.5, before + ' → ' + after);
+  ok(after > before * 1.9, before + ' → ' + after);
   eq(dodgeOf({ agi: AGI_CAP + 10 }), dodgeOf({ agi: AGI_CAP }), 'уворот упёрся в потолок');
 });
 
 test('выносливость: +' + HP_PER_VIT + ' здоровья за очко', () => {
   eq(maxHp({ level: 1, vit: 1 }) - maxHp({ level: 1, vit: 0 }), 25);
+});
+
+test('испытание парагона: от критов не убегает, кровотечения нет, а его жертвы гибнут как обычно', () => {
+  const g = game({ mode: null, settings: { death: 100 } });
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  a.level = PARAGON.level;
+  a.fights = PARAGON.fights;
+  g.open();
+  g.next();
+  eq(g.boss, a);
+  a.hp = 1e6;
+  g.random = () => 0;
+  for (let i = 0; i < 5; i++) g._attack(b, a);
+  ok(!(a.fleeT > 0), 'не убегает от крита');
+  ok(!(a.bleedT > 0), 'кровь не течёт');
+  c.hp = -5;
+  g._knockOut(c, a);
+  eq(c.fate, 'dead', 'убитый парагоном погибает как обычно');
 });
