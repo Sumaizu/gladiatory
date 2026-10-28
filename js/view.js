@@ -19,14 +19,14 @@ const shadeBlood = (hex, k) => '#' + [1, 3, 5].map((i) => Math.max(0, Math.min(2
   * k))).toString(16).padStart(2, '0')).join('');
 const WHERE = {
   train: 'трен', heal: 'лазарет', rest: 'отдых',
-  fight: 'в бою', down: 'пал', yield: 'сдался', dead: 'погиб',
+  fight: 'в бою', down: 'пал', dead: 'погиб',
 };
 
 const COMMANDS = {
   ludus: [['трен', 'тренироваться: опыт'], ['лазарет', 'лечиться бесплатно'], ['отдых', 'сесть на скамью и не идти в бой'],
     ['гача', '30 монет: оружие, доспех, щит, сеть, амулет'], ['сил · лов · вын', 'вложить очко'],
     ['проф', 'твоя карточка']],
-  battle: [['сдаюсь', 'сдаться и точно выжить, но награда втрое меньше'], ['проф', 'твоя карточка'],
+  battle: [['проф', 'твоя карточка'],
     ['трен', 'встать со скамьи: в бой пойдёшь следующим']],
 };
 COMMANDS.results = COMMANDS.ludus;
@@ -372,9 +372,9 @@ export class View {
       this.floats.push({ x: e.x, y: e.y - 46, text: 'мимо', life: FLOAT_TIME * 0.8, kind: 'miss' });
       sound('miss');
     } else if (e.type === 'down') {
-      if (e.fate !== 'yield') this._bleed(e.x, e.y - 12, e.fate === 'dead' ? 22 : 8);
+      this._bleed(e.x, e.y - 12, e.fate === 'dead' ? 22 : 8);
       if (e.fate === 'dead') this._stain(e.x + 4, e.y + 2, 13);
-      const text = e.saved ? 'амулет спас!' : e.fate === 'dead' ? 'погиб' : e.fate === 'yield' ? 'сдался' : 'пал';
+      const text = e.saved ? 'амулет спас!' : e.fate === 'dead' ? 'погиб' : 'пал';
       this.floats.push({ x: e.x, y: e.y - 60, text, life: e.saved ? 3 : 2.2, kind: e.saved ? 'saved' : e.fate });
       this.roar = 1;
       sound(e.saved ? 'jackpot' : e.fate === 'dead' ? 'death' : 'down');
@@ -663,7 +663,7 @@ export class View {
       } else if (f.kind === 'dead') {
         size = 22;
         color = '#ff6b5e';
-      } else if (f.kind === 'down' || f.kind === 'yield') {
+      } else if (f.kind === 'down') {
         size = 18;
         color = '#f1e7d4';
       } else if (f.kind === 'block') {
@@ -766,8 +766,7 @@ export class View {
     this._set('commands', game.state + (duel ? (betting ? 'bet' : 'duel') + duel.left.login + duel.right.login : ''), (node) => {
       const list = betting ? [['1', 'ставка на ' + duel.left.name], ['2', 'ставка на ' + duel.right.name],
         ['что угодно', 'вступить и тоже поставить']]
-        // на дуэли сдаться нельзя — подсказку про «сдаюсь» не показываем
-        : duel ? COMMANDS.battle.filter(([word]) => word !== 'сдаюсь') : COMMANDS[game.state] || COMMANDS.ludus;
+        : COMMANDS[game.state] || COMMANDS.ludus;
       node.replaceChildren(...list.map(([word, text]) => {
         const item = el('span', 'command');
         item.append(el('code', '', word), el('small', '', text));
@@ -779,7 +778,7 @@ export class View {
   _roster(game) {
     const battle = game.state === 'battle';
     const list = Array.from(game.members.values());
-    const fateOrder = { fight: 0, yield: 1, down: 1, dead: 2 };
+    const fateOrder = { fight: 0, down: 1, dead: 2 };
     list.sort((a, b) => (battle ? (fateOrder[a.fate] ?? 3) - (fateOrder[b.fate] ?? 3) : 0)
       || b.level - a.level || b.xp - a.xp || a.name.localeCompare(b.name));
     const bets = game.duel ? game.duel.bets : null;
@@ -1086,7 +1085,7 @@ export class View {
         return span;
       };
       fill('res-alive', r.rows.filter((row) => row.fate === 'fight'), reward);
-      fill('res-beaten', r.rows.filter((row) => row.fate === 'down' || row.fate === 'yield'), reward);
+      fill('res-beaten', r.rows.filter((row) => row.fate === 'down'), reward);
       if (duelView) fill('res-dead', r.bettors, (row) => el('span', '', '+' + row.coins + ' монет'));
       else fill('res-dead', r.rows.filter((row) => row.fate === 'dead'),
         (row) => el('span', '', (row.by ? 'от руки ' + row.by : 'на арене') + ' · ' + row.level + ' ур.'));

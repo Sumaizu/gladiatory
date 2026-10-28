@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { AGI_CAP, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, YIELD_CUT, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { AGI_CAP, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { starOf } from '../../../js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
@@ -295,22 +295,6 @@ test('при шансе гибели 0% никто не гибнет', () => {
   eq(g.results.rows.filter((row) => row.fate === 'dead').length, 0);
 });
 
-test('сдаюсь: только в бою, спасает от гибели, бой кончается', () => {
-  const g = game({ settings: { death: 100 } });
-  const [a, b] = join(g, 'A', 'B');
-  g.feed('A', 'сдаюсь', { login: 'a' });
-  eq(a.fate, null, 'в лудусе не работает');
-  g.next();
-  g.feed('A', 'сдаюсь', { login: 'a' });
-  eq(a.fate, 'yield');
-  eq(g.endIn, END_DELAY);
-  fight(g);
-  eq(g.results.champion, 'b');
-  const row = g.results.rows.find((r) => r.login === 'a');
-  eq(row.fate, 'yield');
-  ok(g.members.has('a'));
-  eq(b.wins, 1);
-});
 
 test('кто пришёл во время боя, ждёт в лудусе и бьётся в следующем', () => {
   const g = game();
@@ -1273,7 +1257,7 @@ test('за каждый удар по врагу — +' + HIT_REWARD.xp + ' оп
   g.random = () => 0.5;
   for (let i = 0; i < 3; i++) g._attack(a, b);
   eq(a.hitsNow, 3);
-  b.fate = 'yield';
+  b.fate = 'down';
   g._checkEnd();
   fight(g);
   const ra = g.results.rows.find((r) => r.login === 'a');
@@ -1325,30 +1309,7 @@ test('щит, отбивший удар, который был бы критом
   ok(hard > plain * 1.6 && hard < plain * 2.5, plain + ' → ' + hard);
 });
 
-test('сдался командой — награда за бой втрое меньше, чем у поваленного', () => {
-  const g = game();
-  const [a, b, c] = join(g, 'A', 'B', 'C');
-  g.next();
-  g.feed('A', 'сдаюсь', { login: 'a' });
-  b.fate = 'down';
-  g._checkEnd();
-  fight(g);
-  const ra = g.results.rows.find((r) => r.login === 'a'), rb = g.results.rows.find((r) => r.login === 'b');
-  eq(ra.fate, 'yield');
-  eq(ra.xp, Math.round((rb.xp - 3 * rb.hits + 3 * ra.hits) / YIELD_CUT));
-  ok(ra.coins < rb.coins);
-  ok(c);
-});
 
-test('на дуэли сдаться нельзя', () => {
-  const g = game({ mode: 'duel' });
-  join(g, 'A', 'B', 'C');
-  g.next();
-  g.next();
-  const { left } = g.duel;
-  g.feed(left.name, 'сдаюсь', { login: left.login });
-  eq(left.fate, 'fight');
-});
 
 test('кровотечение: стоя на месте здоровье не теряет', () => {
   const g = game();
@@ -1409,7 +1370,7 @@ test('стенка на стенку: бой до последней коман�
   b.hp = -5;
   g._knockOut(b, a);
   eq(b.fate, 'dead');
-  c.fate = 'yield';
+  c.fate = 'down';
   g._checkEnd();
   ok(g.endIn !== null, 'синих не осталось — конец');
   fight(g);
@@ -1418,7 +1379,7 @@ test('стенка на стенку: бой до последней коман�
   const row = (m) => r.rows.find((x) => x.login === m.login);
   const base = (x) => x.xp - 3 * x.hits;
   ok(base(row(d)) >= TEAMS.reward.win.standing.xp, 'победитель устоял');
-  ok(base(row(d)) > base(row(c)) * 2, 'сдавшийся проигравший — меньше');
+  ok(base(row(d)) > base(row(c)), 'павший проигравший — меньше');
   no(g.members.has('b'), 'погибший пропал');
   eq(a.team, null, 'после боя команд нет');
 });
@@ -1696,4 +1657,23 @@ test('брошенное копьё: крит вдвое чаще, но пром
   const [m0, c0] = stats(false), [m1, c1] = stats(true);
   ok(Math.abs(m1 - m0 - SPEAR.miss) < 0.03, 'промах ' + m0 + ' → ' + m1);
   ok(c1 / (1 - m1) > c0 / (1 - m0) * 1.7, 'крит ' + c0 + ' → ' + c1);
+});
+
+test('сдаться командой нельзя: «сдаюсь» — просто сообщение в чат', () => {
+  const g = game();
+  const [a] = join(g, 'A', 'B', 'C');
+  g.next();
+  g.feed('A', 'сдаюсь', { login: 'a' });
+  eq(a.fate, 'fight');
+});
+
+// движковые тесты не трогают отрисовку — а синтаксическая ошибка в ней ломает весь оверлей; проверяем, что модули грузятся
+test('все модули оверлея и страницы загружаются без синтаксических ошибок', async () => {
+  for (const name of ['draw', 'view', 'art', 'rules', 'stars', 'sound', 'demo', 'chat', 'config', 'overlay', 'page']) {
+    try {
+      await import('../../../js/' + name + '.js');
+    } catch (error) {
+      if (error instanceof SyntaxError) throw new Error(name + '.js: ' + error.message);
+    }
+  }
 });

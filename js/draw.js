@@ -363,8 +363,7 @@ export function drawGladiator(ctx, g, t, scene) {
   const seed = hashOf(g.login);
   const look = lookOf(g, seed);
   let frame = 'stand';
-  if (fate === 'yield') frame = 'kneel';
-  else if (pose === 'sit') frame = 'sit';
+  if (pose === 'sit') frame = 'sit';
   else if (g.walking && !lying) frame = Math.sin(t * 10 + seed) > 0 ? 'walk1' : 'walk2';
   const sprite = gladiatorSprite(look, frame, fate === 'dead', g.flash > 0.08 && !lying);
   const x = Math.round(g.x / P) * P, y = Math.round(g.y / P) * P;
@@ -432,7 +431,7 @@ export function drawThrown(ctx, game) {
 export function drawLabel(ctx, g, scene, highlight) {
   const fate = scene === 'arena' ? g.fate : null;
   const pose = scene === 'ludus' && !g.walking ? g.pose : null;
-  // на арене у лежачих и сдавшихся ни имени, ни здоровья — только у тех, кто ещё дерётся
+  // на арене у лежачих ни имени, ни здоровья — только у тех, кто ещё дерётся
   if (fate && fate !== 'fight') return;
   const lying = fate === 'down' || fate === 'dead' || pose === 'lie';
   // на скамьях и койках соседи рядом — подписи через одну выше, чтобы не налезали

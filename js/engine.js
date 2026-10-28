@@ -1,4 +1,4 @@
-import { AFK_ROUNDS, CRIT_KILL, TEAMS, BLEED, HIT_REWARD, YIELD_CUT, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
+import { AFK_ROUNDS, CRIT_KILL, TEAMS, BLEED, HIT_REWARD, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, runOf, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
@@ -16,7 +16,6 @@ export const BOTS = [
 ];
 export const CARD_WORDS = new Set(['профиль', 'проф']);
 export const GACHA_WORDS = new Set(['гача', 'крутить']);
-export const YIELD_WORDS = new Set(['сдаюсь', 'сдаться', 'сдался']);
 export const MIN_FIGHTERS = 2;
 export const RESULTS_TIME = 12;
 export const END_DELAY = 2.5;
@@ -364,10 +363,6 @@ export class Game {
       this._showCard(g);
       return;
     }
-    if (YIELD_WORDS.has(word)) {
-      this._yield(g);
-      return;
-    }
     if ((word === '1' || word === '2') && this.duel && this.duel.betting) {
       this._bet(g, Number(word));
       return;
@@ -549,19 +544,6 @@ export class Game {
     this._keep(g);
   }
 
-  _yield(g) {
-    if (this.state !== 'battle' || g.fate !== 'fight') return;
-    // на дуэли не сдаются — она и так без смертей
-    if (this.duel) {
-      this._line(g.name + ': на дуэли не сдаются — бейся до конца', 'warn');
-      return;
-    }
-    g.fate = 'yield';
-    g.by = '';
-    this._line(g.name + ' бросает оружие и сдаётся', 'yield');
-    this._emit('down', { login: g.login, fate: 'yield', x: g.x, y: g.y });
-    this._checkEnd();
-  }
 
   // --- лудус ---
 
@@ -1340,7 +1322,7 @@ export class Game {
     else if (a.lion) this._line(dead ? 'Лев растерзал ' + d.name : 'Лев повалил ' + d.name + ' — тот жив', dead ? 'death' : 'down');
     else if (dead) this._line(d.name + ' погибает от руки ' + a.name, 'death');
     else if (saved) this._line('Божественный амулет спасает ' + d.name + ' от смерти — и рассыпается', 'champion');
-    else this._line(a.name + ' валит ' + d.name + ' — тот сдаётся', 'down');
+    else this._line(a.name + ' валит ' + d.name + ' — тот повержен, но жив', 'down');
     this._emit('down', { login: d.login, fate: d.fate, x: d.x, y: d.y, by: a.login, lion: Boolean(d.lion), saved });
     this._checkEnd();
   }
@@ -1430,7 +1412,7 @@ export class Game {
         xp = Math.round((r.xp + TEAMS.reward.perKo.xp * g.kosNow) * bonus);
         coins = Math.round((r.coins + TEAMS.reward.perKo.coins * g.kosNow) * bonus);
         if (g.team === winTeam) g.wins++;
-      } else if (fate === 'fight' || fate === 'down' || fate === 'yield') {
+      } else if (fate === 'fight' || fate === 'down') {
         const r = fate === 'fight' ? REWARD.standing : REWARD.beaten;
         const mult = bonus * (g === champion ? REWARD.champion : 1);
         xp = Math.round((r.xp + r.xpPerKo * g.kosNow) * mult);
@@ -1441,11 +1423,6 @@ export class Game {
       if (fate !== 'dead' && g !== this.boss) {
         xp += HIT_REWARD.xp * (g.hitsNow || 0);
         coins += HIT_REWARD.coins * (g.hitsNow || 0);
-      }
-      // сдался сам — награда втрое меньше
-      if (fate === 'yield') {
-        xp = Math.round(xp / YIELD_CUT);
-        coins = Math.round(coins / YIELD_CUT);
       }
       const row = { login: g.login, name: g.name, color: g.color, fate, xp, coins, kos: g.kosNow, kills: g.killsNow,
         hits: g.hitsNow || 0, team: g.team || null,
@@ -1491,7 +1468,7 @@ export class Game {
       }
       this._emit('paragon', { login: boss.login, paragon: fresh.paragon });
     }
-    const order = { fight: 0, down: 1, yield: 1, dead: 2 };
+    const order = { fight: 0, down: 1, dead: 2 };
     rows.sort((a, b) => order[a.fate] - order[b.fate] || b.kos - a.kos || b.xp - a.xp);
     let bettors = [];
     if (duel) {

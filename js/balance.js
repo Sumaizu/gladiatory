@@ -46,7 +46,7 @@ export const MOVE_SPEED = 70;
 export const REACH = 36;
 export const BODY = 28;
 
-// выстоявшие получают чуть больше сдавшихся, но не в разы — чтобы чемпион не улетал по уровню
+// выстоявшие получают чуть больше павших, но не в разы — чтобы чемпион не улетал по уровню
 export const REWARD = {
   standing: { xp: 30, coins: 25, xpPerKo: 8, coinsPerKo: 8 },
   beaten: { xp: 25, coins: 18, xpPerKo: 8, coinsPerKo: 5 },
@@ -144,8 +144,6 @@ export const BLEED = { chance: 0.5, time: 5, share: 0.15, slow: 0.25, deathMult:
 // за каждый удар по врагу — к итогам боя
 export const HIT_REWARD = { xp: 3, coins: 2 };
 
-// сдался командой «сдаюсь» — вся награда за бой во столько раз меньше
-export const YIELD_CUT = 3;
 
 // кто столько раундов (лудус + бой) подряд ничего не писал в чат — афк и садится на скамью
 export const AFK_ROUNDS = 3;
