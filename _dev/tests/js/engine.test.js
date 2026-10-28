@@ -646,7 +646,7 @@ test('двуручник задевает всех перед собой, но �
   eq(back.hp, hp[2], 'задний цел');
 });
 
-test('копьё пробивает броню только в броске, обычный удар броня режет', () => {
+test('копьё в ближнем бою пробивает половину брони, брошенное — всю', () => {
   const g = game();
   const [a, b, c] = join(g, 'A', 'B', 'C');
   b.gear.body = { kind: 'armor', slot: 'body', rarity: 'legendary', power: 26 };
@@ -656,6 +656,9 @@ test('копьё пробивает броню только в броске, о�
   g._attack(a, b);
   g._attack(a, c);
   ok(hb - b.hp < hc - c.hp, 'в ближнем бою броня помогает');
+  const sword = join(g, 'S')[0];
+  sword.weapon = weapon('sword');
+  ok(Math.abs((hb - b.hp) / (hc - c.hp) - (1 - armorOf(b) * 0.5)) < 0.05, 'режет вдвое меньше');
   hb = b.hp;
   hc = c.hp;
   g._attack(a, b, { ranged: true });
