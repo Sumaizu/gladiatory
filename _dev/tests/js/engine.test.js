@@ -1416,3 +1416,26 @@ test('режимы: стенка на стенку выпадает так же 
   ok(Math.abs(counts.teams - counts.ffa) < 250, JSON.stringify(counts));
   ok(counts.teams > 1200, JSON.stringify(counts));
 });
+
+test('испытание парагона: сети его не берут, характеристики вдвое', () => {
+  const g = game({ mode: null });
+  const [a, b] = join(g, 'A', 'B', 'C');
+  a.level = PARAGON.level;
+  a.fights = PARAGON.fights;
+  a.str = 5;
+  a.agi = 4;
+  a.vit = 6;
+  a.hp = maxHp(a);
+  const dmg = damageOf(a), hp = maxHp(a), crit = critOf(a);
+  g.open();
+  g.next();
+  eq(g.boss, a);
+  ok(damageOf(a) > dmg && maxHp(a) === hp + 6 * 15 && critOf(a) > crit);
+  eq(a.hp, maxHp(a));
+  g.random = () => 0.99;
+  g._net(b, a);
+  ok(!(a.stunT > 0), 'сеть не держит');
+  fight(g);
+  const fresh = g.members.get('a');
+  ok(!fresh.boost && fresh.str === 0);
+});

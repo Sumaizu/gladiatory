@@ -47,9 +47,12 @@ export const REWARD = {
 
 export const xpNeed = (level) => Math.round(40 * Math.pow(level, 1.4));
 
+// характеристика с учётом временного усиления (boost — у парагона в его испытании)
+const stat = (g, id) => (g[id] || 0) * (g.boost || 1);
+
 // might — множитель силы (здоровье и урон) для львов; у гладиаторов его нет
 export function maxHp(g) {
-  return (HP_BASE + HP_PER_LEVEL * (g.level - 1) + HP_PER_VIT * g.vit) * (g.might || 1);
+  return (HP_BASE + HP_PER_LEVEL * (g.level - 1) + HP_PER_VIT * stat(g, 'vit')) * (g.might || 1);
 }
 
 // виды оружия из гачи. rate — во сколько раз реже удар, dmg — множитель урона, reach — дальность,
@@ -77,12 +80,12 @@ export const NET = { stun: 3, range: [50, 170], chance: 1.2, speed: 320, focus: 
 export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, pickup: 14, cool: 5 };
 
 export function damageOf(g) {
-  return (DAMAGE_BASE + DAMAGE_PER_STR * g.str + (g.weapon ? g.weapon.power : 0)) * typeOf(g).dmg * (g.might || 1);
+  return (DAMAGE_BASE + DAMAGE_PER_STR * stat(g, 'str') + (g.weapon ? g.weapon.power : 0)) * typeOf(g).dmg * (g.might || 1);
 }
 
-export const attackEvery = (g) => ATTACK_EVERY * typeOf(g).rate / (1 + HASTE_PER_AGI * g.agi);
-export const dodgeOf = (g) => Math.min(DODGE_MAX, DODGE_BASE + DODGE_PER_AGI * g.agi);
-export const critOf = (g) => CRIT_BASE + CRIT_PER_AGI * g.agi + typeOf(g).crit;
+export const attackEvery = (g) => ATTACK_EVERY * typeOf(g).rate / (1 + HASTE_PER_AGI * stat(g, 'agi'));
+export const dodgeOf = (g) => Math.min(DODGE_MAX, DODGE_BASE + DODGE_PER_AGI * stat(g, 'agi'));
+export const critOf = (g) => CRIT_BASE + CRIT_PER_AGI * stat(g, 'agi') + typeOf(g).crit;
 // доспех из гачи режет входящий урон на свой процент
 // снаряжение по слотам: share — какая доля «брони» редкости приходится на вещь; вместе режут урон, но не больше ARMOR_CAP
 export const ARMOR_SLOTS = {
@@ -161,10 +164,11 @@ export const TEAMS = {
 // «Дуэль»: двое случайных на арене, bet секунд на ставки «1» (левый) и «2» (правый), потом бой без смертей.
 // Обоим xp опыта, победителю perBet монет за каждую ставку против него, угадавшим — prize монет
 // парагон: дорос до level и провёл не меньше fights боёв (чтобы не копили уровни афк-тренировкой) —
-// следующий бой выходит один против всех. Выжившим против него — много опыта.
+// следующий бой выходит один против всех: сети его не берут, а характеристики в этом бою — ×boost.
+// Выжившим против него — много опыта.
 // Сам он после боя, как бы тот ни кончился, получает парагон и начинает заново: за каждый парагон
 // +points к стартовым очкам характеристик и +coins к стартовому золоту
-export const PARAGON = { level: 10, fights: 30, points: 1, coins: 10,
+export const PARAGON = { level: 10, fights: 30, points: 1, coins: 10, boost: 2,
   reward: { standing: { xp: 160, coins: 40 }, beaten: { xp: 120, coins: 30 }, perKo: { xp: 20, coins: 10 } } };
 
 export function pitStrength(n) {

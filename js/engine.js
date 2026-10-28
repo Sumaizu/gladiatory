@@ -712,6 +712,12 @@ export class Game {
     this.nextMode = null;
     this.nextBoss = null;
     this.boss = this.mode === 'paragon' ? boss : null;
+    if (this.boss) {
+      // испытание: характеристики вдвое, здоровье растёт вместе с выносливостью
+      const was = maxHp(this.boss);
+      this.boss.boost = PARAGON.boost;
+      this.boss.hp += maxHp(this.boss) - was;
+    }
     this.duel = null;
     if (this.mode === 'duel') {
       // двое случайных: первый встаёт слева (ставка «1»), второй справа (ставка «2»)
@@ -1088,7 +1094,7 @@ export class Game {
         g.cool = attackEvery(g);
         continue;
       }
-      if (netUp(g) && !(g.netCool > 0) && !(t.stunT > 0) && d >= NET.range[0] && d <= NET.range[1]
+      if (netUp(g) && !(g.netCool > 0) && !(t.stunT > 0) && t !== this.boss && d >= NET.range[0] && d <= NET.range[1]
         && this.random() < dt * NET.chance) {
         g.netCool = NET.reload;
         this._throw(g, t, 'net');
@@ -1195,6 +1201,11 @@ export class Game {
 
   _net(a, t) {
     if (this.random() < dodgeOf(t)) {
+      this._emit('miss', { x: t.x, y: t.y, login: t.login });
+      return;
+    }
+    // парагона в его испытании сеть не держит
+    if (t === this.boss) {
       this._emit('miss', { x: t.x, y: t.y, login: t.login });
       return;
     }
@@ -1412,6 +1423,10 @@ export class Game {
     // парагон: как бы ни кончился бой, получает парагон и начинает с нуля, как после смерти
     const boss = this.boss;
     let ascended = null;
+    if (boss) {
+      boss.boost = 0;
+      boss.hp = Math.min(boss.hp, maxHp(boss));
+    }
     if (boss && this.members.get(boss.login) === boss) {
       const fresh = newGladiator(boss.login, boss.name, boss.color, this.now(), (boss.paragon || 0) + 1);
       fresh.hp = maxHp(fresh);
