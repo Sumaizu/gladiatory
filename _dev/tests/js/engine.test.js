@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { HEAL_RATE, NET, SHIELD, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { DUEL, HEAL_RATE, NET, SHIELD, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
 import { inArena } from '../../../js/places.js';
@@ -177,13 +177,13 @@ test('бой не начнётся, пока гладиаторов меньше
   eq(g.notice, '');
 });
 
-test('лудус кончается сам и начинается бой; очки распределяются сами', () => {
+test('лудус кончается сам и начинается бой; свободные очки сами не тратятся', () => {
   const g = game();
   const [a] = join(g, 'Brutus', 'Crixus');
   for (let i = 0; i < 20 * 61; i++) g.step(0.05);
   eq(g.state, 'battle');
-  eq(a.points, 0);
-  eq(a.str + a.agi + a.vit, START_POINTS);
+  eq(a.points, START_POINTS);
+  eq(a.str + a.agi + a.vit, 0);
 });
 
 test('бой: все на арене, внутри стен, дерутся до одного', () => {
@@ -872,4 +872,68 @@ test('вступил в игру — здоровье полное; уже в и
   const m = hurt[0], before = m.hp;
   again.feed(m.name, 'привет', { login: m.login });
   eq(m.hp, before, 'новое сообщение того, кто уже в игре, не лечит');
+});
+
+test('Дуэль: двое — слева и справа, 30 секунд ставок, остальные ждут в лудусе', () => {
+  const g = game({ mode: 'duel' });
+  const all = join(g, 'A', 'B', 'C', 'D', 'E');
+  g.next();
+  eq(g.fighters.length, 2);
+  const { left, right } = g.duel;
+  ok(left.x < right.x, 'первый слева');
+  eq(g.timer, DUEL.bet);
+  const others = all.filter((m) => m !== left && m !== right);
+  for (const m of others) eq(m.fate, null);
+  const x = left.x;
+  for (let i = 0; i < 20 * 10; i++) g.step(0.05);
+  eq(left.x, x, 'пока ставки — стоят');
+  no(g.events.some((e) => e.type === 'hit'), 'пока ставки — не дерутся');
+  g.feed(others[0].name, '1', { login: others[0].login });
+  g.feed(others[1].name, '2', { login: others[1].login });
+  g.feed(others[2].name, '2', { login: others[2].login });
+  g.feed(others[2].name, '1', { login: others[2].login });
+  g.feed(left.name, '2', { login: left.login });
+  eq([g.betsOn(1), g.betsOn(2)], [2, 1], 'последняя ставка считается, бойцы не ставят');
+  for (let i = 0; i < 20 * 21; i++) g.step(0.05);
+  no(g.duel.betting, 'ставки закрыты');
+  ok(g.timer > DUEL.bet, 'идёт бой');
+});
+
+test('Дуэль: никто не гибнет, обоим опыт, победителю монеты за ставки против, угадавшим по 100', () => {
+  const g = game({ mode: 'duel', settings: { death: 100 } });
+  const all = join(g, 'A', 'B', 'C', 'D', 'E', 'F');
+  g.next();
+  const { left, right } = g.duel;
+  const others = all.filter((m) => m !== left && m !== right);
+  others.forEach((m, i) => g.feed(m.name, i < 3 ? '1' : '2', { login: m.login }));
+  const coins = new Map(all.map((m) => [m.login, m.coins]));
+  g.next();
+  fight(g);
+  const r = g.results;
+  eq(r.mode, 'duel');
+  eq(r.rows.length, 2);
+  no(r.rows.some((row) => row.fate === 'dead'), 'при шансе гибели 100% — никто не погиб');
+  for (const row of r.rows) ok(row.xp >= DUEL.xp, row.name + ' опыт ' + row.xp);
+  const win = r.rows[0], winner = g.members.get(win.login);
+  const side = winner === left ? 1 : 2, against = side === 1 ? 1 : 3;
+  eq(win.coins, DUEL.perBet * against, 'победителю за ставки против него');
+  eq(r.rows[1].coins, 0);
+  const lucky = others.filter((m, i) => (i < 3 ? 1 : 2) === side);
+  eq(r.bettors.length, lucky.length);
+  for (const m of lucky) eq(m.coins, coins.get(m.login) + DUEL.prize);
+  for (const m of others.filter((x) => !lucky.includes(x))) eq(m.coins, coins.get(m.login));
+});
+
+test('режимы боя: примерно 10% яма, 20% дуэль, остальное — все против всех', () => {
+  const counts = { pit: 0, duel: 0, ffa: 0 };
+  const random = rng(31);
+  for (let i = 0; i < 1000; i++) {
+    const g = new Game(clean({ ludus: 60, battle: 90 }), new Roster(), { random, now: () => 1 });
+    g.open();
+    join(g, 'A', 'B', 'C');
+    g.next();
+    counts[g.mode]++;
+  }
+  ok(counts.pit > 60 && counts.pit < 140, JSON.stringify(counts));
+  ok(counts.duel > 150 && counts.duel < 250, JSON.stringify(counts));
 });

@@ -202,6 +202,8 @@ export class View {
       const g = game.members.get(e.login);
       if (g) this.floats.push({ x: g.x, y: g.y - 70, text: 'уровень ' + e.level, life: 2, kind: 'level', follow: g });
       sound('level');
+    } else if (e.type === 'bet') {
+      sound('coin');
     } else if (e.type === 'buy') {
       sound('coin');
     } else if (e.type === 'join') {
@@ -247,10 +249,13 @@ export class View {
       return;
     }
     box.className = 'banner ' + state;
-    const pit = state === 'battle' && game.mode === 'pit';
+    const pit = state === 'battle' && game.mode === 'pit', duel = state === 'battle' && game.duel;
     const people = game.fighters.filter((g) => !g.lion).length, lions = game.fighters.length - people;
-    $('banner-title').textContent = pit ? 'ВОЛЧЬЯ ЯМА' : state === 'battle' ? 'В БОЙ!' : 'ЛУДУС';
-    $('banner-text').textContent = pit ? lions + ' ' + plural(lions, 'лев', 'льва', 'львов') + ' против ' + people + ' '
+    $('banner-title').textContent = duel ? (duel.betting ? 'ДУЭЛЬ' : 'В БОЙ!') : pit ? 'ВОЛЧЬЯ ЯМА'
+      : state === 'battle' ? 'В БОЙ!' : 'ЛУДУС';
+    $('banner-text').textContent = duel ? duel.left.name + ' против ' + duel.right.name
+      + (duel.betting ? ' · ставки ' + Math.ceil(game.timer) + ' с' : '')
+      : pit ? lions + ' ' + plural(lions, 'лев', 'льва', 'львов') + ' против ' + people + ' '
       + plural(people, 'гладиатора', 'гладиаторов', 'гладиаторов')
       : state === 'battle' ? 'Все против всех · ' + people + ' ' + plural(people, 'гладиатор', 'гладиатора', 'гладиаторов')
         : 'Готовьтесь к бою: ' + clock(game.timer);
@@ -344,12 +349,40 @@ export class View {
     }
     const cards = new Set(game.cards.map((c) => c.login));
     for (const g of figures) drawLabel(ctx, g, scene, cards.has(g.login));
+    if (scene === 'arena' && game.duel) this._duelMarks(ctx, game);
     this._floats(ctx, dt);
     if (this.fade > 0) {
       const k = this.fade / FADE;
       ctx.fillStyle = 'rgba(10,8,14,' + Math.min(1, k * 1.4).toFixed(3) + ')';
       ctx.fillRect(0, 0, FIELD_W, FIELD_H);
     }
+  }
+
+  // над дуэлянтами — номер для ставки и сколько уже поставили
+  _duelMarks(ctx, game) {
+    const d = game.duel;
+    [[d.left, 1], [d.right, 2]].forEach(([g, side]) => {
+      const x = g.x, y = g.y - 122;
+      ctx.fillStyle = side === 1 ? '#5fa8ff' : '#ff7a6e';
+      ctx.beginPath();
+      ctx.arc(x, y, 20, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#fff3dc';
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '20px "Press Start 2P", ' + FONT;
+      ctx.fillText(String(side), x + 1, y + 2);
+      ctx.font = '800 13px ' + FONT;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(20,12,10,.85)';
+      const text = 'ставок: ' + game.betsOn(side);
+      ctx.strokeText(text, x, y - 32);
+      ctx.fillStyle = '#ffd98f';
+      ctx.fillText(text, x, y - 32);
+    });
   }
 
   _floats(ctx, dt) {
@@ -407,9 +440,10 @@ export class View {
 
   _dom(game) {
     const state = game.state;
-    const phase = { ludus: 'Лудус · подготовка', battle: game.mode === 'pit' ? 'Арена · Волчья яма' : 'Арена · все против всех',
-      results: 'Итоги боя' }[state] || '';
-    this._set('phase', state, (node) => {
+    const fightName = game.duel ? (game.duel.betting ? 'Арена · Дуэль: ставки' : 'Арена · Дуэль')
+      : game.mode === 'pit' ? 'Арена · Волчья яма' : 'Арена · все против всех';
+    const phase = { ludus: 'Лудус · подготовка', battle: fightName, results: 'Итоги боя' }[state] || '';
+    this._set('phase', state + phase, (node) => {
       node.textContent = phase;
       node.className = 'phase ' + state;
     });
@@ -431,11 +465,18 @@ export class View {
   }
 
   _status(game) {
-    const key = game.state + '|' + game.mode + '|' + game.notice + '|' + (game.state === 'battle' ? game.waiting : '');
+    const duel = game.duel;
+    const key = game.state + '|' + game.mode + '|' + game.notice + '|' + (game.state === 'battle' ? game.waiting : '')
+      + '|' + (duel ? duel.betting : '');
     this._set('status', key, (node) => {
       node.replaceChildren();
       if (game.notice) {
         node.append(el('span', 'warn', game.notice));
+      } else if (duel && duel.betting) {
+        node.append(el('code', '', '1'), el('small', '', '— за ' + duel.left.name), el('code', '', '2'),
+          el('small', '', '— за ' + duel.right.name + ' · угадавшим по 100 монет'));
+      } else if (duel) {
+        node.append(el('small', '', 'Дуэль: ' + duel.left.name + ' против ' + duel.right.name + ' — никто не погибнет'));
       } else if (game.state === 'battle') {
         const what = game.mode === 'pit' ? 'Все вместе против львов — выжившим щедрая награда' : 'Бой до последнего на ногах';
         node.append(el('small', '', game.waiting ? 'В лудусе ждут следующего боя: ' + game.waiting : what));
@@ -445,8 +486,10 @@ export class View {
         node.append(el('small', '', 'Напиши в чат что угодно — и ты гладиатор'));
       }
     });
-    this._set('commands', game.state, (node) => {
-      const list = COMMANDS[game.state] || COMMANDS.ludus;
+    const betting = duel && duel.betting;
+    this._set('commands', game.state + (betting ? duel.left.login + duel.right.login : ''), (node) => {
+      const list = betting ? [['1', 'ставка на ' + duel.left.name], ['2', 'ставка на ' + duel.right.name],
+        ['что угодно', 'вступить и тоже поставить']] : COMMANDS[game.state] || COMMANDS.ludus;
       node.replaceChildren(...list.map(([word, text]) => {
         const item = el('span', 'command');
         item.append(el('code', '', word), el('small', '', text));
@@ -461,7 +504,8 @@ export class View {
     const fateOrder = { fight: 0, yield: 1, down: 1, dead: 2 };
     list.sort((a, b) => (battle ? (fateOrder[a.fate] ?? 3) - (fateOrder[b.fate] ?? 3) : 0)
       || b.level - a.level || b.xp - a.xp || a.name.localeCompare(b.name));
-    const key = list.map((g) => [g.login, g.level, g.coins, Math.round(g.hp / maxHp(g) * 20), battle ? g.fate : g.place,
+    const bets = game.duel ? game.duel.bets : null;
+    const key = (bets ? Array.from(bets).join(',') : '') + list.map((g) => [g.login, g.level, g.points, g.coins, Math.round(g.hp / maxHp(g) * 20), battle ? g.fate : g.place,
       g.walking && !battle].join(':')).join('|') + '#' + game.roster.fallen.length;
     this._set('roster', key, (node) => {
       node.replaceChildren(...list.map((g) => {
@@ -474,9 +518,12 @@ export class View {
         fill.style.width = (part * 100).toFixed(0) + '%';
         bar.append(fill);
         const gold = el('span', 'gold');
+        // свободные очки характеристик — перед монетой, только если есть
+        if (g.points > 0) gold.append(el('em', 'points', '+' + g.points));
         gold.append(el('i'), String(g.coins));
         li.append(lvl, el('span', 'name', g.name), gold,
-          el('span', 'where ' + where, battle && !g.fate ? 'ждёт' : WHERE[where] || ''), bar);
+          el('span', 'where ' + where, battle && !g.fate ? (bets && bets.has(g.login) ? 'ставка ' + bets.get(g.login) : 'ждёт')
+            : WHERE[where] || ''), bar);
         return li;
       }));
       $('count').textContent = list.length ? String(list.length) : '';
@@ -686,7 +733,14 @@ export class View {
       if (!r) return;
       const champ = r.rows.find((row) => row.login === r.champion);
       $('champion').replaceChildren();
-      if (r.mode === 'pit') {
+      const duelView = r.mode === 'duel';
+      $('res-alive-title').textContent = duelView ? 'Победитель' : 'Выстояли';
+      $('res-beaten-title').textContent = duelView ? 'Проигравший' : 'Пали, но живы';
+      $('res-dead-title').textContent = duelView ? 'Угадали ставку' : 'Погибли';
+      if (duelView) {
+        $('champion').append('Дуэль выиграл ', el('b', '', champ ? champ.name : ''), ' · ставки ' + r.bets[0] + ' : '
+          + r.bets[1]);
+      } else if (r.mode === 'pit') {
         $('champion').textContent = r.lionsDown === r.lions ? 'Львы повержены! Выжившие получают щедрую награду'
           : r.rows.some((row) => row.fate === 'fight') ? 'Время вышло — львы уходят в клетки' : 'Львы победили';
       } else if (champ) {
@@ -714,7 +768,8 @@ export class View {
       };
       fill('res-alive', r.rows.filter((row) => row.fate === 'fight'), reward);
       fill('res-beaten', r.rows.filter((row) => row.fate === 'down' || row.fate === 'yield'), reward);
-      fill('res-dead', r.rows.filter((row) => row.fate === 'dead'),
+      if (duelView) fill('res-dead', r.bettors, (row) => el('span', '', '+' + row.coins + ' монет'));
+      else fill('res-dead', r.rows.filter((row) => row.fate === 'dead'),
         (row) => el('span', '', (row.by ? 'от руки ' + row.by : 'на арене') + ' · ' + row.level + ' ур.'));
     });
     if (r) $('res-next').textContent = 'Возвращение в лудус через ' + Math.max(0, Math.ceil(game.timer)) + ' с';

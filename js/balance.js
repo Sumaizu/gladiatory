@@ -111,3 +111,7 @@ export const PIT = {
   lion: { level: 5, str: 4, agi: 3, vit: 4 },
   reward: { standing: { xp: 100, coins: 80 }, beaten: { xp: 70, coins: 55 }, perKo: { xp: 20, coins: 15 } },
 };
+
+// «Дуэль»: двое случайных на арене, bet секунд на ставки «1» (левый) и «2» (правый), потом бой без смертей.
+// Обоим xp опыта, победителю perBet монет за каждую ставку против него, угадавшим — prize монет
+export const DUEL = { chance: 0.2, bet: 30, xp: 150, perBet: 30, prize: 100, gap: 170 };

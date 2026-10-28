@@ -1,5 +1,5 @@
 import { BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
-  START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
+  START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
 import { PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemText, spin } from './gacha.js';
@@ -181,6 +181,7 @@ export class Game {
     this.spins = [];
     this.spinNow = null;
     this.projectiles = [];
+    this.duel = null;
     this.lastRoundStart = 0;
     this._saveIn = SAVE_EVERY;
   }
@@ -238,6 +239,7 @@ export class Game {
 
   next() {
     if (this.state === 'ludus') this._startBattle();
+    else if (this.state === 'battle' && this.duel && this.duel.betting) this._duelFight();
     else if (this.state === 'battle') this._endBattle();
     else if (this.state === 'results') this.open();
   }
@@ -320,6 +322,10 @@ export class Game {
     }
     if (YIELD_WORDS.has(word)) {
       this._yield(g);
+      return;
+    }
+    if ((word === '1' || word === '2') && this.duel && this.duel.betting) {
+      this._bet(g, Number(word));
       return;
     }
     if (GACHA_WORDS.has(word)) {
@@ -627,15 +633,23 @@ export class Game {
     this.endIn = null;
     this.cards = [];
     const roll = this.random();
-    this.mode = this.forceMode || (roll < PIT.chance ? 'pit' : 'ffa');
+    this.mode = this.forceMode || (roll < PIT.chance ? 'pit' : roll < PIT.chance + DUEL.chance ? 'duel' : 'ffa');
+    this.duel = null;
+    if (this.mode === 'duel') {
+      // двое случайных: первый встаёт слева (ставка «1»), второй справа (ставка «2»)
+      const pool = ready.slice(), pair = [];
+      for (let i = 0; i < 2; i++) pair.push(pool.splice(Math.floor(this.random() * pool.length), 1)[0]);
+      this.duel = { left: pair[0], right: pair[1], bets: new Map(), betting: true, winner: null };
+      ready.length = 0;
+      ready.push(...pair);
+      this.timer = DUEL.bet;
+    }
     const lions = this.mode === 'pit' ? this._lions(Math.ceil(ready.length / PIT.ratio)) : [];
     this.fighters = ready.concat(lions);
-    const all = this.fighters, n = ready.length, spots = this._spots(all.length);
+    const all = this.fighters, n = ready.length;
+    const spots = this.duel ? [{ x: ARENA.cx - DUEL.gap, y: ARENA.cy + 10 }, { x: ARENA.cx + DUEL.gap, y: ARENA.cy + 10 }]
+      : this._spots(all.length);
     all.forEach((g, i) => {
-      while (g.points > 0) {
-        g[STATS[Math.floor(this.random() * STATS.length)].id]++;
-        g.points--;
-      }
       g.hp = Math.min(g.hp, maxHp(g));
       g.x = spots[i].x;
       g.y = spots[i].y;
@@ -660,7 +674,7 @@ export class Game {
       g.by = '';
     });
     // соседи становятся парами — бой сразу распадается на поединки по всей арене (в яме цели ищут сами)
-    const free = new Set(this.mode === 'pit' ? [] : ready);
+    const free = new Set(this.mode === 'ffa' ? ready : []);
     for (const g of ready) {
       if (!free.has(g)) continue;
       free.delete(g);
@@ -675,8 +689,15 @@ export class Game {
       g.retarget = near.retarget = DUEL_TIME;
     }
     for (const g of ready) if (g.target) g.face = g.target.x >= g.x ? 1 : -1;
+    if (this.duel) {
+      this.duel.left.face = 1;
+      this.duel.right.face = -1;
+    }
     this.projectiles = [];
-    if (this.mode === 'pit') {
+    if (this.duel) {
+      this._line('Дуэль! ' + this.duel.left.name + ' против ' + this.duel.right.name + '. Ставки: 1 — за '
+        + this.duel.left.name + ', 2 — за ' + this.duel.right.name, 'battle');
+    } else if (this.mode === 'pit') {
       this._line('Волчья яма! ' + lions.length + ' ' + plural(lions.length, 'лев', 'льва', 'львов') + ' против ' + n + ' '
         + plural(n, 'гладиатора', 'гладиаторов', 'гладиаторов'), 'battle');
     } else {
@@ -710,6 +731,32 @@ export class Game {
 
   _standing() {
     return this.fighters.filter((g) => g.fate === 'fight');
+  }
+
+  // ставка зрителя: последняя считается; бойцы не ставят
+  _bet(g, side) {
+    const d = this.duel;
+    if (g === d.left || g === d.right) return;
+    const was = d.bets.get(g.login);
+    d.bets.set(g.login, side);
+    if (was !== side) this._emit('bet', { login: g.login, side });
+  }
+
+  betsOn(side) {
+    let n = 0;
+    if (this.duel) for (const s of this.duel.bets.values()) if (s === side) n++;
+    return n;
+  }
+
+  _duelFight() {
+    const d = this.duel;
+    d.betting = false;
+    this.timer = this.settings.battle;
+    const a = this.betsOn(1), b = this.betsOn(2);
+    d.left.target = d.right;
+    d.right.target = d.left;
+    this._line('Ставки сделаны: за ' + d.left.name + ' — ' + a + ', за ' + d.right.name + ' — ' + b + '. Бой!', 'battle');
+    this._emit('phase', { state: 'battle', mode: 'duel', fight: true });
   }
 
   // львы для «Волчьей ямы»: не гладиаторы, в лудус и сохранение не попадают
@@ -796,6 +843,10 @@ export class Game {
     for (const g of this.fighters) {
       g.swing = Math.max(0, g.swing - dt);
       g.flash = Math.max(0, g.flash - dt);
+    }
+    if (this.duel && this.duel.betting) {
+      for (const g of standing) g.walking = false;
+      return;
     }
     this._stepProjectiles(dt);
     for (const g of standing) {
@@ -1030,8 +1081,9 @@ export class Game {
   _knockOut(d, a) {
     const hpMax = maxHp(d);
     // лев погибает всегда; от лап льва гибнут втрое чаще
-    const chance = d.lion ? 1 : deathChance(this.settings.death / 100, -d.hp, hpMax) * (a.lion ? PIT.deathMult : 1);
-    const dead = this.random() < Math.min(0.95, chance) || Boolean(d.lion);
+    const chance = d.lion ? 1 : this.duel ? 0
+      : deathChance(this.settings.death / 100, -d.hp, hpMax) * (a.lion ? PIT.deathMult : 1);
+    const dead = Boolean(d.lion) || chance > 0 && this.random() < Math.min(0.95, chance);
     d.fate = dead ? 'dead' : 'down';
     d.by = a.name;
     d.hp = dead ? 0 : Math.max(1, Math.round(hpMax * BEATEN_HP));
@@ -1058,7 +1110,14 @@ export class Game {
     const pit = this.mode === 'pit', people = this.fighters.filter((g) => !g.lion);
     const lions = this.fighters.filter((g) => g.lion);
     const n = people.length, bonus = crowdBonus(n), standing = this._standing().filter((g) => !g.lion);
-    const champion = !pit && standing.length === 1 ? standing[0] : null;
+    const duel = this.duel;
+    let winner = null;
+    if (duel) {
+      const l = duel.left, r = duel.right, share = (g) => (g.fate === 'fight' ? g.hp / maxHp(g) : -1);
+      winner = share(l) >= share(r) ? l : r;
+      duel.winner = winner;
+    }
+    const champion = duel ? winner : !pit && standing.length === 1 ? standing[0] : null;
     const rows = [];
     for (const g of people) {
       const fate = g.fate;
@@ -1066,7 +1125,14 @@ export class Game {
       g.kos += g.kosNow;
       g.kills += g.killsNow;
       let xp = 0, coins = 0;
-      if (pit && fate !== 'dead') {
+      if (duel) {
+        // дуэль: обоим много опыта, победителю — монеты за ставки против него
+        xp = DUEL.xp;
+        if (g === winner) {
+          coins = DUEL.perBet * this.betsOn(g === this.duel.left ? 2 : 1);
+          g.wins++;
+        }
+      } else if (pit && fate !== 'dead') {
         // выжил в яме — много опыта и золота
         const r = fate === 'fight' ? PIT.reward.standing : PIT.reward.beaten;
         xp = Math.round((r.xp + PIT.reward.perKo.xp * g.kosNow) * bonus);
@@ -1097,7 +1163,22 @@ export class Game {
     }
     const order = { fight: 0, down: 1, yield: 1, dead: 2 };
     rows.sort((a, b) => order[a.fate] - order[b.fate] || b.kos - a.kos || b.xp - a.xp);
-    this.results = { champion: champion ? champion.login : null, rows, fighters: n, mode: pit ? 'pit' : 'ffa',
+    let bettors = [];
+    if (duel) {
+      // угадавшим — монеты, без опыта
+      const side = winner === duel.left ? 1 : 2;
+      for (const [login, bet] of duel.bets) {
+        const m = this.members.get(login);
+        if (bet !== side || !m) continue;
+        m.coins += DUEL.prize;
+        this.roster.put(m);
+        bettors.push({ login, name: m.name, color: m.color, coins: DUEL.prize });
+      }
+      for (const row of rows) if (row.login !== winner.login && row.fate === 'fight') row.fate = 'down';
+      rows.sort((a, b) => (b.login === winner.login) - (a.login === winner.login));
+    }
+    this.results = { champion: champion ? champion.login : null, rows, fighters: n,
+      mode: duel ? 'duel' : pit ? 'pit' : 'ffa', bettors, bets: duel ? [this.betsOn(1), this.betsOn(2)] : null,
       lions: lions.length, lionsDown: lions.filter((g) => g.fate !== 'fight').length };
     this.projectiles = [];
     for (const g of this.members.values()) {
@@ -1109,10 +1190,14 @@ export class Game {
     this.endIn = null;
     this.state = 'results';
     this.mode = null;
+    this.duel = null;
     this.timer = RESULTS_TIME;
     const wounded = rows.filter((row) => row.fate !== 'dead' && this.members.get(row.login)?.place === 'heal').length;
     if (wounded) this._line('Раненых уносят в лазарет: ' + wounded, 'heal');
-    if (pit) {
+    if (duel) {
+      this._line('Дуэль выиграл ' + winner.name + '! Угадали ставку: ' + bettors.length + ' — по ' + DUEL.prize + ' монет',
+        'champion');
+    } else if (pit) {
       const won = this.results.lionsDown === lions.length;
       this._line(won ? 'Львы повержены! Выжившие получают щедрую награду' : !standing.length ? 'Львы победили'
         : 'Время вышло — львы уходят в клетки', won ? 'champion' : 'battle');
@@ -1153,6 +1238,7 @@ export class Game {
     this.timer -= dt;
     if (this.timer > 0) return;
     if (this.state === 'ludus') this._startBattle();
+    else if (this.state === 'battle' && this.duel && this.duel.betting) this._duelFight();
     else if (this.state === 'battle') this._endBattle();
     else if (this.state === 'results') this.open();
   }
