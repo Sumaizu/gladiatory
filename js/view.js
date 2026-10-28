@@ -867,7 +867,7 @@ export class View {
     }
   }
 
-  // карточка: имя и уровень; здоровье, урон и монеты иконками; характеристики; кукла со снаряжением; число боёв
+  // карточка: сверху имя и уровень; слева кукла со снаряжением, справа здоровье, урон, монеты, характеристики и бои
   _profile(g) {
     const top = el('div', 'top');
     const lv = el('span', 'lv');
@@ -875,21 +875,12 @@ export class View {
     lv.append(g.level + ' ур.');
     top.append(nick('who', g.name, g.login), lv);
     const hpMax = maxHp(g);
-    const chip = (icon, value, title) => {
-      const node = el('span', 'chip');
+    const chip = (icon, value, title, extra = '') => {
+      const node = el('span', 'chip' + extra);
       node.title = title;
       node.append(icon, el('b', '', value));
       return node;
     };
-    const main = el('div', 'main');
-    main.append(chip(iconImg('images/heart.png'), Math.round(g.hp) + '/' + Math.round(hpMax), 'Здоровье'),
-      chip(iconImg('images/might.png'), String(Math.round(damageOf(g))), 'Урон'),
-      chip(el('i', 'coin'), String(g.coins), 'Монеты'));
-    const hp = el('div', 'hp'), fill = el('i');
-    fill.style.width = (Math.max(0, Math.min(1, g.hp / hpMax)) * 100).toFixed(1) + '%';
-    hp.append(fill);
-    const stats = el('div', 'stats');
-    for (const stat of STATS) stats.append(chip(iconImg(statIcon(stat.id), 'ico small'), String(g[stat.id]), stat.name));
     // кукла: шлем, броня, поножи, сапоги сверху вниз; правая рука слева от брони, левая справа, амулет над правой
     const doll = el('div', 'doll');
     const slot = (area, label, name, color, extra = '') => {
@@ -909,15 +900,25 @@ export class View {
       const item = g.gear && g.gear[id];
       slot(id, ARMOR_SLOTS[id].label, id === 'body' ? 'armor' : id, item && rarityOf(item.rarity).color);
     }
-    const note = (area, label, value) => {
-      const cell = el('span', 'note');
-      cell.style.gridArea = area;
-      cell.append(el('b', '', value), el('small', '', label));
-      doll.append(cell);
+    const info = el('div', 'info');
+    const hp = el('div', 'hp'), fill = el('i');
+    fill.style.width = (Math.max(0, Math.min(1, g.hp / hpMax)) * 100).toFixed(1) + '%';
+    hp.append(fill);
+    const row = (...items) => {
+      const node = el('div', 'row');
+      node.append(...items);
+      return node;
     };
-    note('crit', 'крит', Math.round(critOf(g) * 100) + '%');
-    note('armor', 'броня', Math.round(armorOf(g) * 100) + '%');
-    return [top, main, hp, stats, doll, el('div', 'foot', 'боёв: ' + g.fights)];
+    const stats = row(...STATS.map((stat) => chip(iconImg(statIcon(stat.id), 'ico small'), String(g[stat.id]), stat.name, ' small')));
+    const small = el('div', 'small-line');
+    small.append('крит ' + Math.round(critOf(g) * 100) + '% · броня ' + Math.round(armorOf(g) * 100) + '%', el('br'),
+      'боёв: ' + g.fights);
+    info.append(chip(iconImg('images/heart.png'), Math.round(g.hp) + '/' + Math.round(hpMax), 'Здоровье'), hp,
+      row(chip(iconImg('images/might.png'), String(Math.round(damageOf(g))), 'Урон'), chip(el('i', 'coin'), String(g.coins), 'Монеты')),
+      stats, small);
+    const body = el('div', 'body');
+    body.append(doll, info);
+    return [top, body];
   }
 
   // --- гача ---
