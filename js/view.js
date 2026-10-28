@@ -539,6 +539,8 @@ export class View {
   _reel(game) {
     const now = game.spinNow;
     if (!now) return;
+    // окно должно быть видно до запуска: у скрытого элемента CSS-анимация не идёт
+    $('fortune').hidden = false;
     const strip = $('fortune-strip');
     const cells = [];
     for (let i = 0; i < REEL.cells; i++) cells.push(this._cell(i === REEL.stop ? now.result : spin(Math.random)));
