@@ -1417,7 +1417,7 @@ test('режимы: стенка на стенку выпадает так же 
   ok(counts.teams > 1200, JSON.stringify(counts));
 });
 
-test('испытание парагона: сети его не берут, характеристики вдвое', () => {
+test('испытание парагона: сети его не берут, здоровье и урон вдвое', () => {
   const g = game({ mode: null });
   const [a, b] = join(g, 'A', 'B', 'C');
   a.level = PARAGON.level;
@@ -1426,18 +1426,19 @@ test('испытание парагона: сети его не берут, ха
   a.agi = 4;
   a.vit = 6;
   a.hp = maxHp(a);
-  const dmg = damageOf(a), hp = maxHp(a), crit = critOf(a);
+  const dmg = damageOf(a), hp = maxHp(a), crit = critOf(a), every = attackEvery(a);
   g.open();
   g.next();
   eq(g.boss, a);
-  ok(damageOf(a) > dmg && maxHp(a) === hp + 6 * 15 && critOf(a) > crit);
-  eq(a.hp, maxHp(a));
+  ok(Math.abs(damageOf(a) - dmg * PARAGON.boost) < 1e-9 && Math.abs(maxHp(a) - hp * PARAGON.boost) < 1e-9);
+  eq([critOf(a), attackEvery(a)], [crit, every], 'ловкость не меняется');
+  ok(Math.abs(a.hp - maxHp(a)) < 1e-9);
   g.random = () => 0.99;
   g._net(b, a);
   ok(!(a.stunT > 0), 'сеть не держит');
   fight(g);
   const fresh = g.members.get('a');
-  ok(!fresh.boost && fresh.str === 0);
+  ok(!fresh.might && fresh.str === 0);
 });
 
 test('божественное оружие: ' + DIVINE.rounds + ' раунда с той же легендаркой и убийство насмерть — урон ×' + DIVINE.mult + ', гача не меняет', () => {

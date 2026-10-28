@@ -722,10 +722,10 @@ export class Game {
     this.nextBoss = null;
     this.boss = this.mode === 'paragon' ? boss : null;
     if (this.boss) {
-      // испытание: характеристики вдвое, здоровье растёт вместе с выносливостью
+      // испытание: здоровье и урон вдвое (текущее здоровье растёт в той же пропорции)
       const was = maxHp(this.boss);
-      this.boss.boost = PARAGON.boost;
-      this.boss.hp += maxHp(this.boss) - was;
+      this.boss.might = PARAGON.boost;
+      this.boss.hp *= maxHp(this.boss) / was;
     }
     this.duel = null;
     if (this.mode === 'duel') {
@@ -1447,7 +1447,7 @@ export class Game {
     const boss = this.boss;
     let ascended = null;
     if (boss) {
-      boss.boost = 0;
+      boss.might = 0;
       boss.hp = Math.min(boss.hp, maxHp(boss));
     }
     if (boss && this.members.get(boss.login) === boss) {
