@@ -193,7 +193,9 @@ body {
 }
 
 .duel-cards { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
-.profile.duel { position: absolute; }
+.profile.duel { position: absolute; top: 10px; }
+.profile.duel.left { left: 10px; }
+.profile.duel.right { right: 10px; }
 .cards { position: absolute; left: 12px; bottom: 66px; z-index: 4; display: flex; gap: 10px; align-items: flex-end; }
 .profile {
   width: 184px; padding: 7px 9px 8px; border-radius: 12px; background: rgba(23, 19, 31, .98);
