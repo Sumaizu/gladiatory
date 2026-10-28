@@ -46,6 +46,8 @@ const TEMPLE_WAIT = 6;
 // враг выше уровнем притягивает: за каждый уровень разницы цель «ближе» на per пикселей, не больше cap уровней
 const LEVEL_PULL = { per: 70, cap: 4 };
 const PICK_SOFT = 50;
+// с кровотечением двигается медленнее
+const pace = (g) => (g.bleedT > 0 ? 1 - BLEED.slow : 1);
 const CIRCLE = 0.3;
 export { AFK_ROUNDS };
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -751,6 +753,8 @@ export class Game {
       g.savedNow = false;
       g.bleedT = 0;
       g.bledBy = null;
+      g.bleedLoss = 0;
+      g.lastX = undefined;
       g.hitsNow = 0;
       g.by = '';
     });
@@ -968,7 +972,7 @@ export class Game {
       ax = ax / len - cx * pull + tx * side * pull;
       ay = ay / len - cy * pull + ty * side * pull;
     }
-    const len = Math.hypot(ax, ay) || 1, speed = MOVE_SPEED * FLEE.speed * (1 + 0.01 * g.agi);
+    const len = Math.hypot(ax, ay) || 1, speed = MOVE_SPEED * FLEE.speed * (1 + 0.01 * g.agi) * pace(g);
     g.x += ax / len * speed * dt;
     g.y += ay / len * speed * dt;
     if (Math.abs(ax) > 0.01) g.face = ax > 0 ? 1 : -1;
@@ -995,14 +999,26 @@ export class Game {
       g.netCool = Math.max(0, (g.netCool || 0) - dt);
       g.spearCool = Math.max(0, (g.spearCool || 0) - dt);
       if (g.bleedT > 0) {
-        // кровотечение: пока бегает (и в прошлый такт двигался) — теряет здоровье
+        // кровотечение: теряет здоровье, только если за прошлый такт и правда сдвинулся с места
         g.bleedT = Math.max(0, g.bleedT - dt);
-        if (g.walking) g.hp -= BLEED.rate * maxHp(g) * dt;
+        const moved = g.lastX !== undefined && Math.hypot(g.x - g.lastX, g.y - g.lastY) > 0.5;
+        if (moved) {
+          const loss = BLEED.share / BLEED.time * maxHp(g) * dt;
+          g.hp -= loss;
+          g.bleedLoss = (g.bleedLoss || 0) + loss;
+        }
+        // накапало заметно — показываем цифрой
+        if (g.bleedLoss >= 3 || g.bleedT <= 0 && g.bleedLoss >= 1) {
+          this._emit('bleedtick', { login: g.login, x: g.x, y: g.y, amount: Math.round(g.bleedLoss) });
+          g.bleedLoss = 0;
+        }
         if (g.hp <= 0) {
           this._knockOut(g, g.bledBy || g);
           continue;
         }
       }
+      g.lastX = g.x;
+      g.lastY = g.y;
       if (g.stunT > 0) {
         // в сети: стоит, не бьёт и не убегает
         g.stunT = Math.max(0, g.stunT - dt);
@@ -1060,7 +1076,7 @@ export class Game {
       }
       const reach = reachOf(g);
       if (d > reach) {
-        const speed = MOVE_SPEED * (1 + 0.01 * g.agi);
+        const speed = MOVE_SPEED * (1 + 0.01 * g.agi) * pace(g);
         const stepLen = Math.min(d - reach * 0.8, speed * dt);
         g.x += dx / d * stepLen;
         g.y += dy / d * stepLen;
@@ -1072,7 +1088,7 @@ export class Game {
       } else {
         // между ударами кружит вокруг противника
         if (!g.circle || this.random() < dt * 0.4) g.circle = this.random() < 0.5 ? -1 : 1;
-        const step = MOVE_SPEED * CIRCLE * dt;
+        const step = MOVE_SPEED * CIRCLE * pace(g) * dt;
         g.x += -dy / d * g.circle * step;
         g.y += dx / d * g.circle * step;
         g.walking = g.cool > 0.25;
@@ -1102,7 +1118,7 @@ export class Game {
   _walkTo(g, x, y, dt) {
     const dx = x - g.x, dy = y - g.y, d = Math.hypot(dx, dy);
     if (d < 1) return d;
-    const stepLen = Math.min(d, MOVE_SPEED * 1.1 * dt);
+    const stepLen = Math.min(d, MOVE_SPEED * 1.1 * pace(g) * dt);
     g.x += dx / d * stepLen;
     g.y += dy / d * stepLen;
     if (Math.abs(dx) > 1) g.face = dx > 0 ? 1 : -1;

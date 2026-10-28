@@ -1280,11 +1280,13 @@ test('кровотечение: после крита течёт кровь, н�
   g.next();
   b.bleedT = BLEED.time;
   b.bledBy = a;
-  b.walking = true;
-  b.fleeT = 2;
+  b.fleeT = BLEED.time + 1;
+  b.fleeCool = 0;
   const hp = b.hp;
-  g.step(0.05);
-  ok(b.hp < hp, 'на бегу теряет здоровье');
+  for (let i = 0; i < 20 * BLEED.time + 5; i++) g.step(0.05);
+  const lost = (hp - b.hp) / maxHp(b);
+  ok(lost > BLEED.share * 0.8 && lost <= BLEED.share + 0.01, 'за всё кровотечение на бегу теряет ' + lost.toFixed(3));
+  ok(g.events.some((e) => e.type === 'bleedtick'), 'урон от крови виден цифрой');
   let dead = 0;
   g.random = rng(5);
   for (let i = 0; i < 4000; i++) {
@@ -1339,4 +1341,33 @@ test('на дуэли сдаться нельзя', () => {
   const { left } = g.duel;
   g.feed(left.name, 'сдаюсь', { login: left.login });
   eq(left.fate, 'fight');
+});
+
+test('кровотечение: стоя на месте здоровье не теряет', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  g.next();
+  b.bleedT = BLEED.time;
+  b.bledBy = a;
+  b.stunT = BLEED.time;
+  const hp = b.hp;
+  for (let i = 0; i < 40; i++) g.step(0.05);
+  eq(b.hp, hp);
+});
+
+test('кровотечение замедляет на ' + BLEED.slow * 100 + '%', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  g.next();
+  const run = (bleeding) => {
+    a.x = 300;
+    a.y = 352;
+    a.bleedT = bleeding ? 10 : 0;
+    const x = a.x;
+    g._walkTo(a, 600, 352, 0.5);
+    return a.x - x;
+  };
+  const free = run(false), slow = run(true);
+  ok(Math.abs(slow / free - (1 - BLEED.slow)) < 1e-9, free + ' → ' + slow);
+  ok(b);
 });

@@ -113,9 +113,10 @@ export function deathChance(base, overkill, hpMax) {
   return Math.min(0.9, base * (1 + OVERKILL.weight * Math.min(1, Math.max(0, overkill) / Math.max(1, hpMax))));
 }
 
-// крит с шансом chance пускает кровь на time секунд: пока раненый бегает, теряет rate здоровья в секунду (доля
-// от максимума); свалили с кровотечением — гибнет в deathMult раз чаще
-export const BLEED = { chance: 0.5, time: 5, rate: 0.03, deathMult: 1.5 };
+// крит с шансом chance пускает кровь на time секунд: пока раненый бежит, теряет здоровье — за всё кровотечение
+// на бегу набегает share от максимума (около 15%), а двигается он на slow медленнее; свалили с кровотечением —
+// гибнет в deathMult раз чаще
+export const BLEED = { chance: 0.5, time: 5, share: 0.15, slow: 0.25, deathMult: 1.5 };
 
 // за каждый удар по врагу — к итогам боя
 export const HIT_REWARD = { xp: 3, coins: 2 };

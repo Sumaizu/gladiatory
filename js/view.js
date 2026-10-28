@@ -294,6 +294,11 @@ export class View {
       this.floats.push({ x: e.x, y: e.y - 60, text, life: e.saved ? 3 : 2.2, kind: e.saved ? 'saved' : e.fate });
       this.roar = 1;
       sound(e.saved ? 'jackpot' : e.fate === 'dead' ? 'death' : 'down');
+    } else if (e.type === 'bleedtick') {
+      const g = game.fighters.find((f) => f.login === e.login);
+      this.floats.push({ x: e.x + (Math.random() - 0.5) * 10, y: e.y - 46, text: '-' + e.amount, life: FLOAT_TIME,
+        kind: 'bleedtick' });
+      if (g) this._bleed(g.x, g.y - 22, 3, 0.4);
     } else if (e.type === 'bleed') {
       const g = game.fighters.find((f) => f.login === e.login);
       this.floats.push({ x: e.x, y: e.y - 60, text: 'кровотечение', life: 1.6, kind: 'bleed', follow: g });
@@ -549,7 +554,7 @@ export class View {
     ctx.textBaseline = 'middle';
     for (const f of this.floats) {
       f.life -= dt;
-      const total = f.kind === 'hit' || f.kind === 'miss' ? FLOAT_TIME : 2;
+      const total = f.kind === 'hit' || f.kind === 'miss' || f.kind === 'bleedtick' ? FLOAT_TIME : 2;
       const k = 1 - Math.max(0, f.life) / total;
       const x = f.follow ? f.follow.x : f.x, y = (f.follow ? f.follow.y - 70 : f.y) - k * 26;
       const alpha = Math.min(1, f.life * 3);
@@ -577,6 +582,9 @@ export class View {
       } else if (f.kind === 'level') {
         size = 17;
         color = '#ffd34d';
+      } else if (f.kind === 'bleedtick') {
+        size = 13;
+        color = '#ff4b4b';
       } else if (f.kind === 'bleed') {
         size = 14;
         color = '#ff4b4b';
