@@ -41,6 +41,8 @@ const FLEE = { critChance: 0.75, critTime: [2, 1.5], low: 0.25, lowTime: [3, 2],
 const RETARGET = [3.5, 3.5];
 const REVENGE = 0.35;
 const GACHA_CLOSE = 5;
+// если до храма не дойти (застрял, увели), крутка всё равно начнётся через столько секунд
+const TEMPLE_WAIT = 12;
 // враг выше уровнем притягивает: за каждый уровень разницы цель «ближе» на per пикселей, не больше cap уровней
 const LEVEL_PULL = { per: 70, cap: 4 };
 const PICK_SOFT = 50;
@@ -375,7 +377,8 @@ export class Game {
       return;
     }
     for (let i = 0; i < n; i++) this.spins.push({ login: g.login });
-    const later = this._gachaOpen(SPIN_TIME) ? '' : ' — закрутится после боя';
+    const open = this._gachaOpen(SPIN_TIME), later = open ? '' : ' — закрутится после боя';
+    if (open) this._toTemple(g);
     this._line(g.name + ' встаёт в очередь гачи' + (n > 1 ? ' ×' + n : '') + later, 'buy');
   }
 
@@ -389,21 +392,22 @@ export class Game {
     if (!this.spinNow) {
       const rush = this.spins.length > RUSH.queue, time = rush ? RUSH.spin : SPIN_TIME;
       if (!this._gachaOpen(time)) return;
-      let next = null, g = null;
       while (this.spins.length) {
-        next = this.spins.shift();
-        g = this.members.get(next.login);
-        if (!g) continue;
-        if (g.coins >= PRICE) break;
-        this._line(g.name + ': на гачу не хватило монет', 'warn');
-        g = null;
+        const head = this.members.get(this.spins[0].login);
+        if (head && head.coins >= PRICE) break;
+        if (head) this._line(head.name + ': на гачу не хватило монет', 'warn');
+        this.spins.shift();
       }
-      if (!g) return;
+      if (!this.spins.length) return;
+      const head = this.spins[0], g = this.members.get(head.login);
+      // крутка начинается, когда гладиатор дошёл до храма
+      if (!g.fate && (g.place !== 'temple' || g.walking)) {
+        if (g.place !== 'temple') this._toTemple(g);
+        head.wait = (head.wait || 0) + dt;
+        if (head.wait < TEMPLE_WAIT) return;
+      }
+      this.spins.shift();
       g.coins -= PRICE;
-      if (g.place !== 'temple' && !g.fate) {
-        g.back = g.place;
-        this._arrive(g, 'temple', true);
-      }
       this.spinNow = { id: ++this.eventId, login: g.login, result: spin(this.random, g), t: 0, done: false, paid: true,
         spin: time, show: rush ? RUSH.show : SHOW_TIME };
       this._emit('spin', { login: g.login, spinId: this.spinNow.id });
@@ -417,6 +421,12 @@ export class Game {
     }
     if (s.t < s.spin + s.show) return;
     this._closeSpin();
+  }
+
+  _toTemple(g) {
+    if (g.fate || g.place === 'temple') return;
+    g.back = g.place;
+    this._arrive(g, 'temple', true);
   }
 
   _closeSpin() {

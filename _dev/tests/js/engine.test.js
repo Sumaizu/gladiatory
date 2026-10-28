@@ -411,9 +411,12 @@ test('гача: монеты снимаются в момент прокрутк
   a.coins = 100;
   g.feed('Brutus', 'трен', { login: 'brutus' });
   g.feed('Brutus', 'гача', { login: 'brutus' });
-  eq([a.coins, g.spins.length], [100, 1], 'в очереди деньги не сняты');
+  eq([a.coins, g.spins.length, a.place], [100, 1, 'temple'], 'в очереди деньги не сняты, сразу идёт к храму');
   g.step(0.1);
+  eq(g.spinNow, null, 'пока идёт — не крутится');
+  for (let i = 0; i < 20 * 20 && !g.spinNow; i++) g.step(0.05);
   ok(g.spinNow && !g.spinNow.done, 'крутится');
+  no(a.walking, 'начал крутить, когда дошёл');
   eq([a.coins, a.place], [100 - PRICE, 'temple']);
   for (let i = 0; i < 20 * SPIN_TIME + 4; i++) g.step(0.05);
   ok(g.spinNow.done, 'приз выдан');
@@ -469,8 +472,8 @@ test('гача: не крутится в последние 5 секунд лу�
   eq([g.spinNow, a.coins], [null, 300], 'в бою не крутится');
   fight(g);
   const before = a.coins;
-  g.step(0.1);
-  ok(g.spinNow, 'после боя закрутилась');
+  for (let i = 0; i < 20 * 20 && !g.spinNow; i++) g.step(0.05);
+  ok(g.spinNow, 'после боя дошёл до храма и закрутил');
   eq(a.coins, before - PRICE);
 });
 test('гача: остановка игры возвращает монеты за недокрученное', () => {
@@ -479,6 +482,7 @@ test('гача: остановка игры возвращает монеты з
   const [a] = join(g, 'A');
   a.coins = PRICE * 4;
   g.feed('A', 'гача 4', { login: 'a' });
+  for (let i = 0; i < 20 * 20 && !g.spinNow; i++) g.step(0.05);
   g.step(0.1);
   ok(g.spinNow && !g.spinNow.done);
   g.stop();
@@ -767,7 +771,7 @@ test('гача: пока нет оружия, первая прокрутка г
   const [a] = join(g, 'A');
   a.coins = PRICE * 2;
   g.feed('A', 'гача 2', { login: 'a' });
-  for (let i = 0; i < 20 * 3 && !(g.spinNow && g.spinNow.done); i++) g.step(0.05);
+  for (let i = 0; i < 20 * 20 && !(g.spinNow && g.spinNow.done); i++) g.step(0.05);
   ok(a.weapon, 'после первой прокрутки в руке оружие');
 });
 
@@ -936,4 +940,26 @@ test('режимы боя: примерно 10% яма, 20% дуэль, оста
   }
   ok(counts.pit > 60 && counts.pit < 140, JSON.stringify(counts));
   ok(counts.duel > 150 && counts.duel < 250, JSON.stringify(counts));
+});
+
+test('гача: очередь идёт к храму заранее, каждый крутит, когда дошёл', () => {
+  const g = game({ settings: { ludus: 900 } });
+  const [a, b] = join(g, 'A', 'B');
+  a.coins = b.coins = 100;
+  g.feed('A', 'трен', { login: 'a' });
+  g.feed('B', 'трен', { login: 'b' });
+  for (let i = 0; i < 20 * 10; i++) g.step(0.05);
+  g.feed('A', 'гача', { login: 'a' });
+  g.feed('B', 'гача', { login: 'b' });
+  eq([a.place, b.place], ['temple', 'temple'], 'оба пошли сразу');
+  const starts = [];
+  for (let i = 0; i < 20 * 40 && (g.spins.length || g.spinNow); i++) {
+    const was = g.spinNow;
+    g.step(0.05);
+    if (g.spinNow && g.spinNow !== was) {
+      const who = g.members.get(g.spinNow.login);
+      starts.push(who.login + ':' + (who.walking ? 'идёт' : 'на месте'));
+    }
+  }
+  eq(starts, ['a:на месте', 'b:на месте']);
 });
