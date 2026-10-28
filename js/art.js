@@ -944,62 +944,128 @@ export const netHandSprite = () => remember('net-hand2', netHandArt);
 export const netSprite = () => remember('net2', netArt);
 
 // лев в профиль, смотрит вправо: лапы на y = 23, центр x = 18. frame: stand, walk1, walk2, pounce, dead
-// лев как в Domina: светлое кремовое тело, вытянутое и поджарое, тёмная лохматая грива, длинный хвост с кисточкой
+// лев как в Domina, в высоком разрешении: один пиксель рисунка — один пиксель поля (у людей — два).
+// Светлое кремовое поджарое тело, тёмная лохматая грива, тонкие лапы, длинный хвост с кисточкой; свет сверху слева
+const LION_W = 112, LION_H = 64, LION_GROUND = 61;
+const FUR = ['#a8937a', '#c3b090', '#dccdb2', '#ebe0ca', '#f7f0e2'];
+const MANE = ['#1d1510', '#2c2019', '#463428', '#6b5242'];
+
 function lionArt(frame) {
-  const p = new Pix(38, 25);
-  const fur = '#e8dcc5', furD = '#c6b498', furL = '#f6efe2', belly = '#d9cab0';
-  const mane = '#3d2d24', maneD = '#251a14', maneL = '#5c4536', nose = '#2a1a12';
-  const dead = frame === 'dead';
-  const lift = frame === 'pounce' ? -3 : 0;
-  // хвост: длинный, тонкий, кисточка тёмная
-  p.line(6, 12, 3, 13, furD);
-  p.line(3, 13, 1, 12, furD);
-  p.rect(0, 10, 2, 2, mane);
-  p.px(0, 12, maneD);
-  // лапы: тонкие, дальние темнее
-  const legs = frame === 'walk1' ? [[9, 6], [12, 15], [25, 22], [28, 31]] : frame === 'walk2' ? [[9, 12], [12, 9], [25, 27],
-    [28, 25]] : frame === 'pounce' ? [[9, 7], [12, 10], [26, 31], [29, 34]] : [[9, 9], [12, 12], [25, 25], [28, 28]];
-  if (!dead) {
-    legs.forEach(([hip, foot], i) => {
-      const far = i % 2 === 0, c = far ? furD : fur, top = i >= 2 ? 15 + lift : 15;
-      p.line(hip, top, foot, 22, c, 2);
-      p.rect(foot - 1, 23, 3, 1, far ? '#9c8a70' : furD);
-    });
+  const p = new Pix(LION_W, LION_H);
+  const dead = frame === 'dead', pounce = frame === 'pounce';
+  const lift = pounce ? 1 : 0, down = dead ? 9 : 0;
+  // мех: по высоте внутри детали (-1 верх … 1 низ) — от светлого к тёмному, с мелким зерном по пикселям
+  const furAt = (x, y, ny, bias = 0) => {
+    const v = 2.6 - ny * 1.6 + bias + (hash(x, y, 71) - 0.5) * 0.7;
+    return FUR[Math.max(0, Math.min(FUR.length - 1, Math.round(v)))];
+  };
+  const blob = (cx, cy, rx, ry, color) => {
+    for (let y = Math.floor(cy - ry); y <= cy + ry; y++) {
+      for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
+        const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
+        if (dx * dx + dy * dy <= 1) p.px(x, y, color(x, y, dy));
+      }
+    }
+  };
+  // конечность: от толстого начала к тонкому концу по ломаной
+  const limb = (pts, w0, w1, far) => {
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    let run = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], len = Math.hypot(x1 - x0, y1 - y0);
+      for (let s = 0; s <= len; s += 0.5) {
+        const t = (run + s) / total, r = (w0 + (w1 - w0) * t) / 2, x = x0 + (x1 - x0) * s / len, y = y0 + (y1 - y0) * s / len;
+        blob(x, y, r, r, (px, py, dy) => furAt(px, py, dy * 0.6 + t * 0.6, far ? -1.1 : -0.2));
+      }
+      run += len;
+    }
+  };
+  const legs = {
+    stand: [[30, 22, 26], [38, 30, 34], [74, 74, 74], [82, 82, 82]],
+    walk1: [[30, 16, 20], [38, 36, 40], [74, 66, 64], [82, 88, 92]],
+    walk2: [[30, 26, 34], [38, 22, 24], [74, 80, 86], [82, 70, 70]],
+    pounce: [[30, 18, 8], [38, 26, 16], [76, 92, 104], [84, 98, 108]],
+  }[dead ? 'stand' : frame] || [[30, 22, 26], [38, 30, 34], [74, 74, 74], [82, 82, 82]];
+  const ground = LION_GROUND;
+  // дальние лапы — первыми и темнее
+  const drawLeg = ([hip, knee, foot], i) => {
+    const far = i % 2 === 0, front = i >= 2, hy = (front ? 38 : 36) - (front ? lift * 6 : 0) + down;
+    let pts;
+    if (dead) pts = [[hip, hy], [hip + 10, hy + 10], [hip + 22, hy + 13]];
+    else if (front) pts = [[hip, hy], [knee, hy + 12 + (pounce ? -8 : 0)], [foot, pounce ? ground - 10 + (i - 2) * 4 : ground - 1]];
+    else pts = [[hip, hy], [hip + 4, hy + 9], [knee, hy + 16], [foot, ground - 1]];
+    limb(pts, front ? 6.5 : 7.5, 3.4, far);
+    const [fx, fy] = pts[pts.length - 1];
+    blob(fx + 1.5, fy, 3, 1.6, (x, y) => (far ? FUR[0] : FUR[1]));
+  };
+  [0, 2].forEach((i) => drawLeg(legs[i], i));
+  // хвост: длинный, тонкий, чуть провисает; кисточка тёмная
+  const tail = (t) => [22 - 19 * t, 27 + down + 10 * t * t - 4 * t * (1 - t)];
+  for (let t = 0; t <= 1; t += 0.02) {
+    const [x, y] = tail(t);
+    blob(x, y, 1.3, 1.3, (px, py, dy) => furAt(px, py, dy, -0.4));
   }
-  // туловище: длинное и низкое, светлая спина, тень снизу
-  for (let y = 9; y < 18; y++) {
-    for (let x = 5; x < 30; x++) {
-      const dx = (x + 0.5 - 17.5) / 12.5, dy = (y + 0.5 - 13.2 - (x > 20 ? lift * 0.5 : 0)) / 3.9;
-      if (dx * dx + dy * dy > 1) continue;
-      p.px(x, y, dy < -0.45 ? furL : dy > 0.5 ? belly : dy > 0.15 ? furD : fur);
+  const [tx, ty] = tail(1);
+  blob(tx - 1, ty + 2, 2.6, 3.6, (x, y) => MANE[hash(x, y, 72) < 0.5 ? 1 : 2]);
+  // туловище: длинное, брюхо подобрано, грудь глубже
+  const tilt = pounce ? -0.12 : 0;
+  const curve = (pts, x) => {
+    for (let i = 1; i < pts.length; i++) {
+      if (x <= pts[i][0]) {
+        const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], t = (x - x0) / (x1 - x0), k = (1 - Math.cos(t * Math.PI)) / 2;
+        return y0 + (y1 - y0) * k;
+      }
+    }
+    return pts[pts.length - 1][1];
+  };
+  const TOP = [[18, 31], [24, 23], [34, 20], [50, 22], [66, 21], [80, 20], [90, 24]];
+  const BOT = [[18, 33], [24, 40], [34, 43], [48, 39], [58, 39], [70, 44], [80, 46], [90, 40]];
+  for (let x = 18; x <= 90; x++) {
+    const shift = (x - 54) * tilt + down;
+    const top = curve(TOP, x) + shift, bot = curve(BOT, x) + shift;
+    for (let y = Math.floor(top); y <= bot; y++) {
+      const ny = ((y + 0.5) - (top + bot) / 2) / ((bot - top) / 2 || 1);
+      p.px(x, y, furAt(x, y, ny, x > 60 && ny > 0.3 ? -0.3 : 0));
     }
   }
-  // грива: крупная, тёмная, с рваным краем
-  const hx = 29, hy = 9 + lift;
-  p.ellipse(hx - 2, hy + 0.5, 6.4, 7, mane, maneD, maneL);
-  for (let i = 0; i < 16; i++) {
-    const a = i / 16 * Math.PI * 2, r = 6.8 + (i % 3);
-    p.px(hx - 2 + Math.cos(a) * r, hy + 0.5 + Math.sin(a) * r * 1.05, i % 2 ? maneD : mane);
+  [1, 3].forEach((i) => drawLeg(legs[i], i));
+  // грива: крупная, тёмная, с рваным краем и прядями
+  const mx = 84, my = 25 + down + (pounce ? -5 : 0);
+  for (let y = my - 20; y <= my + 22; y++) {
+    for (let x = mx - 18; x <= mx + 12; x++) {
+      const dx = x + 0.5 - mx, dy = y + 0.5 - my, a = Math.atan2(dy, dx), d = Math.hypot(dx / 13, dy / 16.5);
+      const edge = 1 + 0.09 * Math.sin(a * 9 + 1.3) + 0.07 * Math.sin(a * 17) + (hash(Math.round(a * 30), 0, 73) - 0.5) * 0.14;
+      if (d > edge) continue;
+      const strand = Math.sin(a * 14 + d * 6) * 0.5 + 0.5, light = -dx * 0.03 - dy * 0.04;
+      const v = 1.4 + strand * 0.9 + light + (hash(x, y, 74) - 0.5) * 0.8 - (d > 0.85 ? 0.6 : 0);
+      p.px(x, y, MANE[Math.max(0, Math.min(MANE.length - 1, Math.round(v)))]);
+    }
   }
-  for (let i = 0; i < 8; i++) p.px(hx - 6 + (i % 4) * 3, hy - 4 + Math.floor(i / 4) * 8, maneL);
-  // морда: светлая, вытянутая вперёд, тёмный нос и глаз
-  p.ellipse(hx + 2.5, hy + 1.5, 3.2, 2.9, fur, furD, furL);
-  p.rect(hx + 4, hy + 1, 3, 3, furL);
-  p.px(hx + 6, hy + 1, nose);
-  p.px(hx + 3, hy - 0, nose);
-  p.rect(hx + 4, hy + 4, 2, 1, '#8a3a2a');
-  p.px(hx + 1, hy - 2, maneL);
-  p.outline('#4a3a2e');
+  // голова: светлая, вытянутая морда вперёд
+  const hx = 95, hy = 26 + down + (pounce ? -6 : 0);
+  blob(hx, hy, 8.5, 7.5, (x, y, dy) => furAt(x, y, dy, 0.1));
+  blob(hx + 6.5, hy + 3, 5.5, 4.2, (x, y, dy) => furAt(x, y, dy * 0.8, 0.4));
+  blob(hx - 4, hy - 8, 2.4, 2.4, (x, y, dy) => furAt(x, y, dy, -0.5));
+  p.rect(hx + 10, hy + 1, 2, 2, '#2a1a12');
+  p.px(hx + 11, hy + 1, '#4a3424');
+  p.rect(hx + 1, hy - 2, 2, 1, '#1a120c');
+  p.px(hx + 2, hy - 3, FUR[1]);
+  p.line(hx + 6, hy + 6, hx + 11, hy + 5, '#7d3326');
+  p.px(hx + 5, hy + 6, FUR[0]);
+  for (const [x, y] of [[hx + 7, hy + 2], [hx + 8, hy + 3], [hx + 7, hy + 4]]) p.px(x, y, FUR[2]);
+  p.outline('#3a2c22');
   if (!dead) return p.canvas();
-  // мёртвый лев лежит на боку: всё темнее и серее
+  // мёртвый лев: лежит, всё темнее и серее
   return p.canvas((c) => {
     const [r, g, b] = rgb(c), l = (r + g + b) / 3;
     return hex([l * 0.6 + r * 0.2, l * 0.55 + g * 0.15, l * 0.5 + b * 0.1]);
   });
 }
 
-export const lionSprite = (frame) => remember('lion2:' + frame, () => lionArt(frame));
-export const LION = { x: 18, foot: 23 };
+export const lionSprite = (frame) => remember('lion3:' + frame, () => lionArt(frame));
+// точка опоры спрайта льва: середина туловища на уровне лап; scale — во сколько пикселей поля один пиксель рисунка
+export const LION = { x: 56, foot: LION_GROUND, scale: 1 };
 
 function silhouette(canvas) {
   const c = document.createElement('canvas');

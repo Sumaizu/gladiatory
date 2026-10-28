@@ -339,20 +339,16 @@ function drawArms(ctx, g, look, bob) {
 function drawLion(ctx, g, t) {
   const dead = g.fate !== 'fight';
   const frame = dead ? 'dead' : g.swing > 0 ? 'pounce' : g.walking ? (Math.sin(t * 9 + g.x) > 0 ? 'walk1' : 'walk2') : 'stand';
-  const x = Math.round(g.x / P) * P, y = Math.round(g.y / P) * P;
+  // лев в высоком разрешении: пиксель рисунка — пиксель поля
+  const x = Math.round(g.x), y = Math.round(g.y);
   ctx.save();
   ctx.translate(x, y);
-  ctx.scale(P, P);
-  ctx.fillStyle = 'rgba(30,15,8,.3)';
-  ctx.fillRect(-15, -1, 30, 3);
-  if (dead) {
-    ctx.fillStyle = '#7a1414';
-    ctx.fillRect(-14, 0, 26, 4);
-    ctx.translate(0, -2);
-    ctx.rotate(g.face > 0 ? -0.18 : 0.18);
-  }
-  ctx.scale(g.face < 0 ? -1 : 1, 1);
-  ctx.drawImage(lionSprite(frame), -LION.x, -LION.foot + (dead ? 6 : 0));
+  ctx.fillStyle = 'rgba(60,35,15,.22)';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 40, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.scale((g.face < 0 ? -1 : 1) * LION.scale, LION.scale);
+  ctx.drawImage(lionSprite(frame), -LION.x, -LION.foot);
   ctx.restore();
 }
 
@@ -441,7 +437,7 @@ export function drawLabel(ctx, g, scene, highlight) {
   const lying = fate === 'down' || fate === 'dead' || pose === 'lie';
   // на скамьях и койках соседи рядом — подписи через одну выше, чтобы не налезали
   const stagger = pose && g.seat !== null && g.seat !== undefined && g.seat % 2 ? 15 : 0;
-  const top = g.y - (g.lion ? (fate === 'fight' ? 54 : 30) : lying ? 26 : pose === 'sit' ? 64 : 86) - stagger;
+  const top = g.y - (g.lion ? (fate === 'fight' ? 70 : 40) : lying ? 26 : pose === 'sit' ? 64 : 86) - stagger;
   // на скамьях и койках имя не пишем — только полоску здоровья; имя видно у тех, кто ходит и тренируется
   if (pose && !highlight) {
     const part = Math.max(0, Math.min(1, g.hp / maxHp(g)));
