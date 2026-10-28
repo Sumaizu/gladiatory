@@ -485,7 +485,8 @@ test('гача: вещь надевается, только если лучше;
   const base = damageOf(a);
   g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'epic', power: 11, type: 'sword' } });
   ok(damageOf(a) > base, 'сильнее кулаков');
-  eq(damageOf(a), damageOf({ str: a.str, weapon: { type: 'sword', power: 0 } }) + 11);
+  // сила оружия умножается вместе с базой на множитель меча
+  ok(Math.abs(damageOf(a) - (damageOf({ str: a.str, weapon: { type: 'sword', power: 0 } }) + 11 * 1.2)) < 1e-9);
   g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'common', power: 2, type: 'sword' } });
   eq(a.weapon.power, 11, 'хуже — выброшено');
   g._prize(a, { kind: 'item', item: { kind: 'armor', slot: 'body', rarity: 'rare', power: 8 } });
