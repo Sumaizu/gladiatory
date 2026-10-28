@@ -4,7 +4,7 @@ import { FIELD_H, FIELD_W, DUMMIES, PLACES } from './places.js';
 import { FONT, drawCrowd, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
 import { ambience, play, setSound } from './sound.js';
-import { P } from './art.js';
+import { P, Pix } from './art.js';
 import { RAINBOW_CYCLE, SNOW_CYCLE, starOf } from './stars.js';
 
 const STAGE_WIDTH = 1280;
@@ -96,6 +96,74 @@ function paragonTag(paragon) {
   node.title = 'Парагон ' + paragon;
   node.append(flagImage(), el('b', '', String(paragon)));
   return node;
+}
+
+// иконки характеристик — в стиле иконки атаки из Чатобороны: цветной диск с тёмным ободком, блик и знак поверх
+const STAT_ICONS = {
+  // сила — гантеля
+  str: { rim: '#7c2d12', fill: '#ea580c', glint: '#fdba74', colors: { W: '#f1f5f9', G: '#94a3b8', D: '#475569' }, rows: [
+    '..........',
+    '.GG....GG.',
+    '.WG....WG.',
+    'GWG....WGG',
+    'GWWWWWWWGG',
+    'GGDDDDDDGG',
+    'GGG....GGG',
+    '.GG....GG.',
+    '.DD....DD.',
+    '..........'] },
+  // ловкость — молния
+  agi: { rim: '#14532d', fill: '#16a34a', glint: '#86efac', colors: { W: '#fefce8', Y: '#facc15', O: '#ca8a04' }, rows: [
+    '......WY..',
+    '.....WYO..',
+    '....WYO...',
+    '...WYO....',
+    '..WYYYYYO.',
+    '.....WYO..',
+    '....WYO...',
+    '...WYO....',
+    '..WYO.....',
+    '..YO......'] },
+  // выносливость — щит с крестом
+  vit: { rim: '#1e3a8a', fill: '#2563eb', glint: '#93c5fd', colors: { W: '#f8fafc', G: '#cbd5e1', D: '#64748b', R: '#ef4444' }, rows: [
+    '.WWWWWWWW.',
+    '.WGGRRGGW.',
+    '.WGGRRGGW.',
+    '.WRRRRRRW.',
+    '.WRRRRRRD.',
+    '.WGGRRGGD.',
+    '..WGRRGD..',
+    '..WGGGGD..',
+    '...WGGD...',
+    '....DD....'] },
+};
+const statUrls = {};
+function statIcon(id) {
+  if (!statUrls[id]) {
+    const spec = STAT_ICONS[id], p = new Pix(16, 16);
+    p.ellipse(8, 8, 7.4, 7.4, spec.rim);
+    p.ellipse(8, 8, 6.4, 6.4, spec.fill);
+    for (const [x, y] of [[4, 3], [3, 4], [5, 3], [3, 5]]) p.px(x, y, spec.glint);
+    spec.rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) if (spec.colors[row[x]]) p.px(x + 3, y + 3, spec.colors[row[x]]);
+    });
+    p.outline('#15111d');
+    const src = p.canvas(), big = document.createElement('canvas');
+    big.width = big.height = 64;
+    const ctx = big.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, 0, 0, 64, 64);
+    statUrls[id] = big.toDataURL();
+  }
+  return statUrls[id];
+}
+
+function iconImg(src, className = 'ico') {
+  const img = document.createElement('img');
+  img.className = className;
+  img.src = src;
+  img.alt = '';
+  return img;
 }
 
 // ник стримера получает свой класс: радуга, белый, тимьян, сердце или снег
@@ -799,65 +867,57 @@ export class View {
     }
   }
 
+  // карточка: имя и уровень; здоровье, урон и монеты иконками; характеристики; кукла со снаряжением; число боёв
   _profile(g) {
-    const box = { parts: [], append(...items) { this.parts.push(...items); } };
     const top = el('div', 'top');
     const lv = el('span', 'lv');
     if (g.paragon) lv.append(paragonTag(g.paragon), ' ');
     lv.append(g.level + ' ур.');
     top.append(nick('who', g.name, g.login), lv);
-    const bar = (kind, part, text) => {
-      const node = el('div', 'bar ' + kind), fill = el('i');
-      fill.style.width = (Math.max(0, Math.min(1, part)) * 100).toFixed(1) + '%';
-      node.append(fill, el('span', '', text));
+    const hpMax = maxHp(g);
+    const chip = (icon, value, title) => {
+      const node = el('span', 'chip');
+      node.title = title;
+      node.append(icon, el('b', '', value));
       return node;
     };
-    const hpMax = maxHp(g), need = xpNeed(g.level);
+    const main = el('div', 'main');
+    main.append(chip(iconImg('images/heart.png'), Math.round(g.hp) + '/' + Math.round(hpMax), 'Здоровье'),
+      chip(iconImg('images/might.png'), String(Math.round(damageOf(g))), 'Урон'),
+      chip(el('i', 'coin'), String(g.coins), 'Монеты'));
+    const hp = el('div', 'hp'), fill = el('i');
+    fill.style.width = (Math.max(0, Math.min(1, g.hp / hpMax)) * 100).toFixed(1) + '%';
+    hp.append(fill);
     const stats = el('div', 'stats');
-    for (const stat of STATS) {
-      const cell = el('div');
-      cell.append(el('b', '', String(g[stat.id])), el('small', '', stat.name.toLowerCase()));
-      stats.append(cell);
-    }
-    const gear = el('div', 'gear');
-    const line = (label, value) => {
-      const p = el('div');
-      p.append(label + ': ', el('b', '', value));
-      return p;
-    };
-    // инвентарь: шесть квадратных иконок, рамка — цвет редкости; ниже только общие цифры
-    const inv = el('div', 'inv');
-    const icon = (label, name, color) => {
-      const cell = el('span', 'icon' + (color ? '' : ' empty'));
+    for (const stat of STATS) stats.append(chip(iconImg(statIcon(stat.id), 'ico small'), String(g[stat.id]), stat.name));
+    // кукла: шлем, броня, поножи, сапоги сверху вниз; правая рука слева от брони, левая справа, амулет над правой
+    const doll = el('div', 'doll');
+    const slot = (area, label, name, color, extra = '') => {
+      const cell = el('span', 'icon' + (color ? '' : ' empty') + extra);
       cell.title = label;
+      cell.style.gridArea = area;
       cell.style.setProperty('--c', color || '#5b5468');
       cell.innerHTML = ICONS[name];
-      inv.append(cell);
+      doll.append(cell);
     };
-    const w = g.weapon;
-    icon('Правая рука', w ? (w.type === 'sword' ? 'weapon' : w.type) : 'fists', w && rarityOf(w.rarity).color);
-    icon('Левая рука', g.shield ? 'shield' : 'net', (g.shield || g.nets > 0) && !twoHanded(g) ? '#d9a441' : '');
+    const w = g.weapon, wName = w ? (w.type === 'sword' ? 'weapon' : w.type) : 'fists', wColor = w && rarityOf(w.rarity).color;
+    slot('amulet', 'Божественный амулет: спасёт от смерти', 'amulet', g.amulet ? outcomeOf('amulet').color : '');
+    slot('right', 'Правая рука', wName, wColor);
+    if (twoHanded(g)) slot('left', 'Левая рука: двуручное оружие', wName, wColor, ' twin');
+    else slot('left', 'Левая рука', g.nets > 0 && !g.shield ? 'net' : 'shield', g.shield || g.nets > 0 ? '#d9a441' : '');
     for (const id of SLOT_IDS) {
       const item = g.gear && g.gear[id];
-      icon(ARMOR_SLOTS[id].label, id === 'body' ? 'armor' : id, item && rarityOf(item.rarity).color);
+      slot(id, ARMOR_SLOTS[id].label, id === 'body' ? 'armor' : id, item && rarityOf(item.rarity).color);
     }
-    icon('Божественный амулет: спасёт от смерти', 'amulet', g.amulet ? outcomeOf('amulet').color : '');
-    const totals = el('div', 'stats totals');
-    for (const [value, label] of [[Math.round(damageOf(g)), 'урон'], [Math.round(armorOf(g) * 100) + '%', 'броня'],
-      [Math.round(critOf(g) * 100) + '%', 'крит']]) {
-      const cell = el('div');
-      cell.append(el('b', '', String(value)), el('small', '', label));
-      totals.append(cell);
-    }
-    gear.append(line('Монеты', String(g.coins)),
-      line('Бои', g.fights + ' · побед ' + g.wins + ' · нокаутов ' + g.kos + ' · убийств ' + g.kills));
-    box.append(top, bar('hp', g.hp / hpMax, Math.round(g.hp) + ' / ' + hpMax + ' здоровья'),
-      bar('xp', g.xp / need, Math.floor(g.xp) + ' / ' + need + ' опыта'), stats);
-    if (g.points > 0) {
-      box.append(el('div', 'gear points', 'Свободных очков: ' + g.points + ' — пиши «сил», «лов» или «вын»'));
-    }
-    box.append(inv, totals, gear);
-    return box.parts;
+    const note = (area, label, value) => {
+      const cell = el('span', 'note');
+      cell.style.gridArea = area;
+      cell.append(el('b', '', value), el('small', '', label));
+      doll.append(cell);
+    };
+    note('crit', 'крит', Math.round(critOf(g) * 100) + '%');
+    note('armor', 'броня', Math.round(armorOf(g) * 100) + '%');
+    return [top, main, hp, stats, doll, el('div', 'foot', 'боёв: ' + g.fights)];
   }
 
   // --- гача ---
@@ -918,7 +978,7 @@ export class View {
       if (now.done && r.item) {
         prize.style.color = rarityOf(r.item.rarity).color;
         prize.append(itemText(r.item), el('small', '', r.equipped ? 'надевает' : r.locked ? 'божественная вещь не меняется'
-          : 'не лучше своего — выброшено'));
+          : r.item.kind === 'weapon' ? 'редкость ниже своей — выброшено' : 'не лучше своего — выброшено'));
       } else if (now.done && r.kind === 'amulet') {
         prize.style.color = outcomeOf(r.kind).color;
         prize.append(outcomeOf(r.kind).name, el('small', '', 'один раз спасёт от смерти'));

@@ -1540,3 +1540,18 @@ test('без смерти, льва или легендарных вещей б�
   eq(b.fate, 'down');
   eq(a.weapon.rarity, 'legendary', 'просто повалил — не считается');
 });
+
+test('оружие из гачи той же редкости или выше заменяет старое, даже если урон меньше; ниже — выбрасывается', () => {
+  const g = game();
+  const [a] = join(g, 'A', 'B');
+  a.weapon = { kind: 'weapon', type: 'sword', rarity: 'epic', power: 12 };
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'spear', rarity: 'epic', power: 9 } });
+  eq([a.weapon.type, a.weapon.power], ['spear', 9], 'та же редкость — меняет');
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'greatsword', rarity: 'rare', power: 50 } });
+  eq(a.weapon.type, 'spear', 'редкость ниже — не меняет');
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'sword', rarity: 'legendary', power: 13 } });
+  eq(a.weapon.rarity, 'legendary');
+  a.gear.body = { kind: 'armor', slot: 'body', rarity: 'epic', power: 19 };
+  g._prize(a, { kind: 'item', item: { kind: 'armor', slot: 'body', rarity: 'epic', power: 17 } });
+  eq(a.gear.body.power, 19, 'доспех — по-прежнему только если крепче');
+});

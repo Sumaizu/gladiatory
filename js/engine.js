@@ -2,7 +2,7 @@ import { AFK_ROUNDS, TEAMS, BLEED, HIT_REWARD, YIELD_CUT, PARAGON, pitStrength, 
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, runOf, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
-import { DIVINE, PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemText, spin } from './gacha.js';
+import { DIVINE, PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemText, rankOf, spin } from './gacha.js';
 
 export const COMMANDS = new Map([
   ['!гладиаторы-пауза', 'pause'],
@@ -516,13 +516,15 @@ export class Game {
       if (current && current.rarity === DIVINE.id) {
         result.locked = true;
         this._line(g.name + ': божественную вещь гача не меняет — «' + itemText(item) + '» выброшено', 'info');
-      } else if (!current || item.power > current.power) {
+      // оружие той же редкости или выше заменяет старое, даже если урон меньше; доспех — только если крепче
+      } else if (!current || (item.kind === 'weapon' ? rankOf(item) >= rankOf(current) : item.power > current.power)) {
         if (item.kind === 'armor') g.gear[item.slot] = item;
         else g.weapon = item;
         result.equipped = true;
         this._line(g.name + ' надевает «' + itemText(item) + '»', 'level');
       } else {
-        this._line(g.name + ': «' + itemText(item) + '» не лучше своего — выброшено', 'info');
+        this._line(g.name + ': «' + itemText(item) + '» ' + (item.kind === 'weapon' ? 'реже своего' : 'не лучше своего')
+          + ' — выброшено', 'info');
       }
     } else {
       this._line(g.name + ': в гаче пусто', 'info');
