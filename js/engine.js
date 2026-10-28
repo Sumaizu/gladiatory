@@ -543,6 +543,11 @@ export class Game {
 
   _yield(g) {
     if (this.state !== 'battle' || g.fate !== 'fight') return;
+    // на дуэли не сдаются — она и так без смертей
+    if (this.duel) {
+      this._line(g.name + ': на дуэли не сдаются — бейся до конца', 'warn');
+      return;
+    }
     g.fate = 'yield';
     g.by = '';
     this._line(g.name + ' бросает оружие и сдаётся', 'yield');

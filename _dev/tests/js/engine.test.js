@@ -1330,3 +1330,13 @@ test('сдался командой — награда за бой втрое м
   ok(ra.coins < rb.coins);
   ok(c);
 });
+
+test('на дуэли сдаться нельзя', () => {
+  const g = game({ mode: 'duel' });
+  join(g, 'A', 'B', 'C');
+  g.next();
+  g.next();
+  const { left } = g.duel;
+  g.feed(left.name, 'сдаюсь', { login: left.login });
+  eq(left.fate, 'fight');
+});

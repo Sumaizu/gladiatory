@@ -659,9 +659,11 @@ export class View {
       }
     });
     const betting = duel && duel.betting;
-    this._set('commands', game.state + (betting ? duel.left.login + duel.right.login : ''), (node) => {
+    this._set('commands', game.state + (duel ? (betting ? 'bet' : 'duel') + duel.left.login + duel.right.login : ''), (node) => {
       const list = betting ? [['1', 'ставка на ' + duel.left.name], ['2', 'ставка на ' + duel.right.name],
-        ['что угодно', 'вступить и тоже поставить']] : COMMANDS[game.state] || COMMANDS.ludus;
+        ['что угодно', 'вступить и тоже поставить']]
+        // на дуэли сдаться нельзя — подсказку про «сдаюсь» не показываем
+        : duel ? COMMANDS.battle.filter(([word]) => word !== 'сдаюсь') : COMMANDS[game.state] || COMMANDS.ludus;
       node.replaceChildren(...list.map(([word, text]) => {
         const item = el('span', 'command');
         item.append(el('code', '', word), el('small', '', text));
