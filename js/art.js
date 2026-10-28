@@ -501,6 +501,7 @@ export function lookOf(g, seed) {
     shield: !shieldUp(g) ? 'none' : SHIELD_SHAPES[(seed >>> 11) % SHIELD_SHAPES.length],
     design: (seed >>> 9) % 3,
     net: netUp(g) && !(g.netCool > 0),
+    amulet: Boolean(g.amulet),
   };
 }
 
@@ -714,6 +715,13 @@ function gladiatorArt(look, pose, dead) {
       p.line(12, H, 10, H - 4, color);
       p.line(14, H, 15, H - 4, colorL);
     }
+  }
+  if (look.amulet) {
+    // божественный амулет: золотой шнурок и красный камень на груди
+    p.px(12, 11 + dy, '#d4af37');
+    p.px(14, 11 + dy, '#d4af37');
+    p.rect(13, 12 + dy, 1, 2, '#d8202e');
+    p.px(13, 12 + dy, '#ff8a8a');
   }
   if (pose === 'sit') {
     // сидя ближняя рука лежит на колене
@@ -986,7 +994,8 @@ function silhouette(canvas) {
 }
 
 export function gladiatorSprite(look, pose, dead = false, flash = false) {
-  const key = ['g7', look.color, gearKey(look), look.helmet, look.shield, look.net, look.skin, look.hair, pose, dead, flash].join(':');
+  const key = ['g7', look.color, gearKey(look), look.helmet, look.shield, look.net, look.amulet, look.skin, look.hair, pose, dead,
+    flash].join(':');
   return remember(key, () => {
     const art = remember(key.replace(/:(true|false)$/, ':false'), () => gladiatorArt(look, pose, dead));
     return flash ? silhouette(art) : art;

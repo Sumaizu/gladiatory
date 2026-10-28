@@ -437,6 +437,8 @@ export function drawThrown(ctx, game) {
 export function drawLabel(ctx, g, scene, highlight) {
   const fate = scene === 'arena' ? g.fate : null;
   const pose = scene === 'ludus' && !g.walking ? g.pose : null;
+  // на арене у лежачих и сдавшихся ни имени, ни здоровья — только у тех, кто ещё дерётся
+  if (fate && fate !== 'fight') return;
   const lying = fate === 'down' || fate === 'dead' || pose === 'lie';
   // на скамьях и койках соседи рядом — подписи через одну выше, чтобы не налезали
   const stagger = pose && g.seat !== null && g.seat !== undefined && g.seat % 2 ? 15 : 0;

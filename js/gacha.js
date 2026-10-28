@@ -1,15 +1,18 @@
 // гача в лудильне: редкости в тех же пропорциях, что в Чатобороне; монет и пустоты нет; щит и сеть — без редкости
 import { ARMOR_SLOTS, SLOT_IDS, WEAPON_TYPES, offhandFree } from './balance.js';
 export const PRICE = 30;
-export const SPIN_TIME = 2.2;
-export const SHOW_TIME = 3;
-export const RUSH = { queue: 6, spin: 0.9, show: 1.4 };
+// крутка вдвое быстрее прежней — лудус теперь минута
+export const SPIN_TIME = 1.1;
+export const SHOW_TIME = 1.5;
+export const RUSH = { queue: 6, spin: 0.5, show: 0.7 };
 export const QUEUE_CAP = 10;
 export const SPREAD = 0.15;
 
 export const OUTCOMES = [
   { id: 'shield', name: 'Щит', color: '#d9a441', chance: 0.04 },
   { id: 'net', name: 'Сеть', color: '#a8c4b0', chance: 0.05 },
+  // спасает от смерти один раз и рассыпается; пока он есть, второй не выпадает
+  { id: 'amulet', name: 'Божественный амулет', color: '#ff3b47', chance: 0.03 },
 ];
 
 // weapon — прибавка к урону, armor — процент, на который режется входящий урон
@@ -53,7 +56,8 @@ export function makeItem(random, kind, rarity, type = null) {
 
 // owner — кто крутит: щит и сеть выпадают, только если его вторая рука свободна
 export function spin(random, owner = null) {
-  const outcomes = owner && !offhandFree(owner) ? OUTCOMES.filter((o) => o.id !== 'shield' && o.id !== 'net') : OUTCOMES;
+  const outcomes = OUTCOMES.filter((o) => !owner || (o.id === 'amulet' ? !owner.amulet
+    : o.id !== 'shield' && o.id !== 'net' || offhandFree(owner)));
   // у кого ещё нет оружия, тому первая же гача гарантированно даёт оружие
   if (owner && !owner.weapon) return { kind: 'item', item: makeItem(random, 'weapon', pick(RARITIES, random)) };
   const roll = pick(outcomes.concat(RARITIES), random);

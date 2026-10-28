@@ -1,6 +1,6 @@
 export const DEFAULTS = {
   channel: '',
-  ludus: 120,
+  ludus: 60,
   battle: 90,
   death: 15,
   chat_commands: true,

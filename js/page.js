@@ -22,7 +22,13 @@ const armedUntil = { reset: 0 };
 function restore() {
   if (location.search.length > 1) return fromQuery(location.search);
   try {
-    return clean(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'));
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    // лудус по умолчанию стал минутой: старое сохранённое значение по умолчанию (120) меняем на новое
+    if (saved && saved.ludus === 120 && !localStorage.getItem(STORAGE_KEY + '.ludus60')) {
+      saved.ludus = 60;
+      localStorage.setItem(STORAGE_KEY + '.ludus60', '1');
+    }
+    return clean(saved);
   } catch (error) {
     return clean({});
   }

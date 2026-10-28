@@ -1,4 +1,4 @@
-import { AFK_ROUNDS, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
+import { AFK_ROUNDS, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
@@ -42,7 +42,7 @@ const RETARGET = [3.5, 3.5];
 const REVENGE = 0.35;
 const GACHA_CLOSE = 5;
 // если до лудильни не дойти (застрял, увели), крутка всё равно начнётся через столько секунд
-const TEMPLE_WAIT = 12;
+const TEMPLE_WAIT = 6;
 // враг выше уровнем притягивает: за каждый уровень разницы цель «ближе» на per пикселей, не больше cap уровней
 const LEVEL_PULL = { per: 70, cap: 4 };
 const PICK_SOFT = 50;
@@ -51,10 +51,10 @@ export { AFK_ROUNDS };
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const INVISIBLE = /[​‌‍⁠﻿­͏⠀\u{E0000}]/gu;
 const IGNORED = new Set(BOTS);
-const SAVED = ['name', 'color', 'level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'gear', 'shield', 'nets', 'hp',
-  'fights', 'wins', 'kos', 'kills', 'born'];
+const SAVED = ['name', 'color', 'level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'gear', 'shield', 'nets', 'amulet', 'hp',
+  'fights', 'wins', 'kos', 'kills', 'paragon', 'born'];
 const COUNTS = ['level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'nets', 'fights', 'wins', 'kos',
-  'kills'];
+  'kills', 'paragon'];
 
 const PLACE_BY_WORD = new Map();
 for (const [id, place] of Object.entries(PLACES)) for (const word of place.words) PLACE_BY_WORD.set(word, id);
@@ -80,9 +80,10 @@ export function readableColor(color, login) {
   return '#' + rgb.map((c) => c.toString(16).padStart(2, '0')).join('');
 }
 
-export function newGladiator(login, name, color, now) {
-  return { login, name, color, level: 1, xp: 0, coins: START_COINS, str: 0, agi: 0, vit: 0, points: START_POINTS,
-    weapon: null, gear: emptyGear(), shield: false, nets: 0, hp: 1, fights: 0, wins: 0, kos: 0, kills: 0, born: now };
+export function newGladiator(login, name, color, now, paragon = 0) {
+  return { login, name, color, level: 1, xp: 0, coins: START_COINS + PARAGON.coins * paragon, str: 0, agi: 0, vit: 0,
+    points: START_POINTS + PARAGON.points * paragon, weapon: null, gear: emptyGear(), shield: false, nets: 0, amulet: false,
+    paragon, hp: 1, fights: 0, wins: 0, kos: 0, kills: 0, born: now };
 }
 
 export class Roster {
@@ -91,6 +92,8 @@ export class Roster {
     this.key = key;
     this.data = new Map();
     this.fallen = [];
+    // парагон остаётся за логином и после смерти
+    this.paragons = new Map();
     if (!storage) return;
     try {
       const saved = JSON.parse(storage.getItem(key) || '{}');
@@ -109,9 +112,13 @@ export class Roster {
         if (!entry.gear && entry.armor) g.gear.body = cleanItem(Object.assign({}, entry.armor, { slot: 'body' }), 'armor');
         for (const slot of SLOT_IDS) if (g.gear[slot]) g.gear[slot].slot = slot;
         g.shield = entry.shield === true;
+        g.amulet = entry.amulet === true;
         g.nets = Math.min(NET.max, g.nets);
         g.hp = Number.isFinite(Number(entry.hp)) ? Math.max(0.01, Math.min(1, Number(entry.hp))) : 1;
         this.data.set(login, g);
+      }
+      for (const [login, n] of Object.entries(saved.paragons || {})) {
+        if (Number(n) > 0) this.paragons.set(login, Math.trunc(Number(n)));
       }
       this.fallen = (Array.isArray(saved.fallen) ? saved.fallen : []).filter((f) => f && f.name).slice(0, FALLEN_MAX)
         .map((f) => ({ name: String(f.name), level: Math.max(1, Math.trunc(Number(f.level)) || 1),
@@ -120,6 +127,7 @@ export class Roster {
     } catch (error) {
       this.data = new Map();
       this.fallen = [];
+      this.paragons = new Map();
     }
   }
 
@@ -138,6 +146,7 @@ export class Roster {
     entry.hp = Math.max(0.01, Math.min(1, g.hp / maxHp(g)));
     entry.hp = Math.round(entry.hp * 1000) / 1000;
     this.data.set(g.login, entry);
+    if (g.paragon > 0) this.paragons.set(g.login, g.paragon);
   }
 
   bury(g, by, at) {
@@ -149,6 +158,7 @@ export class Roster {
   reset() {
     this.data = new Map();
     this.fallen = [];
+    this.paragons = new Map();
     this.save();
   }
 
@@ -157,7 +167,8 @@ export class Roster {
     try {
       const alive = {};
       for (const [login, entry] of this.data) alive[login] = entry;
-      this.storage.setItem(this.key, JSON.stringify({ alive, fallen: this.fallen }));
+      this.storage.setItem(this.key, JSON.stringify({ alive, fallen: this.fallen,
+        paragons: Object.fromEntries(this.paragons) }));
     } catch (error) {
       return;
     }
@@ -209,8 +220,9 @@ export class Game {
     this.state = 'ludus';
     this.paused = false;
     this.timer = this.settings.ludus;
-    // режим следующего боя известен заранее — его пишут сверху лудуса
-    this.nextMode = this.forceMode || this._rollMode();
+    // режим следующего боя известен заранее — его пишут сверху лудуса; дорос до парагона — его испытание первым делом
+    this.nextBoss = this.forceMode ? null : this._paragonNext();
+    this.nextMode = this.forceMode || (this.nextBoss ? 'paragon' : this._rollMode());
     this.fighters = [];
     this.endIn = null;
     this.notice = '';
@@ -326,7 +338,8 @@ export class Game {
       g.hp = maxHp(g);
       this._line(g.name + ' возвращается в лудус', 'join');
     } else {
-      g = newGladiator(login, name.slice(0, NAME_MAX), readableColor(color, login), this.now());
+      g = newGladiator(login, name.slice(0, NAME_MAX), readableColor(color, login), this.now(),
+        this.roster.paragons.get(login) || 0);
       g.hp = maxHp(g);
       const fell = this.roster.fallen.find((f) => f.name.toLowerCase() === login);
       this._line(fell ? g.name + ' начинает заново новым бойцом' : 'Новый гладиатор: ' + g.name, 'join');
@@ -484,6 +497,10 @@ export class Game {
       } else {
         this._line(g.name + ': вторая рука занята — щит выброшен', 'info');
       }
+    } else if (result.kind === 'amulet') {
+      result.equipped = !g.amulet;
+      g.amulet = true;
+      this._line(g.name + ' надевает божественный амулет — он спасёт от смерти', 'champion');
     } else if (result.kind === 'net') {
       result.equipped = !g.shield && !(g.nets > 0);
       if (result.equipped) g.nets = 1;
@@ -654,6 +671,14 @@ export class Game {
       this._line(g.name + ' достигает ' + g.level + ' уровня (+' + points + ' ' + plural(points, 'очко', 'очка', 'очков')
         + ')', 'level');
       this._emit('level', { login: g.login, level: g.level });
+      if (g.level >= PARAGON.level && this.state === 'ludus' && !this.forceMode && this.nextMode !== 'paragon') {
+        const boss = this._paragonNext();
+        if (boss) {
+          this.nextMode = 'paragon';
+          this.nextBoss = boss;
+          this._line(boss.name + ' дорос до парагона — следующий бой он один против всех!', 'champion');
+        }
+      }
     }
     return ups;
   }
@@ -675,8 +700,11 @@ export class Game {
     this.timer = this.settings.battle;
     this.endIn = null;
     this.cards = [];
-    this.mode = this.forceMode || this.nextMode || this._rollMode();
+    const boss = this.forceMode ? null : this._paragonNext(ready);
+    this.mode = this.forceMode || (boss ? 'paragon' : this.nextMode !== 'paragon' && this.nextMode || this._rollMode());
     this.nextMode = null;
+    this.nextBoss = null;
+    this.boss = this.mode === 'paragon' ? boss : null;
     this.duel = null;
     if (this.mode === 'duel') {
       // двое случайных: первый встаёт слева (ставка «1»), второй справа (ставка «2»)
@@ -715,6 +743,7 @@ export class Game {
       g.netCool = 0;
       g.spearOut = null;
       g.spearCool = 0;
+      g.savedNow = false;
       g.by = '';
     });
     // соседи становятся парами — бой сразу распадается на поединки по всей арене (в яме цели ищут сами)
@@ -737,10 +766,24 @@ export class Game {
       this.duel.left.face = 1;
       this.duel.right.face = -1;
     }
+    if (this.boss) {
+      // парагон в центре, остальные вокруг
+      const b = this.boss, near = all.filter((g) => g !== b && Math.hypot(g.x - ARENA.cx, g.y - ARENA.cy) < 90);
+      for (const g of near) {
+        const a = Math.atan2(g.y - ARENA.cy, g.x - ARENA.cx) || this.random() * 6.28;
+        g.x = ARENA.cx + Math.cos(a) * 120;
+        g.y = ARENA.cy + Math.sin(a) * 90;
+      }
+      b.x = ARENA.cx;
+      b.y = ARENA.cy;
+    }
     this.projectiles = [];
     if (this.duel) {
       this._line('Дуэль! ' + this.duel.left.name + ' против ' + this.duel.right.name + '. Ставки: 1 — за '
         + this.duel.left.name + ', 2 — за ' + this.duel.right.name, 'battle');
+    } else if (this.boss) {
+      this._line('Испытание парагона! ' + this.boss.name + ' (' + this.boss.level + ' ур.) против всех: ' + (n - 1) + ' '
+        + plural(n - 1, 'гладиатор', 'гладиатора', 'гладиаторов'), 'champion');
     } else if (this.mode === 'pit') {
       this._line('Яма со львами! ' + lions.length + ' ' + plural(lions.length, 'лев', 'льва', 'львов') + ' против ' + n + ' '
         + plural(n, 'гладиатора', 'гладиаторов', 'гладиаторов'), 'battle');
@@ -806,6 +849,20 @@ export class Game {
     this._emit('phase', { state: 'battle', mode: 'duel', fight: true });
   }
 
+  // кто дорос до парагона, провёл нужное число боёв и не сидит на скамье — выходит один против всех
+  // (по одному за бой, старший первым)
+  _paragonNext(pool = null) {
+    let best = null;
+    for (const g of pool || this.members.values()) {
+      if (g.lion || g.level < PARAGON.level || g.fights < PARAGON.fights || g.place === 'rest') continue;
+      if (!best || g.level > best.level || g.level === best.level && g.xp > best.xp) best = g;
+    }
+    if (!best) return null;
+    // одному не с кем драться
+    const others = (pool || Array.from(this.members.values())).filter((g) => g !== best && g.place !== 'rest');
+    return others.length ? best : null;
+  }
+
   _rollMode() {
     const roll = this.random();
     return roll < PIT.chance ? 'pit' : roll < PIT.chance + DUEL.chance ? 'duel' : 'ffa';
@@ -840,7 +897,10 @@ export class Game {
 
   // в обычном бою враги все, в яме — только другая сторона
   _enemy(a, b) {
-    return a !== b && (this.mode !== 'pit' || Boolean(a.lion) !== Boolean(b.lion));
+    if (a === b) return false;
+    if (this.mode === 'pit') return Boolean(a.lion) !== Boolean(b.lion);
+    if (this.boss) return (a === this.boss) !== (b === this.boss);
+    return true;
   }
 
   // ищем ближайшего, но кого ещё мало кто бьёт: толпа распадается на поединки
@@ -1156,9 +1216,16 @@ export class Game {
   _knockOut(d, a) {
     const hpMax = maxHp(d);
     // лев погибает всегда; от лап льва гибнут втрое чаще
-    const chance = d.lion ? 1 : this.duel ? 0
+    const chance = d.lion ? 1 : this.duel || d === this.boss ? 0
       : deathChance(this.settings.death / 100, -d.hp, hpMax) * (a.lion ? PIT.deathMult : 1);
-    const dead = Boolean(d.lion) || chance > 0 && this.random() < Math.min(0.95, chance);
+    let dead = Boolean(d.lion) || chance > 0 && this.random() < Math.min(0.95, chance);
+    // божественный амулет забирает смерть на себя и рассыпается
+    const saved = dead && !d.lion && d.amulet;
+    if (saved) {
+      dead = false;
+      d.amulet = false;
+      d.savedNow = true;
+    }
     d.fate = dead ? 'dead' : 'down';
     d.by = a.name;
     d.hp = dead ? 0 : Math.max(1, Math.round(hpMax * BEATEN_HP));
@@ -1168,16 +1235,19 @@ export class Game {
     if (d.lion) this._line(a.name + ' сражает льва!', 'champion');
     else if (a.lion) this._line(dead ? 'Лев растерзал ' + d.name : 'Лев повалил ' + d.name + ' — тот жив', dead ? 'death' : 'down');
     else if (dead) this._line(d.name + ' погибает от руки ' + a.name, 'death');
+    else if (saved) this._line('Божественный амулет спасает ' + d.name + ' от смерти — и рассыпается', 'champion');
     else this._line(a.name + ' валит ' + d.name + ' — тот сдаётся', 'down');
-    this._emit('down', { login: d.login, fate: d.fate, x: d.x, y: d.y, by: a.login, lion: Boolean(d.lion) });
+    this._emit('down', { login: d.login, fate: d.fate, x: d.x, y: d.y, by: a.login, lion: Boolean(d.lion), saved });
     this._checkEnd();
   }
 
   _checkEnd() {
     if (this.state !== 'battle' || this.endIn !== null) return;
     const standing = this._standing();
+    const boss = this.boss;
     const over = this.mode === 'pit' ? !standing.some((g) => g.lion) || !standing.some((g) => !g.lion)
-      : standing.length <= 1;
+      : boss ? !standing.includes(boss) || standing.every((g) => g === boss)
+        : standing.length <= 1;
     if (over) this.endIn = END_DELAY;
   }
 
@@ -1192,7 +1262,7 @@ export class Game {
       winner = share(l) >= share(r) ? l : r;
       duel.winner = winner;
     }
-    const champion = duel ? winner : !pit && standing.length === 1 ? standing[0] : null;
+    const champion = duel ? winner : !pit && !this.boss && standing.length === 1 ? standing[0] : null;
     const rows = [];
     for (const g of people) {
       const fate = g.fate;
@@ -1207,6 +1277,15 @@ export class Game {
           coins = DUEL.perBet * this.betsOn(g === this.duel.left ? 2 : 1);
           g.wins++;
         }
+      } else if (g === this.boss) {
+        // парагон после боя всё равно начинает заново — опыт и монеты ему ни к чему
+        if (fate === 'fight') g.wins++;
+      } else if (this.boss && fate !== 'dead') {
+        // выстоял против парагона — много опыта
+        const r = fate === 'fight' ? PARAGON.reward.standing : PARAGON.reward.beaten;
+        xp = r.xp + PARAGON.reward.perKo.xp * g.kosNow;
+        coins = r.coins + PARAGON.reward.perKo.coins * g.kosNow;
+        if (fate === 'fight') g.wins++;
       } else if (pit && fate !== 'dead') {
         // выжил в яме — много опыта и золота
         const r = fate === 'fight' ? PIT.reward.standing : PIT.reward.beaten;
@@ -1221,7 +1300,8 @@ export class Game {
         if (fate === 'fight') g.wins++;
       }
       const row = { login: g.login, name: g.name, color: g.color, fate, xp, coins, kos: g.kosNow, kills: g.killsNow,
-        by: g.by, level: g.level, ups: 0 };
+        by: g.by, level: g.level, ups: 0, saved: Boolean(g.savedNow) };
+      g.savedNow = false;
       if (fate === 'dead') {
         this.roster.bury(g, g.by, this.now());
         this.members.delete(g.login);
@@ -1239,6 +1319,25 @@ export class Game {
       }
       rows.push(row);
     }
+    // парагон: как бы ни кончился бой, получает парагон и начинает с нуля, как после смерти
+    const boss = this.boss;
+    let ascended = null;
+    if (boss && this.members.get(boss.login) === boss) {
+      const fresh = newGladiator(boss.login, boss.name, boss.color, this.now(), (boss.paragon || 0) + 1);
+      fresh.hp = maxHp(fresh);
+      fresh.saidAt = boss.saidAt;
+      this.members.set(boss.login, fresh);
+      this._arrive(fresh, 'train');
+      this.roster.put(fresh);
+      this.cards = this.cards.filter((card) => card.login !== boss.login);
+      const row = rows.find((r) => r.login === boss.login);
+      ascended = { login: boss.login, name: boss.name, paragon: fresh.paragon, stood: Boolean(row && row.fate === 'fight') };
+      if (row) {
+        row.paragon = fresh.paragon;
+        row.level = 1;
+      }
+      this._emit('paragon', { login: boss.login, paragon: fresh.paragon });
+    }
     const order = { fight: 0, down: 1, yield: 1, dead: 2 };
     rows.sort((a, b) => order[a.fate] - order[b.fate] || b.kos - a.kos || b.xp - a.xp);
     let bettors = [];
@@ -1255,8 +1354,8 @@ export class Game {
       for (const row of rows) if (row.login !== winner.login && row.fate === 'fight') row.fate = 'down';
       rows.sort((a, b) => (b.login === winner.login) - (a.login === winner.login));
     }
-    this.results = { champion: champion ? champion.login : null, rows, fighters: n,
-      mode: duel ? 'duel' : pit ? 'pit' : 'ffa', bettors, bets: duel ? [this.betsOn(1), this.betsOn(2)] : null,
+    this.results = { champion: champion ? champion.login : null, rows, fighters: n, ascended,
+      mode: duel ? 'duel' : pit ? 'pit' : boss ? 'paragon' : 'ffa', bettors, bets: duel ? [this.betsOn(1), this.betsOn(2)] : null,
       lions: lions.length, lionsDown: lions.filter((g) => g.fate !== 'fight').length };
     this.projectiles = [];
     for (const g of this.members.values()) {
@@ -1269,6 +1368,7 @@ export class Game {
     this.state = 'results';
     this.mode = null;
     this.duel = null;
+    this.boss = null;
     this.timer = RESULTS_TIME;
     const wounded = rows.filter((row) => row.fate !== 'dead' && this.members.get(row.login)?.place === 'heal').length;
     if (wounded) this._line('Раненых уносят в лазарет: ' + wounded, 'heal');
@@ -1281,6 +1381,9 @@ export class Game {
       const won = this.results.lionsDown === lions.length;
       this._line(won ? 'Львы повержены! Выжившие получают щедрую награду' : !standing.length ? 'Львы победили'
         : 'Время вышло — львы уходят в клетки', won ? 'champion' : 'battle');
+    } else if (ascended) {
+      this._line((ascended.stood ? ascended.name + ' выстоял против всех' : 'Гладиаторы одолели ' + ascended.name) + ' — он получает '
+        + ascended.paragon + '-й парагон и начинает заново', 'champion');
     } else if (champion) this._line(champion.name + ' — чемпион арены!', 'champion');
     else this._line('Время вышло — бой окончен', 'battle');
     this._emit('phase', { state: 'results' });

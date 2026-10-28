@@ -28,10 +28,11 @@ export const STATS = [
 // цена следующей ступени оружия или доспеха
 export const gearPrice = (tier) => Math.round(30 * Math.pow(tier + 1, 1.5) / 5) * 5;
 
-// в лудусе, доля здоровья в секунду
-export const HEAL_RATE = { rest: 0.003, heal: 0.015, train: 0 };
+// в лудусе, доля здоровья в секунду. Лудус идёт минуту, поэтому лечение вдвое быстрее, чем было при двух;
+// опыт за тренировку — вчетверо: вдвое за короткий лудус и ещё вдвое сверху
+export const HEAL_RATE = { rest: 0.006, heal: 0.03, train: 0 };
 export const BEATEN_HP = 0.15;
-export const TRAIN_XP = 0.4;
+export const TRAIN_XP = 1.6;
 
 export const MOVE_SPEED = 70;
 export const REACH = 36;
@@ -58,7 +59,7 @@ export const WEAPON_TYPES = {
   sword: { name: 'меч', gender: 'm', rate: 1, dmg: 1, reach: 1, crit: 0, hands: 1 },
   greatsword: { name: 'двуручный меч', gender: 'm', rate: 1.5, dmg: 1.6, reach: 1.1, crit: 0.1, hands: 2, cleave: true },
   claws: { name: 'когти', gender: 'p', rate: 0.95, dmg: 1.15, reach: 1.2, crit: 0.1, hands: 2 },
-  spear: { name: 'копьё', gender: 'n', rate: 1.1, dmg: 1, reach: 1.6, crit: 0, hands: 1, pierce: true, throw: 2.2 },
+  spear: { name: 'копьё', gender: 'n', rate: 1.1, dmg: 0.9, reach: 1.6, crit: 0, hands: 1, pierce: true, throw: 2.2 },
 };
 // без оружия — кулаки
 export const typeOf = (g) => (g.weapon ? WEAPON_TYPES[g.weapon.type] || WEAPON_TYPES.sword : WEAPON_TYPES.fists);
@@ -129,6 +130,13 @@ export const PIT = {
 
 // «Дуэль»: двое случайных на арене, bet секунд на ставки «1» (левый) и «2» (правый), потом бой без смертей.
 // Обоим xp опыта, победителю perBet монет за каждую ставку против него, угадавшим — prize монет
+// парагон: дорос до level и провёл не меньше fights боёв (чтобы не копили уровни афк-тренировкой) —
+// следующий бой выходит один против всех. Выжившим против него — много опыта.
+// Сам он после боя, как бы тот ни кончился, получает парагон и начинает заново: за каждый парагон
+// +points к стартовым очкам характеристик и +coins к стартовому золоту
+export const PARAGON = { level: 10, fights: 30, points: 1, coins: 10,
+  reward: { standing: { xp: 160, coins: 40 }, beaten: { xp: 120, coins: 30 }, perKo: { xp: 20, coins: 10 } } };
+
 export function pitStrength(n) {
   const [from, to] = PIT.grow, part = Math.max(0, Math.min(1, (n - from) / (to - from)));
   return PIT.strength[0] + (PIT.strength[1] - PIT.strength[0]) * part;

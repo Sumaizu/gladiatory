@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { DUEL, HEAL_RATE, PIT, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { DUEL, HEAL_RATE, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { starOf } from '../../../js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
@@ -33,7 +33,7 @@ function rng(seed = 1) {
 function game(options = {}) {
   const g = new Game(Object.assign({}, SETTINGS, options.settings || {}), options.roster || new Roster(),
     { random: options.random || rng(7), now: () => 1000 });
-  g.forceMode = options.mode || 'ffa';
+  g.forceMode = 'mode' in options ? options.mode : 'ffa';
   g.open();
   return g;
 }
@@ -219,7 +219,8 @@ test('лудус кончается сам и начинается бой; св�
   const [a] = join(g, 'Brutus', 'Crixus');
   for (let i = 0; i < 20 * 61; i++) g.step(0.05);
   eq(g.state, 'battle');
-  eq(a.points, START_POINTS);
+  // за лудус на тренировке он подрос — очки копятся, но в характеристики сами не идут
+  eq(a.points, START_POINTS + POINTS_PER_LEVEL * (a.level - 1));
   eq(a.str + a.agi + a.vit, 0);
 });
 
@@ -1120,4 +1121,123 @@ test('копьё после подбора метают снова не рань
 
 test('щит блокирует чаще (35%), а ломается вдвое реже (4%)', () => {
   eq([SHIELD.block, SHIELD.breaks], [0.35, 0.04]);
+});
+
+test('божественный амулет: 3% в гаче, второй не выпадает, пока есть первый', () => {
+  const owner = { weapon: { type: 'sword' }, shield: false, nets: 0, amulet: false };
+  let r = 0;
+  const count = (o) => {
+    let n = 0;
+    for (let i = 0; i < 20000; i++) if (spin(() => ((r = (r * 9301 + 49297) % 233280) / 233280), o).kind === 'amulet') n++;
+    return n / 20000;
+  };
+  const share = count(owner);
+  ok(share > 0.02 && share < 0.04, String(share));
+  eq(count(Object.assign({}, owner, { amulet: true })), 0);
+});
+
+test('божественный амулет спасает от смерти один раз и рассыпается', () => {
+  const g = game({ settings: { death: 100 } });
+  const [a, b] = join(g, 'A', 'B');
+  a.amulet = true;
+  g.next();
+  a.hp = -1000;
+  g._knockOut(a, b);
+  eq(a.fate, 'down');
+  no(a.amulet);
+  b.hp = -1000;
+  g._knockOut(b, a);
+  eq(b.fate, 'dead');
+  fight(g);
+  const row = g.results.rows.find((x) => x.login === 'a');
+  ok(row.saved);
+  ok(g.members.has('a'));
+});
+
+test('амулет сохраняется между сессиями', () => {
+  const store = new Map(), storage = { getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v) };
+  const roster = new Roster(storage, 'k');
+  const g = new Game(SETTINGS, roster);
+  g.open();
+  g.feed('A', 'привет', { login: 'a' });
+  g.members.get('a').amulet = true;
+  roster.put(g.members.get('a'));
+  roster.save();
+  ok(new Roster(storage, 'k').get('a').amulet);
+});
+
+test('парагон: дорос до ' + PARAGON.level + ' уровня в лудусе — следующий бой он один против всех', () => {
+  const g = game({ mode: null });
+  const [a] = join(g, 'A', 'B', 'C', 'D');
+  g.open();
+  a.fights = PARAGON.fights;
+  a.level = PARAGON.level - 1;
+  a.xp = 0;
+  g._gainXp(a, xpNeed(a.level));
+  eq([g.nextMode, g.nextBoss], ['paragon', a]);
+  g.next();
+  eq([g.mode, g.boss], ['paragon', a]);
+  const [, b, c] = g.fighters;
+  ok(g._enemy(a, b) && g._enemy(c, a));
+  no(g._enemy(b, c), 'остальные заодно');
+});
+
+test('парагон: после боя получает парагон и начинает с нуля, выжившие — много опыта', () => {
+  const g = game({ settings: { death: 100 }, mode: null });
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  a.level = PARAGON.level;
+  a.fights = PARAGON.fights;
+  a.amulet = true;
+  a.coins = 999;
+  g.open();
+  g.next();
+  eq(g.mode, 'paragon');
+  a.hp = -1000;
+  g._knockOut(a, b);
+  eq(a.fate, 'down', 'парагон не погибает');
+  fight(g);
+  const fresh = g.members.get('a');
+  ok(fresh !== a);
+  eq([fresh.level, fresh.paragon, fresh.points, fresh.coins, fresh.amulet, fresh.weapon],
+    [1, 1, START_POINTS + PARAGON.points, START_COINS + PARAGON.coins, false, null]);
+  eq(fresh.fights, 0, 'бои для следующего парагона считаются заново');
+  eq(g.results.mode, 'paragon');
+  eq(g.results.ascended.paragon, 1);
+  for (const m of [b, c]) {
+    const row = g.results.rows.find((r) => r.login === m.login);
+    ok(row.xp >= PARAGON.reward.beaten.xp, m.login + ' ' + row.xp);
+  }
+});
+
+test('парагон остаётся за игроком и после смерти', () => {
+  const store = new Map(), storage = { getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v) };
+  const roster = new Roster(storage, 'k');
+  const g = new Game(SETTINGS, roster);
+  g.open();
+  g.feed('A', 'привет', { login: 'a' });
+  const a = g.members.get('a');
+  a.paragon = 2;
+  roster.put(a);
+  roster.bury(a, 'B', 0);
+  roster.save();
+  const again = new Game(SETTINGS, new Roster(storage, 'k'));
+  again.open();
+  again.feed('A', 'привет', { login: 'a' });
+  const b = again.members.get('a');
+  eq([b.paragon, b.points, b.coins], [2, START_POINTS + 2 * PARAGON.points, START_COINS + 2 * PARAGON.coins]);
+});
+
+test('парагон только тем, кто провёл хотя бы ' + PARAGON.fights + ' боёв — афк-тренировкой не накопить', () => {
+  const g = game({ mode: null });
+  const [a] = join(g, 'A', 'B', 'C');
+  a.level = PARAGON.level + 3;
+  a.fights = PARAGON.fights - 1;
+  g.open();
+  no(g.nextMode === 'paragon');
+  g.next();
+  no(g.mode === 'paragon');
+  fight(g);
+  g.next();
+  eq(g.members.get('a').fights, PARAGON.fights);
+  eq(g.nextMode, 'paragon');
 });
