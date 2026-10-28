@@ -689,17 +689,18 @@ test('щит: отбивает удар, иногда ломается; с дв�
   const [a, b] = join(g, 'A', 'B');
   b.shield = true;
   b.agi = 0;
-  g.random = queue(0.9, 0.01, 0.5);
+  // по порядку: уклонение, крит, блок щитом, поломка
+  g.random = queue(0.9, 0.9, 0.01, 0.5);
   const hp = b.hp;
   g._attack(a, b);
   eq(b.hp, hp, 'отбил');
   ok(b.shield, 'цел');
-  g.random = queue(0.9, 0.01, 0.01);
+  g.random = queue(0.9, 0.9, 0.01, 0.01);
   g._attack(a, b);
   no(b.shield, 'раскололся');
   b.shield = true;
   b.weapon = weapon('greatsword');
-  g.random = queue(0.9, 0.01, 0.9, 0.5);
+  g.random = queue(0.9, 0.9, 0.5);
   g._attack(a, b);
   ok(b.hp < hp, 'с двуручником щит не спасает');
   ok(SHIELD.block > 0 && SHIELD.breaks > 0);
@@ -1295,4 +1296,22 @@ test('кровотечение: после крита течёт кровь, н�
   }
   const share = dead / 4000;
   ok(share > 0.12 && share < 0.18, 'с кровотечением гибнет ' + share.toFixed(3));
+});
+
+test('щит, отбивший удар, который был бы критом, ломается вдвое чаще', () => {
+  const breaks = (crit) => {
+    const g = game();
+    const [a] = join(g, 'A', 'B');
+    g.next();
+    g.random = rng(11);
+    let n = 0;
+    for (let i = 0; i < 6000; i++) {
+      a.shield = true;
+      a.stunT = 0;
+      if (g._blocked(a, crit) && !a.shield) n++;
+    }
+    return n;
+  };
+  const plain = breaks(false), hard = breaks(true);
+  ok(hard > plain * 1.6 && hard < plain * 2.5, plain + ' → ' + hard);
 });

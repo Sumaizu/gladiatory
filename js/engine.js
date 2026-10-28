@@ -1171,10 +1171,10 @@ export class Game {
   }
 
   // щит: шанс отбить любой удар, при отбитии иногда ломается
-  _blocked(d) {
+  _blocked(d, crit = false) {
     if (!shieldUp(d) || d.stunT > 0 || this.random() >= SHIELD.block) return false;
-    this._emit('block', { login: d.login, x: d.x, y: d.y });
-    if (this.random() < SHIELD.breaks) {
+    this._emit('block', { login: d.login, x: d.x, y: d.y, crit });
+    if (this.random() < SHIELD.breaks * (crit ? SHIELD.critBreaks : 1)) {
       d.shield = false;
       this._emit('shieldbreak', { login: d.login, x: d.x, y: d.y });
       this._line('У ' + d.name + ' раскололся щит', 'warn');
@@ -1204,8 +1204,9 @@ export class Game {
       this._emit('miss', { x: d.x, y: d.y, login: d.login });
       return;
     }
-    if (this._blocked(d)) return;
+    // крит решается до щита: отбитый крит бьёт по щиту сильнее
     const crit = this.random() < critOf(a);
+    if (this._blocked(d, crit)) return;
     // копьё пробивает броню только в броске
     const armor = ranged && typeOf(a).pierce ? 0 : armorOf(d);
     let dmg = damageOf(a) * mult * (1 + SPREAD * (2 * this.random() - 1)) * (crit ? CRIT_HIT : 1) * (1 - armor);

@@ -69,7 +69,8 @@ export const shieldUp = (g) => Boolean(g.shield) && !twoHanded(g);
 export const netUp = (g) => g.nets > 0 && !g.shield && !twoHanded(g);
 // вторая рука: щит или сеть. Занята или в руках двуручник — ни щит, ни сеть из гачи не выпадают
 export const offhandFree = (g) => !g.shield && !(g.nets > 0) && !twoHanded(g);
-export const SHIELD = { block: 0.35, breaks: 0.04 };
+// принял на щит удар, который был бы критом, — щит ломается в critBreaks раз чаще
+export const SHIELD = { block: 0.35, breaks: 0.04, critBreaks: 2 };
 // сеть многоразовая: после броска reload секунд на то, чтобы её подобрать, и шанс tear, что она порвётся
 export const NET = { stun: 3, range: [50, 170], chance: 1.2, speed: 320, focus: 6, max: 1, reload: 5, tear: 0.15 };
 // cool — сколько секунд после подбора копьё нельзя метнуть снова
