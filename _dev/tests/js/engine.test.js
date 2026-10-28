@@ -1677,3 +1677,27 @@ test('все модули оверлея и страницы загружают�
     }
   }
 });
+
+test('парагон: «Дальше» меняется, когда претендент заходит посреди лудуса, и возвращается, когда он садится на скамью', () => {
+  const store = new Map(), storage = { getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v) };
+  const roster = new Roster(storage, 'k');
+  const first = new Game(SETTINGS, roster, { random: rng(3) });
+  first.open();
+  first.feed('Hero', 'привет', { login: 'hero' });
+  Object.assign(first.members.get('hero'), { level: PARAGON.level, fights: PARAGON.fights });
+  roster.put(first.members.get('hero'));
+  roster.save();
+  const g = new Game(SETTINGS, new Roster(storage, 'k'), { random: rng(5) });
+  g.open();
+  join(g, 'A', 'B');
+  const rolled = g.nextMode;
+  no(rolled === 'paragon');
+  g.feed('Hero', 'привет', { login: 'hero' });
+  eq([g.nextMode, g.nextBoss && g.nextBoss.login], ['paragon', 'hero'], 'зашёл — сверху сразу испытание');
+  g.feed('Hero', 'отдых', { login: 'hero' });
+  eq([g.nextMode, g.nextBoss], [rolled, null], 'сел на скамью — прежний режим');
+  g.feed('Hero', 'трен', { login: 'hero' });
+  eq(g.nextMode, 'paragon');
+  g.next();
+  eq([g.mode, g.boss && g.boss.login], ['paragon', 'hero'], 'и бой — тот, что написан сверху');
+});

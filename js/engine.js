@@ -223,8 +223,9 @@ export class Game {
     this.paused = false;
     this.timer = this.settings.ludus;
     // режим следующего боя известен заранее — его пишут сверху лудуса; дорос до парагона — его испытание первым делом
-    this.nextBoss = this.forceMode ? null : this._paragonNext();
-    this.nextMode = this.forceMode || (this.nextBoss ? 'paragon' : this._rollMode());
+    this.rolledMode = this.forceMode || this._rollMode();
+    this.nextBoss = null;
+    this._planNext();
     this.fighters = [];
     this.endIn = null;
     this.notice = '';
@@ -551,6 +552,8 @@ export class Game {
   _arrive(g, place, walk = false) {
     g.place = place;
     g.afk = false;
+    // сел на скамью или встал с неё — мог появиться или пропасть претендент на парагон
+    if (this.members.get(g.login) === g) this._planNext();
     g.seat = null;
     if (!walk || g.x === undefined) {
       g.x = ENTRANCE.x;
@@ -666,16 +669,19 @@ export class Game {
       this._line(g.name + ' достигает ' + g.level + ' уровня (+' + points + ' ' + plural(points, 'очко', 'очка', 'очков')
         + ')', 'level');
       this._emit('level', { login: g.login, level: g.level });
-      if (g.level >= PARAGON.level && this.state === 'ludus' && !this.forceMode && this.nextMode !== 'paragon') {
-        const boss = this._paragonNext();
-        if (boss) {
-          this.nextMode = 'paragon';
-          this.nextBoss = boss;
-          this._line(boss.name + ' дорос до парагона — следующий бой он один против всех!', 'champion');
-        }
-      }
+      if (g.level >= PARAGON.level) this._planNext();
     }
     return ups;
+  }
+
+  // кто будет в следующем бою: пересчитываем при каждом изменении в лудусе — дорос, зашёл в игру, встал со скамьи
+  // или ушёл на неё. Есть претендент на парагон — его испытание, нет — режим, выпавший в начале лудуса
+  _planNext() {
+    if (this.state !== 'ludus') return;
+    const boss = this.forceMode ? null : this._paragonNext();
+    if (boss && boss !== this.nextBoss) this._line(boss.name + ' дорос до парагона — следующий бой он один против всех!', 'champion');
+    this.nextBoss = boss;
+    this.nextMode = boss ? 'paragon' : this.rolledMode;
   }
 
   // --- бой ---
@@ -696,7 +702,7 @@ export class Game {
     this.endIn = null;
     this.cards = [];
     const boss = this.forceMode ? null : this._paragonNext(ready);
-    this.mode = this.forceMode || (boss ? 'paragon' : this.nextMode !== 'paragon' && this.nextMode || this._rollMode());
+    this.mode = this.forceMode || (boss ? 'paragon' : this.rolledMode || this._rollMode());
     this.nextMode = null;
     this.nextBoss = null;
     this.boss = this.mode === 'paragon' ? boss : null;
