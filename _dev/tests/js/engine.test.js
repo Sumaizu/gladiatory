@@ -1486,3 +1486,23 @@ test('божественным становится только легенда�
   g._knockOut(b, a);
   eq(a.weapon.rarity, 'epic');
 });
+
+test('двуручник: сектор 100° в сторону цели и в полтора маха длиной', () => {
+  const g = game();
+  const [a, t, far, side, tooFar] = join(g, 'A', 'T', 'Far', 'Side', 'TooFar');
+  g.next();
+  a.weapon = weapon('greatsword');
+  const reach = reachOf(a);
+  a.x = 400; a.y = 350;
+  t.x = 400 + reach * 0.9; t.y = 350;
+  const at = (v, deg, dist) => { v.x = 400 + Math.cos(deg * Math.PI / 180) * dist; v.y = 350 + Math.sin(deg * Math.PI / 180) * dist; };
+  at(far, 45, reach * 1.45);
+  at(side, 55, reach * 0.8);
+  at(tooFar, 0, reach * 1.6);
+  for (const v of [t, far, side, tooFar]) v.agi = 0;
+  g.random = always(0.5);
+  const hp = new Map([t, far, side, tooFar].map((v) => [v, v.hp]));
+  g._swing(a, t, [a, t, far, side, tooFar]);
+  ok(t.hp < hp.get(t) && far.hp < hp.get(far), 'цель и тот, что в секторе на полтора маха, задеты');
+  eq([side.hp, tooFar.hp], [hp.get(side), hp.get(tooFar)], 'сбоку за 50° и дальше полутора махов — целы');
+});

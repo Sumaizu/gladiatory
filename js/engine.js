@@ -1245,13 +1245,21 @@ export class Game {
 
   // двуручник бьёт всех перед собой в пределах досягаемости
   _swing(a, t, fighting) {
-    if (!typeOf(a).cleave) {
+    const cleave = typeOf(a).cleave;
+    if (!cleave) {
       this._attack(a, t);
       return;
     }
-    const reach = reachOf(a) * 1.15;
-    const victims = fighting.filter((v) => this._enemy(a, v) && v.fate === 'fight' && (v === t
-      || (v.x - a.x) * a.face > -6 && Math.hypot(v.x - a.x, v.y - a.y) <= reach));
+    // сектор в arc градусов в сторону цели, длиной в полтора маха
+    const reach = reachOf(a) * cleave.reach, aim = Math.atan2(t.y - a.y, t.x - a.x), half = cleave.arc / 2 * Math.PI / 180;
+    const inArc = (v) => {
+      const d = Math.hypot(v.x - a.x, v.y - a.y);
+      if (d > reach) return false;
+      if (d < 1) return true;
+      const off = Math.abs(Math.atan2(Math.sin(Math.atan2(v.y - a.y, v.x - a.x) - aim), Math.cos(Math.atan2(v.y - a.y, v.x - a.x) - aim)));
+      return off <= half;
+    };
+    const victims = fighting.filter((v) => this._enemy(a, v) && v.fate === 'fight' && (v === t || inArc(v)));
     for (const v of victims) if (v.fate === 'fight') this._attack(a, v);
   }
 
