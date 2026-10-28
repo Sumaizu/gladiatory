@@ -944,11 +944,11 @@ export const netHandSprite = () => remember('net-hand2', netHandArt);
 export const netSprite = () => remember('net2', netArt);
 
 // лев в профиль, смотрит вправо: лапы на y = 23, центр x = 18. frame: stand, walk1, walk2, pounce, dead
-// лев как в Domina, в высоком разрешении: один пиксель рисунка — один пиксель поля (у людей — два).
-// Светлое кремовое поджарое тело, тёмная лохматая грива, тонкие лапы, длинный хвост с кисточкой; свет сверху слева
+// лев в высоком разрешении: один пиксель рисунка — один пиксель поля (у людей — два).
+// Рыжевато-песочное поджарое тело, тёмная лохматая грива, тонкие лапы, длинный хвост с кисточкой; свет сверху слева
 const LION_W = 112, LION_H = 64, LION_GROUND = 61;
-const FUR = ['#a48a6c', '#c4ab86', '#dcc7a5', '#ebdcc0', '#f6ecdb'];
-const MANE = ['#21160f', '#33241a', '#4b3424', '#6e4e34'];
+const FUR = ['#7a5430', '#9c7243', '#bd925b', '#d4ac73', '#e6c792'];
+const MANE = ['#1f140c', '#382214', '#57351d', '#86552c'];
 
 function lionArt(frame) {
   const p = new Pix(LION_W, LION_H);
@@ -1052,7 +1052,7 @@ function lionArt(frame) {
     }
   }
   // голова в профиль: округлый лоб, вытянутая морда, нижняя челюсть; морда теплее тела
-  const FACE = ['#b89a76', '#d3b892', '#e7d3b2', '#f4e8d3'];
+  const FACE = ['#97703f', '#bd925b', '#d6b07a', '#ecd3a5'];
   const faceAt = (x, y, ny, bias = 0) => {
     const v = 2 - ny * 1.3 + bias + (hash(x, y, 77) - 0.5) * 0.5;
     return FACE[Math.max(0, Math.min(FACE.length - 1, Math.round(v)))];
@@ -1099,7 +1099,7 @@ function lionArt(frame) {
   });
 }
 
-export const lionSprite = (frame) => remember('lion4:' + frame, () => lionArt(frame));
+export const lionSprite = (frame) => remember('lion5:' + frame, () => lionArt(frame));
 // точка опоры спрайта льва: середина туловища на уровне лап; scale — во сколько пикселей поля один пиксель рисунка
 export const LION = { x: 56, foot: LION_GROUND, scale: 1 };
 
