@@ -281,8 +281,13 @@ export function drawGladiator(ctx, g, t, scene) {
   const bob = g.walking ? (frame === 'walk1' ? 1 : 0) : 0;
   ctx.drawImage(sprite, -SPRITE.x, -SPRITE.foot - bob);
   // оружие в дальней руке: в бою и на тренировке им машут; брошенного копья в руке нет
-  if ((frame === 'stand' || frame === 'walk1' || frame === 'walk2') && !g.spearOut) {
-    const type = g.weapon ? g.weapon.type : 'sword';
+  if ((frame === 'stand' || frame === 'walk1' || frame === 'walk2') && !g.weapon) {
+    // без оружия — кулак, при ударе выбрасывается вперёд
+    const punch = g.swing > 0 ? Math.sin((1 - g.swing / 0.3) * Math.PI) : 0;
+    ctx.fillStyle = look.skin;
+    ctx.fillRect(SPRITE.hand[0] - SPRITE.x - 1 + punch * 9, SPRITE.hand[1] - SPRITE.foot - bob - 1 - punch * 4, 3, 3);
+  } else if ((frame === 'stand' || frame === 'walk1' || frame === 'walk2') && !g.spearOut) {
+    const type = g.weapon.type;
     const art = weaponSprite(type, tierOf(g.weapon));
     const swing = g.swing > 0 ? Math.sin((1 - g.swing / 0.3) * Math.PI) : 0;
     ctx.translate(SPRITE.hand[0] - SPRITE.x, SPRITE.hand[1] - SPRITE.foot - bob);

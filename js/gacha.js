@@ -23,7 +23,7 @@ export const RARITIES = [
 ];
 
 export const KINDS = { weapon: { name: 'меч', stat: 'урона' }, armor: { name: 'доспех', stat: 'брони' } };
-export const TYPES = Object.keys(WEAPON_TYPES);
+export const TYPES = Object.keys(WEAPON_TYPES).filter((type) => type !== 'fists');
 
 function pick(list, random) {
   let roll = random() * list.reduce((sum, item) => sum + item.chance, 0);
@@ -47,6 +47,8 @@ export function makeItem(random, kind, rarity, type = null) {
 // owner — кто крутит: щит и сеть выпадают, только если его вторая рука свободна
 export function spin(random, owner = null) {
   const outcomes = owner && !offhandFree(owner) ? OUTCOMES.filter((o) => o.id !== 'shield' && o.id !== 'net') : OUTCOMES;
+  // у кого ещё нет оружия, тому первая же гача гарантированно даёт оружие
+  if (owner && !owner.weapon) return { kind: 'item', item: makeItem(random, 'weapon', pick(RARITIES, random)) };
   const roll = pick(outcomes.concat(RARITIES), random);
   if (roll.coins) {
     const [low, high] = roll.coins;

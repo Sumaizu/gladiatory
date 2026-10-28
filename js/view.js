@@ -567,7 +567,7 @@ export class View {
       return p;
     };
     const gearLine = (label, item) => {
-      const p = line(label, item ? itemText(item) : 'нет — крути гачу');
+      const p = line(label, item ? itemText(item) : label === 'Оружие' ? 'кулаки — крути гачу' : 'нет — крути гачу');
       if (item) p.lastChild.style.color = rarityOf(item.rarity).color;
       return p;
     };

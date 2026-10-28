@@ -440,9 +440,10 @@ test('гача: вещь надевается, только если лучше;
   const g = game();
   const [a] = join(g, 'A');
   const base = damageOf(a);
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'epic', power: 11 } });
-  eq(damageOf(a), base + 11);
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'common', power: 2 } });
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'epic', power: 11, type: 'sword' } });
+  ok(damageOf(a) > base, 'сильнее кулаков');
+  eq(damageOf(a), damageOf({ str: a.str, weapon: { type: 'sword', power: 0 } }) + 11);
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'common', power: 2, type: 'sword' } });
   eq(a.weapon.power, 11, 'хуже — выброшено');
   g._prize(a, { kind: 'item', item: { kind: 'armor', rarity: 'rare', power: 8 } });
   eq(armorOf(a), 0.08);
@@ -573,7 +574,7 @@ test('оружие: двуручник бьёт реже и сильнее, кр
   ok(damageOf(gs) > damageOf(s) * 1.5);
   ok(critOf(gs) > critOf(s));
   ok(reachOf(sp) > reachOf(s) * 1.5);
-  eq([attackEvery(s), damageOf(s)], [attackEvery({ agi: 0, weapon: null }), damageOf({ str: 0, weapon: weapon('sword') })]);
+  eq([attackEvery(s), damageOf(s)], [attackEvery({ agi: 0, weapon: weapon('sword', 0) }), damageOf({ str: 0, weapon: weapon('sword') })]);
 });
 
 test('двуручник задевает всех перед собой, но не тех, кто сзади', () => {
@@ -730,4 +731,28 @@ test('сеть: после броска с небольшим шансом рв�
   eq(a.nets, 0, 'порвалась');
   ok(g.events.some((e) => e.type === 'nettear' && e.login === 'a'));
   ok(NET.tear > 0 && NET.tear < 0.5 && NET.reload > NET.stun);
+});
+
+test('новичок дерётся кулаками: слабее меча, но бьёт чаще', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  eq(a.weapon, null);
+  b.weapon = weapon('sword', 0);
+  ok(damageOf(a) < damageOf(b));
+  ok(attackEvery(a) < attackEvery(b));
+  ok(reachOf(a) < reachOf(b));
+});
+
+test('гача: пока нет оружия, первая прокрутка гарантированно даёт оружие', () => {
+  const random = rng(21);
+  for (let i = 0; i < 500; i++) {
+    const r = spin(random, { weapon: null, shield: false, nets: 0 });
+    ok(r.item && r.item.kind === 'weapon' && ['sword', 'greatsword', 'spear'].includes(r.item.type), JSON.stringify(r));
+  }
+  const g = game();
+  const [a] = join(g, 'A');
+  a.coins = PRICE * 2;
+  g.feed('A', 'гача 2', { login: 'a' });
+  for (let i = 0; i < 20 * 3 && !(g.spinNow && g.spinNow.done); i++) g.step(0.05);
+  ok(a.weapon, 'после первой прокрутки в руке оружие');
 });
