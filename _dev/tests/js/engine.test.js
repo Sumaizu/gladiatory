@@ -536,7 +536,7 @@ test('гача: редкости в пропорциях Чатобороны, �
   }
   const total = OUTCOMES.concat(RARITIES).reduce((sum, x) => sum + x.chance, 0);
   for (const id of ['handful', 'bag', 'chest', 'void']) eq(counts[id], undefined, 'монет и пустоты из гачи нет');
-  for (const [id, chance] of [['shield', 0.064], ['net', 0.08], ['common', 0.27], ['legendary', 0.06]]) {
+  for (const [id, chance] of [['shield', 0.1567], ['net', 0.1567], ['common', 0.27], ['legendary', 0.06]]) {
     const share = counts[id] / n, want = chance / total;
     ok(Math.abs(share - want) < want * 0.12, id + ': ' + share.toFixed(3) + ' против ' + want.toFixed(3));
   }

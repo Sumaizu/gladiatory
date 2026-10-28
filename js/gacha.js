@@ -8,11 +8,12 @@ export const RUSH = { queue: 6, spin: 0.5, show: 0.7 };
 export const QUEUE_CAP = 10;
 export const SPREAD = 0.15;
 
+// веса: при свободной второй руке щит и сеть выпадают по 15% (вес 0.1567 от суммы всех весов ≈ 1.045), амулет — 3%
 export const OUTCOMES = [
-  { id: 'shield', name: 'Щит', color: '#d9a441', chance: 0.064 },
-  { id: 'net', name: 'Сеть', color: '#a8c4b0', chance: 0.08 },
+  { id: 'shield', name: 'Щит', color: '#d9a441', chance: 0.1567 },
+  { id: 'net', name: 'Сеть', color: '#a8c4b0', chance: 0.1567 },
   // спасает от смерти один раз и рассыпается; пока он есть, второй не выпадает
-  { id: 'amulet', name: 'Божественный амулет', color: '#ff3b47', chance: 0.03 },
+  { id: 'amulet', name: 'Божественный амулет', color: '#ff3b47', chance: 0.0313 },
 ];
 
 // weapon — прибавка к урону, armor — процент, на который режется входящий урон
