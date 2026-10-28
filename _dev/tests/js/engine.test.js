@@ -604,16 +604,21 @@ test('двуручник задевает всех перед собой, но �
   eq(back.hp, hp[2], 'задний цел');
 });
 
-test('копьё пробивает броню', () => {
+test('копьё пробивает броню только в броске, обычный удар броня режет', () => {
   const g = game();
   const [a, b, c] = join(g, 'A', 'B', 'C');
   b.gear.body = { kind: 'armor', slot: 'body', rarity: 'legendary', power: 26 };
   a.weapon = weapon('spear');
   g.random = always(0.5);
-  const hb = b.hp, hc = c.hp;
+  let hb = b.hp, hc = c.hp;
   g._attack(a, b);
   g._attack(a, c);
-  eq(hb - b.hp, hc - c.hp);
+  ok(hb - b.hp < hc - c.hp, 'в ближнем бою броня помогает');
+  hb = b.hp;
+  hc = c.hp;
+  g._attack(a, b, { ranged: true });
+  g._attack(a, c, { ranged: true });
+  eq(hb - b.hp, hc - c.hp, 'брошенное копьё — сквозь броню');
 });
 
 test('копьё: в израненного беглеца метают, потом бегут подбирать', () => {

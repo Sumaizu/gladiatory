@@ -1007,7 +1007,8 @@ export class Game {
     }
     if (this._blocked(d)) return;
     const crit = this.random() < critOf(a);
-    const armor = typeOf(a).pierce ? 0 : armorOf(d);
+    // копьё пробивает броню только в броске
+    const armor = ranged && typeOf(a).pierce ? 0 : armorOf(d);
     let dmg = damageOf(a) * mult * (1 + SPREAD * (2 * this.random() - 1)) * (crit ? CRIT_HIT : 1) * (1 - armor);
     dmg = Math.max(1, Math.round(dmg));
     d.hp -= dmg;

@@ -51,7 +51,7 @@ export function maxHp(g) {
 }
 
 // виды оружия из гачи. rate — во сколько раз реже удар, dmg — множитель урона, reach — дальность,
-// hands: 2 — щит не работает, cleave — бьёт всех перед собой, pierce — урон сквозь броню, throw — бросок
+// hands: 2 — щит не работает, cleave — бьёт всех перед собой, pierce — брошенное копьё летит сквозь броню, throw — бросок
 export const WEAPON_TYPES = {
   fists: { name: 'кулаки', gender: 'p', rate: 0.85, dmg: 0.6, reach: 0.85, crit: 0, hands: 1 },
   sword: { name: 'меч', gender: 'm', rate: 1, dmg: 1, reach: 1, crit: 0, hands: 1 },
