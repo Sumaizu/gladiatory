@@ -191,6 +191,10 @@ export class View {
       sound('coin');
     } else if (e.type === 'join') {
       sound('join');
+    } else if (e.type === 'flee') {
+      this.floats.push({ x: e.x, y: e.y - 70, text: 'бежит!', life: 1.6, kind: 'flee' });
+      this.roar = Math.min(1, this.roar + 0.3);
+      sound('boo');
     } else if (e.type === 'spin') {
       this._reel(game);
       sound('reel');
@@ -336,6 +340,9 @@ export class View {
       } else if (f.kind === 'down' || f.kind === 'yield') {
         size = 18;
         color = '#f1e7d4';
+      } else if (f.kind === 'flee') {
+        size = 15;
+        color = '#ffd98f';
       } else if (f.kind === 'level') {
         size = 17;
         color = '#ffd34d';

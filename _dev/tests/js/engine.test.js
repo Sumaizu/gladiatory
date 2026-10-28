@@ -483,3 +483,74 @@ test('гача: шансы как в Чатобороне', () => {
     ok(Math.abs(share - want) < want * 0.12, id + ': ' + share.toFixed(3) + ' против ' + want.toFixed(3));
   }
 });
+
+const always = (value) => () => value;
+
+test('арена: от крита гладиатор убегает, не бьёт и удаляется от обидчика', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B', 'C');
+  g.next();
+  // по порядку: не увернулся, крит, разброс урона, испугался, длительность бегства
+  const rolls = [0.9, 0.01, 0.5, 0.01, 0.5];
+  g.random = () => (rolls.length ? rolls.shift() : 0.5);
+  a.x = 400; a.y = 350; b.x = 430; b.y = 350;
+  b.agi = 0;
+  g._attack(a, b);
+  ok(b.fleeT > 0, 'убегает');
+  ok(b.target === null, 'бросил цель');
+  ok(g.events.some((e) => e.type === 'flee' && e.login === 'b'));
+  g.random = rng(3);
+  const was = Math.hypot(b.x - a.x, b.y - a.y), hits = g.events.filter((e) => e.type === 'hit' && e.from === 'b').length;
+  for (let i = 0; i < 20; i++) g.step(0.05);
+  ok(Math.hypot(b.x - a.x, b.y - a.y) > was, 'дальше от обидчика');
+  eq(g.events.filter((e) => e.type === 'hit' && e.from === 'b').length, hits, 'пока бежит — не бьёт');
+});
+
+test('арена: раненый меньше чем на четверть убегает, потом возвращается в бой', () => {
+  const g = game();
+  const [a] = join(g, 'A', 'B', 'C', 'D');
+  g.next();
+  a.hp = maxHp(a) * 0.2;
+  g.step(0.05);
+  ok(a.fleeT > 0, 'убегает');
+  for (let i = 0; i < 20 * 6; i++) g.step(0.05);
+  if (a.fate === 'fight') {
+    eq(a.fleeT, 0, 'бегство кончилось');
+    ok(a.fleeCool >= 0);
+  }
+});
+
+test('арена: цель убегает — нападающий переключается на другого', () => {
+  const g = game();
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  g.next();
+  a.target = b;
+  a.retarget = 10;
+  b.fleeT = 3;
+  b.fleeCool = 8;
+  for (let i = 0; i < 20; i++) g.step(0.05);
+  ok(a.target === c || a.target !== b, 'бьёт не беглеца');
+});
+
+test('арена: цели время от времени меняются сами', () => {
+  const g = game();
+  const all = join(g, 'A', 'B', 'C', 'D', 'E', 'F');
+  g.next();
+  for (const m of all) m.vit = 200;
+  for (const m of all) m.hp = maxHp(m);
+  const first = new Map(all.map((m) => [m.login, m.target && m.target.login]));
+  for (let i = 0; i < 20 * 15; i++) g.step(0.05);
+  ok(all.some((m) => m.target && m.target.login !== first.get(m.login)), 'кто-то сменил цель');
+});
+
+test('арена: ударили сбоку — может развернуться на обидчика', () => {
+  const g = game();
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  g.next();
+  b.target = c;
+  b.agi = 0;
+  c.vit = 0;
+  g.random = always(0.3);
+  g._attack(a, b);
+  ok(b.target === a, 'развернулся на A');
+});

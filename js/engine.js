@@ -34,7 +34,13 @@ const STEP_MAX = 1;
 const EVENTS_MAX = 400;
 const STROLL = 1.4;
 const CROWDING = 160;
-const DUEL_TIME = 12;
+const DUEL_TIME = 6;
+// бегство: от крита — с шансом, от ран — когда здоровья меньше четверти; потом передышка без бегства
+const FLEE = { critChance: 0.75, critTime: [2, 1.5], low: 0.25, lowTime: [3, 2], rest: 5, speed: 1.2, sense: 170,
+  ignored: 220 };
+const RETARGET = [3.5, 3.5];
+const REVENGE = 0.35;
+const CIRCLE = 0.3;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const INVISIBLE = /[​‌‍⁠﻿­͏⠀\u{E0000}]/gu;
 const IGNORED = new Set(BOTS);
@@ -588,6 +594,9 @@ export class Game {
       g.kosNow = 0;
       g.killsNow = 0;
       g.dealt = 0;
+      g.fleeT = 0;
+      g.fleeCool = 0;
+      g.circle = 0;
       g.by = '';
     });
     // соседи становятся парами — бой сразу распадается на поединки по всей арене
@@ -638,6 +647,7 @@ export class Game {
   }
 
   // ищем ближайшего, но кого ещё мало кто бьёт: толпа распадается на поединки
+  // цель: ближе, слабее, не убегает и ещё не окружена другими
   _pickTarget(g, standing) {
     const hunted = new Map();
     for (const other of standing) if (other !== g && other.target) hunted.set(other.target, (hunted.get(other.target) || 0) + 1);
@@ -646,12 +656,49 @@ export class Game {
       if (other === g) continue;
       const d = Math.hypot(other.x - g.x, other.y - g.y);
       const busy = (hunted.get(other) || 0) - (other.target === g ? 1 : 0);
-      best.push({ other, score: d + CROWDING * Math.max(0, busy) });
+      const weak = 1 - Math.max(0, other.hp) / maxHp(other);
+      best.push({ other, score: d + CROWDING * Math.max(0, busy) + (other.fleeT > 0 ? FLEE.ignored : 0) - weak * 70 });
     }
     if (!best.length) return null;
     best.sort((a, b) => a.score - b.score);
     best = best.slice(0, 2);
     return best[Math.floor(this.random() * best.length)].other;
+  }
+
+  _flee(g, time, why) {
+    if (g.fleeT > 0 || g.fate !== 'fight') return;
+    g.fleeT = time;
+    g.fleeCool = time + FLEE.rest;
+    g.target = null;
+    this._emit('flee', { login: g.login, x: g.x, y: g.y, why });
+  }
+
+  // убегает от ближайших врагов; у стены скользит вдоль неё, а не упирается
+  _runAway(g, standing, dt) {
+    let ax = 0, ay = 0;
+    for (const other of standing) {
+      if (other === g || other.fleeT > 0) continue;
+      const dx = g.x - other.x, dy = g.y - other.y, d = Math.hypot(dx, dy) || 1;
+      if (d > FLEE.sense) continue;
+      ax += dx / d * (FLEE.sense - d);
+      ay += dy / d * (FLEE.sense - d);
+    }
+    if (!ax && !ay) {
+      ax = g.x - ARENA.cx;
+      ay = g.y - ARENA.cy;
+    }
+    const cx = (g.x - ARENA.cx) / ARENA.rx, cy = (g.y - ARENA.cy) / ARENA.ry, edge = Math.hypot(cx, cy);
+    if (edge > 0.75) {
+      const len = Math.hypot(ax, ay) || 1, tx = -cy, ty = cx, side = tx * ax + ty * ay >= 0 ? 1 : -1;
+      const pull = (edge - 0.75) * 4;
+      ax = ax / len - cx * pull + tx * side * pull;
+      ay = ay / len - cy * pull + ty * side * pull;
+    }
+    const len = Math.hypot(ax, ay) || 1, speed = MOVE_SPEED * FLEE.speed * (1 + 0.01 * g.agi);
+    g.x += ax / len * speed * dt;
+    g.y += ay / len * speed * dt;
+    if (Math.abs(ax) > 0.01) g.face = ax > 0 ? 1 : -1;
+    g.walking = true;
   }
 
   _stepBattle(dt) {
@@ -664,9 +711,23 @@ export class Game {
       if (g.fate !== 'fight') continue;
       g.retarget -= dt;
       g.cool = Math.max(0, g.cool - dt);
+      g.fleeT = Math.max(0, (g.fleeT || 0) - dt);
+      g.fleeCool = Math.max(0, (g.fleeCool || 0) - dt);
+      if (g.fleeT <= 0 && g.fleeCool <= 0 && g.hp < maxHp(g) * FLEE.low && this._standing().length > 2) {
+        this._flee(g, FLEE.lowTime[0] + this.random() * FLEE.lowTime[1], 'low');
+      }
+      if (g.fleeT > 0) {
+        this._runAway(g, standing, dt);
+        continue;
+      }
+      const fighting = standing.filter((s) => s.fate === 'fight');
+      // цель убегает, а рядом есть другие — переключиться почти сразу
+      if (g.target && g.target.fleeT > 0 && fighting.some((s) => s !== g && s !== g.target && !(s.fleeT > 0))) {
+        g.retarget = Math.min(g.retarget, 0.2 + this.random() * 0.3);
+      }
       if (!g.target || g.target.fate !== 'fight' || g.retarget <= 0) {
-        g.target = this._pickTarget(g, standing.filter((s) => s.fate === 'fight'));
-        g.retarget = DUEL_TIME;
+        g.target = this._pickTarget(g, fighting);
+        g.retarget = RETARGET[0] + this.random() * RETARGET[1];
       }
       const t = g.target;
       if (!t) {
@@ -681,12 +742,17 @@ export class Game {
         g.x += dx / d * stepLen;
         g.y += dy / d * stepLen;
         g.walking = true;
-      } else {
+      } else if (g.cool <= 0) {
         g.walking = false;
-        if (g.cool <= 0) {
-          this._attack(g, t);
-          g.cool = attackEvery(g) * (0.9 + this.random() * 0.2);
-        }
+        this._attack(g, t);
+        g.cool = attackEvery(g) * (0.9 + this.random() * 0.2);
+      } else {
+        // между ударами кружит вокруг противника
+        if (!g.circle || this.random() < dt * 0.4) g.circle = this.random() < 0.5 ? -1 : 1;
+        const step = MOVE_SPEED * CIRCLE * dt;
+        g.x += -dy / d * g.circle * step;
+        g.y += dx / d * g.circle * step;
+        g.walking = g.cool > 0.25;
       }
     }
     const alive = this._standing();
@@ -723,7 +789,16 @@ export class Game {
     d.flash = 0.18;
     a.dealt += dmg;
     this._emit('hit', { x: d.x, y: d.y, amount: dmg, crit, login: d.login, from: a.login });
-    if (d.hp <= 0) this._knockOut(d, a);
+    if (d.hp <= 0) {
+      this._knockOut(d, a);
+      return;
+    }
+    if (crit && this.random() < FLEE.critChance) this._flee(d, FLEE.critTime[0] + this.random() * FLEE.critTime[1], 'crit');
+    // ударили сбоку — может развернуться на обидчика
+    else if (d.target !== a && !(d.fleeT > 0) && this.random() < REVENGE) {
+      d.target = a;
+      d.retarget = RETARGET[0] + this.random() * RETARGET[1];
+    }
   }
 
   _knockOut(d, a) {
