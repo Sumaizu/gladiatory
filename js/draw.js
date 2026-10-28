@@ -1,7 +1,7 @@
 import { maxHp } from './balance.js';
 import { ARENA, BAYS, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, bayX } from './places.js';
 import { tierOf } from './gacha.js';
-import { P, SPRITE, drawDummyArt, gladiatorSprite, lookOf, lyingSprite, paintLudusArt, swordSprite } from './art.js';
+import { P, SPRITE, drawDummyArt, gladiatorSprite, lookOf, lyingSprite, netSprite, paintLudusArt, weaponSprite } from './art.js';
 
 const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
 const SKIN = ['#f0c79e', '#e2b48a', '#c98f62', '#a86e46', '#7d4f32'];
@@ -280,14 +280,62 @@ export function drawGladiator(ctx, g, t, scene) {
   ctx.scale(g.face < 0 ? -1 : 1, 1);
   const bob = g.walking ? (frame === 'walk1' ? 1 : 0) : 0;
   ctx.drawImage(sprite, -SPRITE.x, -SPRITE.foot - bob);
-  // меч в дальней руке: в бою и на тренировке им машут
-  if (frame === 'stand' || frame === 'walk1' || frame === 'walk2') {
+  // оружие в дальней руке: в бою и на тренировке им машут; брошенного копья в руке нет
+  if ((frame === 'stand' || frame === 'walk1' || frame === 'walk2') && !g.spearOut) {
+    const type = g.weapon ? g.weapon.type : 'sword';
+    const art = weaponSprite(type, tierOf(g.weapon));
     const swing = g.swing > 0 ? Math.sin((1 - g.swing / 0.3) * Math.PI) : 0;
     ctx.translate(SPRITE.hand[0] - SPRITE.x, SPRITE.hand[1] - SPRITE.foot - bob);
-    ctx.rotate(0.5 + swing * 2);
-    ctx.drawImage(swordSprite(tierOf(g.weapon)), -1, -11);
+    if (type === 'spear') {
+      ctx.translate(swing * 9, 0);
+      ctx.rotate(1.25);
+    } else if (type === 'greatsword') {
+      ctx.rotate(-0.2 + swing * 2.6);
+    } else {
+      ctx.rotate(0.5 + swing * 2);
+    }
+    ctx.drawImage(art.canvas, -art.px, -art.py);
   }
   ctx.restore();
+  if (scene === 'arena' && g.stunT > 0 && g.fate === 'fight') {
+    // накинутая сеть
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(P, P);
+    ctx.drawImage(netSprite(), -9, -38, 18, 22);
+    ctx.drawImage(netSprite(), -9, -20, 18, 20);
+    ctx.restore();
+  }
+}
+
+// копья и сети в полёте, брошенные копья на песке
+export function drawThrown(ctx, game) {
+  for (const g of game.fighters) {
+    if (!g.spearOut || g.spearOut.flying) continue;
+    const art = weaponSprite('spear', tierOf(g.weapon));
+    ctx.save();
+    ctx.translate(Math.round(g.spearOut.x / P) * P, Math.round(g.spearOut.y / P) * P);
+    ctx.scale(P, P);
+    ctx.fillStyle = 'rgba(30,15,8,.25)';
+    ctx.fillRect(-15, 0, 30, 2);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(art.canvas, -art.px, -15);
+    ctx.restore();
+  }
+  for (const p of game.projectiles || []) {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(P, P);
+    if (p.kind === 'spear') {
+      const art = weaponSprite('spear', tierOf(p.from.weapon));
+      ctx.rotate(p.angle + Math.PI / 2);
+      ctx.drawImage(art.canvas, -art.px, -15);
+    } else {
+      ctx.rotate(p.x * 0.05);
+      ctx.drawImage(netSprite(), -8, -8);
+    }
+    ctx.restore();
+  }
 }
 
 export function drawLabel(ctx, g, scene, highlight) {

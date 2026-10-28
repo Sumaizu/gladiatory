@@ -1,6 +1,6 @@
 // все звуки синтезируются на лету — файлов нет
 const GAP = { hit: 0.07, crit: 0.1, miss: 0.12, down: 0.15, death: 0.4, horn: 1, level: 0.3, coin: 0.15, join: 0.2,
-  cheer: 1.5, champion: 2, reel: 0.5, jackpot: 1, boo: 0.8, thwack: 0.09, heal: 0.4, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5 };
+  cheer: 1.5, champion: 2, reel: 0.5, jackpot: 1, boo: 0.8, block: 0.1, crack: 0.5, net: 0.4, whoosh: 0.2, thwack: 0.09, heal: 0.4, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5 };
 
 let audio = null;
 let master = null;
@@ -118,6 +118,21 @@ const SOUNDS = {
       tone(ac, { freq, dur: i === 4 ? 0.9 : 0.22, type: 'sawtooth', gain: 0.07, at: i * 0.16 });
       tone(ac, { freq: freq / 2, dur: i === 4 ? 0.9 : 0.22, type: 'square', gain: 0.04, at: i * 0.16 });
     });
+  },
+  block(ac) {
+    tone(ac, { freq: 620, to: 540, dur: 0.18, type: 'square', gain: 0.07 });
+    hiss(ac, { dur: 0.06, gain: 0.2, freq: 1800, q: 2 });
+  },
+  crack(ac) {
+    hiss(ac, { dur: 0.25, gain: 0.35, freq: 900, q: 0.8 });
+    tone(ac, { freq: 220, to: 70, dur: 0.3, type: 'sawtooth', gain: 0.07 });
+  },
+  net(ac) {
+    hiss(ac, { dur: 0.35, gain: 0.2, freq: 700, q: 0.6 });
+    tone(ac, { freq: 330, to: 260, dur: 0.3, type: 'triangle', gain: 0.08, at: 0.1 });
+  },
+  whoosh(ac) {
+    hiss(ac, { dur: 0.25, gain: 0.18, freq: 1400, q: 0.7 });
   },
   boo(ac) {
     // трибуны гудят и свистят вслед беглецу

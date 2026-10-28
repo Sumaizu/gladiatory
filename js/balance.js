@@ -49,13 +49,28 @@ export function maxHp(g) {
   return HP_BASE + HP_PER_LEVEL * (g.level - 1) + HP_PER_VIT * g.vit;
 }
 
+// виды оружия из гачи. rate — во сколько раз реже удар, dmg — множитель урона, reach — дальность,
+// hands: 2 — щит не работает, cleave — бьёт всех перед собой, pierce — урон сквозь броню, throw — бросок
+export const WEAPON_TYPES = {
+  sword: { name: 'меч', gender: 'm', rate: 1, dmg: 1, reach: 1, crit: 0, hands: 1 },
+  greatsword: { name: 'двуручный меч', gender: 'm', rate: 1.5, dmg: 1.6, reach: 1.1, crit: 0.1, hands: 2, cleave: true },
+  spear: { name: 'копьё', gender: 'n', rate: 1.1, dmg: 1, reach: 1.6, crit: 0, hands: 1, pierce: true, throw: 2.2 },
+};
+export const typeOf = (g) => WEAPON_TYPES[g.weapon && g.weapon.type] || WEAPON_TYPES.sword;
+export const reachOf = (g) => REACH * typeOf(g).reach;
+export const twoHanded = (g) => typeOf(g).hands === 2;
+export const shieldUp = (g) => Boolean(g.shield) && !twoHanded(g);
+export const SHIELD = { block: 0.25, breaks: 0.08 };
+export const NET = { stun: 3, range: [50, 170], chance: 1.2, speed: 320, focus: 6, max: 3 };
+export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, pickup: 14 };
+
 export function damageOf(g) {
-  return DAMAGE_BASE + DAMAGE_PER_STR * g.str + (g.weapon ? g.weapon.power : 0);
+  return (DAMAGE_BASE + DAMAGE_PER_STR * g.str + (g.weapon ? g.weapon.power : 0)) * typeOf(g).dmg;
 }
 
-export const attackEvery = (g) => ATTACK_EVERY / (1 + HASTE_PER_AGI * g.agi);
+export const attackEvery = (g) => ATTACK_EVERY * typeOf(g).rate / (1 + HASTE_PER_AGI * g.agi);
 export const dodgeOf = (g) => Math.min(DODGE_MAX, DODGE_BASE + DODGE_PER_AGI * g.agi);
-export const critOf = (g) => CRIT_BASE + CRIT_PER_AGI * g.agi;
+export const critOf = (g) => CRIT_BASE + CRIT_PER_AGI * g.agi + typeOf(g).crit;
 // доспех из гачи режет входящий урон на свой процент
 export const armorOf = (g) => (g.armor ? g.armor.power / 100 : 0);
 

@@ -1,7 +1,7 @@
-import { STATS, maxHp, xpNeed } from './balance.js';
+import { STATS, maxHp, twoHanded, xpNeed } from './balance.js';
 import { RARITIES, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
 import { FIELD_H, FIELD_W, DUMMIES, PLACES } from './places.js';
-import { FONT, drawCrowd, drawGladiator, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
+import { FONT, drawCrowd, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
 import { ambience, play, setSound } from './sound.js';
 import { P } from './art.js';
@@ -21,7 +21,7 @@ const WHERE = {
 
 const COMMANDS = {
   ludus: [['трен', 'тренироваться: опыт'], ['лазарет', 'лечиться бесплатно'], ['отдых', 'сесть на скамью'],
-    ['гача', '30 монет: оружие или доспех'], ['сила · ловкость · выносливость', 'вложить очко'],
+    ['гача', '30 монет: оружие, доспех, щит, сеть'], ['сила · ловкость · выносливость', 'вложить очко'],
     ['проф', 'твоя карточка']],
   battle: [['сдаюсь', 'сдаться и точно выжить, но награда меньше'], ['проф', 'твоя карточка'],
     ['что угодно', 'вступить: в бой пойдёшь следующим']],
@@ -32,6 +32,10 @@ const ICONS = {
   weapon: '<svg viewBox="0 0 16 16"><path d="M13 1h2v2L7.5 10.5 5.5 8.5z" fill="currentColor"/><path d="M3.5 9l3.5 3.5-1.2 1.2-1.2-1.2-1.6 1.6-1.2-1.2 1.6-1.6-1.2-1.2z" fill="currentColor"/></svg>',
   armor: '<svg viewBox="0 0 16 16"><path d="M5 1.5 8 3l3-1.5 3.5 2-1 4-1.5-.5V14H4V7l-1.5.5-1-4z" fill="currentColor"/></svg>',
   coins: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="currentColor"/><circle cx="8" cy="8" r="3.5" fill="none" stroke="#1e140e" stroke-width="1.5"/></svg>',
+  greatsword: '<svg viewBox="0 0 16 16"><path d="M14 0.5h1.5V2L6.5 11 5 9.5z" fill="currentColor"/><path d="M2.5 8.5l5 5-1.2 1.2-1.4-1.4-2 2-1.2-1.2 2-2-1.4-1.4z" fill="currentColor"/></svg>',
+  spear: '<svg viewBox="0 0 16 16"><path d="M15.5 0.5l-1 4.2-1.6-1.6z" fill="currentColor"/><path d="M13.2 3.6l.9.9L1.7 16.9.8 16z" fill="currentColor"/></svg>',
+  shield: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="currentColor"/><circle cx="8" cy="8" r="2" fill="#1e140e"/></svg>',
+  net: '<svg viewBox="0 0 16 16"><path d="M2 2 14 14M2 14 14 2M2 8h12M8 2v12M2 5l9 9M5 2l9 9M2 11l9-9M5 14l9-9" stroke="currentColor" stroke-width="1.1" fill="none"/></svg>',
   void: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/></svg>',
 };
 // ширина окна барабана = ширина .fortune (312) минус отступы (20)
@@ -191,6 +195,18 @@ export class View {
       sound('coin');
     } else if (e.type === 'join') {
       sound('join');
+    } else if (e.type === 'block') {
+      this.floats.push({ x: e.x, y: e.y - 60, text: 'блок!', life: 1.1, kind: 'block' });
+      sound('block');
+    } else if (e.type === 'shieldbreak') {
+      this.floats.push({ x: e.x, y: e.y - 78, text: 'щит сломан', life: 1.8, kind: 'flee' });
+      sound('crack');
+    } else if (e.type === 'stun') {
+      this.floats.push({ x: e.x, y: e.y - 70, text: 'в сети!', life: 1.8, kind: 'flee' });
+      this.roar = Math.min(1, this.roar + 0.4);
+      sound('net');
+    } else if (e.type === 'throw') {
+      sound('whoosh');
     } else if (e.type === 'flee') {
       this.floats.push({ x: e.x, y: e.y - 70, text: 'бежит!', life: 1.6, kind: 'flee' });
       this.roar = Math.min(1, this.roar + 0.3);
@@ -305,7 +321,10 @@ export class View {
     const lying = (g) => scene === 'arena' && (g.fate === 'down' || g.fate === 'dead');
     figures.sort((a, b) => (lying(b) - lying(a)) || a.y - b.y);
     for (const g of figures) drawGladiator(w, g, t, scene);
-    if (scene === 'arena') this._blood(w, dt);
+    if (scene === 'arena') {
+      drawThrown(w, game);
+      this._blood(w, dt);
+    }
     const cards = new Set(game.cards.map((c) => c.login));
     for (const g of figures) drawLabel(ctx, g, scene, cards.has(g.login));
     this._floats(ctx, dt);
@@ -340,6 +359,9 @@ export class View {
       } else if (f.kind === 'down' || f.kind === 'yield') {
         size = 18;
         color = '#f1e7d4';
+      } else if (f.kind === 'block') {
+        size = 14;
+        color = '#cfe3ff';
       } else if (f.kind === 'flee') {
         size = 15;
         color = '#ffd98f';
@@ -472,7 +494,7 @@ export class View {
     for (const g of cards) {
       let box = this.cardNodes.get(g.login);
       const key = [g.level, Math.floor(g.xp), Math.round(g.hp), g.coins, g.str, g.agi, g.vit, g.points,
-        JSON.stringify(g.weapon), JSON.stringify(g.armor), g.fights].join(':');
+        JSON.stringify(g.weapon), JSON.stringify(g.armor), g.shield, g.nets, g.fights].join(':');
       if (!box) {
         box = el('div', 'profile');
         box.dataset.key = '';
@@ -515,6 +537,8 @@ export class View {
       return p;
     };
     gear.append(gearLine('Оружие', g.weapon), gearLine('Доспех', g.armor),
+      line('Щит', g.shield ? (twoHanded(g) ? 'есть, но с двуручником не работает' : 'есть') : 'нет'),
+      line('Сети', String(g.nets || 0)),
       line('Монеты', String(g.coins)),
       line('Бои', g.fights + ' · побед ' + g.wins + ' · нокаутов ' + g.kos + ' · убийств ' + g.kills));
     box.append(top, bar('hp', g.hp / hpMax, Math.round(g.hp) + ' / ' + hpMax + ' здоровья'),
@@ -533,7 +557,10 @@ export class View {
     let color, icon;
     if (result.item) {
       color = rarityOf(result.item.rarity).color;
-      icon = result.item.kind;
+      icon = result.item.kind === 'weapon' ? (result.item.type === 'sword' ? 'weapon' : result.item.type) : result.item.kind;
+    } else if (result.kind === 'shield' || result.kind === 'net') {
+      color = outcomeOf(result.kind).color;
+      icon = result.kind;
     } else {
       color = outcomeOf(result.kind).color;
       icon = result.coins ? 'coins' : 'void';
@@ -578,6 +605,9 @@ export class View {
       if (now.done && r.item) {
         prize.style.color = rarityOf(r.item.rarity).color;
         prize.append(itemText(r.item), el('small', '', r.equipped ? 'надевает' : 'не лучше своего — выброшено'));
+      } else if (now.done && (r.kind === 'shield' || r.kind === 'net')) {
+        prize.style.color = outcomeOf(r.kind).color;
+        prize.append(outcomeOf(r.kind).name, el('small', '', r.equipped ? 'берёт' : 'лишний — выброшен'));
       } else if (now.done && r.coins) {
         prize.style.color = outcomeOf(r.kind).color;
         prize.append('+' + r.coins + ' монет', el('small', '', outcomeOf(r.kind).name));

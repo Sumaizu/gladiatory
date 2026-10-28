@@ -1,6 +1,7 @@
 // пиксельная графика как в Чатобороне: один пиксель рисунка — два пикселя поля, текстуры и спрайты с обводкой
 import { BAYS, BAY_W, COLUMNS, FIELD_H, FIELD_W, PLACES, WALL, bayX } from './places.js';
 import { tierOf } from './gacha.js';
+import { shieldUp } from './balance.js';
 
 export const P = 2;
 const W = FIELD_W / P;
@@ -493,7 +494,7 @@ export function lookOf(g, seed) {
   return {
     color: muted(g.color), armor: tierOf(g.armor), helmet,
     skin: SKINS[(seed >>> 3) % SKINS.length], hair: HAIR[(seed >>> 6) % HAIR.length],
-    shield: helmet === 'murmillo' || helmet === 'secutor' ? 'scutum' : helmet === 'bare' ? 'none' : 'parma',
+    shield: !shieldUp(g) ? 'none' : helmet === 'murmillo' || helmet === 'secutor' ? 'scutum' : 'parma',
   };
 }
 
@@ -621,8 +622,9 @@ function gladiatorArt(look, pose, dead) {
       p.rect(18, 13 + dy, 1, 12, colorL);
       p.rect(17, 18 + dy, 3, 2, metal);
     } else {
-      p.rect(11, 10 + dy, 4, 2, metal);
-      p.rect(11, 10 + dy, 4, 1, metalL);
+      // щита нет — видна ближняя рука, согнутая у груди
+      p.line(14, 12 + dy, 16, 16 + dy, skin, 2);
+      p.rect(16, 15 + dy, 2, 2, skinL);
     }
   }
   if (!dead) return p.canvas();
@@ -669,16 +671,48 @@ export function lyingSprite(look, blanket, dead) {
     () => lyingArt(look, blanket, dead));
 }
 
-// гладиус: рукоять внизу, в точке (1, 11)
-function swordArt(tier) {
-  const p = new Pix(3, 13), blade = BLADES[Math.min(BLADES.length - 1, tier)];
+// оружие смотрит клинком вверх; pivot — где его держит рука
+function weaponArt(type, tier) {
+  const blade = BLADES[Math.min(BLADES.length - 1, tier)];
+  if (type === 'greatsword') {
+    const p = new Pix(4, 21);
+    p.rect(1, 1, 2, 14, blade);
+    p.px(1, 0, blade);
+    p.rect(2, 1, 1, 14, darker(blade, 0.72));
+    p.rect(0, 15, 4, 1, '#6b5236');
+    p.rect(1, 16, 2, 4, '#4a3426');
+    p.rect(1, 20, 2, 1, '#8a7044');
+    return { canvas: p.canvas(), px: 1.5, py: 18 };
+  }
+  if (type === 'spear') {
+    const p = new Pix(3, 30);
+    p.px(1, 0, blade);
+    p.rect(0, 1, 3, 3, blade);
+    p.rect(2, 1, 1, 3, darker(blade, 0.72));
+    p.px(1, 4, darker(blade, 0.8));
+    p.rect(1, 5, 1, 25, '#7a5636');
+    for (const y of [14, 22]) p.px(1, y, '#5a3e26');
+    return { canvas: p.canvas(), px: 1, py: 20 };
+  }
+  const p = new Pix(3, 13);
   p.rect(1, 0, 1, 8, blade);
   p.rect(2, 1, 1, 7, darker(blade, 0.72));
   p.rect(0, 8, 3, 1, '#6b5236');
   p.rect(1, 9, 1, 3, '#4a3426');
   p.px(1, 12, '#8a7044');
+  return { canvas: p.canvas(), px: 1, py: 11 };
+}
+
+function netArt() {
+  const p = new Pix(16, 16);
+  for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) {
+    const inside = Math.hypot(i - 7.5, j - 7.5) < 7.8;
+    if (inside && ((i + j) % 4 === 0 || (i - j + 16) % 4 === 0)) p.px(i, j, (i + j) % 8 ? '#cdbf9c' : '#a8986f');
+  }
   return p.canvas();
 }
+
+export const netSprite = () => remember('net', netArt);
 
 function silhouette(canvas) {
   const c = document.createElement('canvas');
@@ -693,11 +727,11 @@ function silhouette(canvas) {
 }
 
 export function gladiatorSprite(look, pose, dead = false, flash = false) {
-  const key = ['g3', look.color, look.armor, look.helmet, look.skin, look.hair, pose, dead, flash].join(':');
+  const key = ['g4', look.color, look.armor, look.helmet, look.shield, look.skin, look.hair, pose, dead, flash].join(':');
   return remember(key, () => {
     const art = remember(key.replace(/:(true|false)$/, ':false'), () => gladiatorArt(look, pose, dead));
     return flash ? silhouette(art) : art;
   });
 }
 
-export const swordSprite = (tier) => remember('sword:' + tier, () => swordArt(tier));
+export const weaponSprite = (type, tier) => remember('weapon:' + type + ':' + tier, () => weaponArt(type, tier));

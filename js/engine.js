@@ -1,5 +1,5 @@
 import { BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
-  START_POINTS, STATS, TRAIN_XP, armorOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
+  START_POINTS, STATS, TRAIN_XP, NET, SHIELD, SPEAR, armorOf, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
 import { PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemText, spin } from './gacha.js';
@@ -44,9 +44,9 @@ const CIRCLE = 0.3;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const INVISIBLE = /[​‌‍⁠﻿­͏⠀\u{E0000}]/gu;
 const IGNORED = new Set(BOTS);
-const SAVED = ['name', 'color', 'level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'armor', 'hp',
+const SAVED = ['name', 'color', 'level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'armor', 'shield', 'nets', 'hp',
   'fights', 'wins', 'kos', 'kills', 'born'];
-const COUNTS = ['level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'fights', 'wins', 'kos',
+const COUNTS = ['level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'nets', 'fights', 'wins', 'kos',
   'kills'];
 
 const PLACE_BY_WORD = new Map();
@@ -70,7 +70,7 @@ export function readableColor(color, login) {
 
 export function newGladiator(login, name, color, now) {
   return { login, name, color, level: 1, xp: 0, coins: START_COINS, str: 0, agi: 0, vit: 0, points: START_POINTS,
-    weapon: null, armor: null, hp: 1, fights: 0, wins: 0, kos: 0, kills: 0, born: now };
+    weapon: null, armor: null, shield: false, nets: 0, hp: 1, fights: 0, wins: 0, kos: 0, kills: 0, born: now };
 }
 
 export class Roster {
@@ -92,6 +92,8 @@ export class Roster {
         g.level = Math.max(1, Math.min(LEVEL_MAX, g.level));
         g.weapon = cleanItem(entry.weapon, 'weapon');
         g.armor = cleanItem(entry.armor, 'armor');
+        g.shield = entry.shield === true;
+        g.nets = Math.min(NET.max, g.nets);
         g.hp = Number.isFinite(Number(entry.hp)) ? Math.max(0.01, Math.min(1, Number(entry.hp))) : 1;
         this.data.set(login, g);
       }
@@ -170,6 +172,7 @@ export class Game {
     this.roundStart = 0;
     this.spins = [];
     this.spinNow = null;
+    this.projectiles = [];
     this.lastRoundStart = 0;
     this._saveIn = SAVE_EVERY;
   }
@@ -397,6 +400,16 @@ export class Game {
     if (result.coins) {
       g.coins += result.coins;
       this._line(g.name + ': +' + result.coins + ' монет из гачи', 'buy');
+    } else if (result.kind === 'shield') {
+      result.equipped = !g.shield;
+      if (g.shield) this._line(g.name + ': второй щит не нужен — выброшен', 'info');
+      else this._line(g.name + ' берёт щит' + (typeOf(g).hands === 2 ? ' — заработает, когда в руке не двуручник' : ''), 'level');
+      g.shield = true;
+    } else if (result.kind === 'net') {
+      result.equipped = g.nets < NET.max;
+      if (result.equipped) g.nets++;
+      this._line(g.name + (result.equipped ? ' берёт сеть (сетей: ' + g.nets + ')' : ': больше ' + NET.max + ' сетей не унести — выброшена'),
+        result.equipped ? 'level' : 'info');
     } else if (result.item) {
       const item = result.item, current = g[item.kind];
       if (!current || item.power > current.power) {
@@ -597,6 +610,8 @@ export class Game {
       g.fleeT = 0;
       g.fleeCool = 0;
       g.circle = 0;
+      g.stunT = 0;
+      g.spearOut = null;
       g.by = '';
     });
     // соседи становятся парами — бой сразу распадается на поединки по всей арене
@@ -615,6 +630,7 @@ export class Game {
       g.retarget = near.retarget = DUEL_TIME;
     }
     for (const g of ready) if (g.target) g.face = g.target.x >= g.x ? 1 : -1;
+    this.projectiles = [];
     this._line('Бой начинается! На арене ' + n + ' ' + plural(n, 'гладиатор', 'гладиатора', 'гладиаторов'), 'battle');
     this._emit('phase', { state: 'battle' });
     return true;
@@ -707,12 +723,19 @@ export class Game {
       g.swing = Math.max(0, g.swing - dt);
       g.flash = Math.max(0, g.flash - dt);
     }
+    this._stepProjectiles(dt);
     for (const g of standing) {
       if (g.fate !== 'fight') continue;
       g.retarget -= dt;
       g.cool = Math.max(0, g.cool - dt);
       g.fleeT = Math.max(0, (g.fleeT || 0) - dt);
       g.fleeCool = Math.max(0, (g.fleeCool || 0) - dt);
+      if (g.stunT > 0) {
+        // в сети: стоит, не бьёт и не убегает
+        g.stunT = Math.max(0, g.stunT - dt);
+        g.walking = false;
+        continue;
+      }
       if (g.fleeT <= 0 && g.fleeCool <= 0 && g.hp < maxHp(g) * FLEE.low && this._standing().length > 2) {
         this._flee(g, FLEE.lowTime[0] + this.random() * FLEE.lowTime[1], 'low');
       }
@@ -720,9 +743,23 @@ export class Game {
         this._runAway(g, standing, dt);
         continue;
       }
+      if (g.spearOut) {
+        // бросил копьё — ждёт, пока долетит, потом бежит подбирать
+        if (g.spearOut.flying) {
+          g.walking = false;
+          continue;
+        }
+        if (this._walkTo(g, g.spearOut.x, g.spearOut.y, dt) < SPEAR.pickup) {
+          g.spearOut = null;
+          this._emit('pickup', { login: g.login, x: g.x, y: g.y });
+        }
+        continue;
+      }
       const fighting = standing.filter((s) => s.fate === 'fight');
-      // цель убегает, а рядом есть другие — переключиться почти сразу
-      if (g.target && g.target.fleeT > 0 && fighting.some((s) => s !== g && s !== g.target && !(s.fleeT > 0))) {
+      const t0 = g.target;
+      const prey = t0 && this._canThrowSpear(g, t0);
+      // цель убегает, а рядом есть другие — переключиться почти сразу (копейщик сначала пробует метнуть)
+      if (t0 && t0.fleeT > 0 && !prey && fighting.some((s) => s !== g && s !== t0 && !(s.fleeT > 0))) {
         g.retarget = Math.min(g.retarget, 0.2 + this.random() * 0.3);
       }
       if (!g.target || g.target.fate !== 'fight' || g.retarget <= 0) {
@@ -736,15 +773,26 @@ export class Game {
       }
       const dx = t.x - g.x, dy = t.y - g.y, d = Math.hypot(dx, dy) || 1;
       if (Math.abs(dx) > 2) g.face = dx > 0 ? 1 : -1;
-      if (d > REACH) {
+      if (g.cool <= 0 && this._canThrowSpear(g, t)) {
+        this._throw(g, t, 'spear');
+        g.cool = attackEvery(g);
+        continue;
+      }
+      if (g.nets > 0 && !(t.stunT > 0) && d >= NET.range[0] && d <= NET.range[1] && this.random() < dt * NET.chance) {
+        g.nets--;
+        this._throw(g, t, 'net');
+        continue;
+      }
+      const reach = reachOf(g);
+      if (d > reach) {
         const speed = MOVE_SPEED * (1 + 0.01 * g.agi);
-        const stepLen = Math.min(d - REACH * 0.8, speed * dt);
+        const stepLen = Math.min(d - reach * 0.8, speed * dt);
         g.x += dx / d * stepLen;
         g.y += dy / d * stepLen;
         g.walking = true;
       } else if (g.cool <= 0) {
         g.walking = false;
-        this._attack(g, t);
+        this._swing(g, t, fighting);
         g.cool = attackEvery(g) * (0.9 + this.random() * 0.2);
       } else {
         // между ударами кружит вокруг противника
@@ -776,19 +824,115 @@ export class Game {
     for (const g of alive) clampToArena(g, 26);
   }
 
-  _attack(a, d) {
-    a.swing = 0.3;
-    if (this.random() < dodgeOf(d)) {
+  _walkTo(g, x, y, dt) {
+    const dx = x - g.x, dy = y - g.y, d = Math.hypot(dx, dy);
+    if (d < 1) return d;
+    const stepLen = Math.min(d, MOVE_SPEED * 1.1 * dt);
+    g.x += dx / d * stepLen;
+    g.y += dy / d * stepLen;
+    if (Math.abs(dx) > 1) g.face = dx > 0 ? 1 : -1;
+    g.walking = true;
+    return d - stepLen;
+  }
+
+  // копьё метают в убегающего и израненного, если он не слишком далеко
+  _canThrowSpear(g, t) {
+    if (!g.weapon || g.weapon.type !== 'spear' || g.spearOut || t.fate !== 'fight' || !(t.fleeT > 0)) return false;
+    const d = Math.hypot(t.x - g.x, t.y - g.y);
+    return t.hp < maxHp(t) * SPEAR.low && d >= SPEAR.range[0] && d <= SPEAR.range[1];
+  }
+
+  _throw(g, t, kind) {
+    g.swing = 0.3;
+    if (kind === 'spear') g.spearOut = { x: g.x, y: g.y, flying: true };
+    this.projectiles.push({ kind, from: g, to: t, x: g.x, y: g.y - 30, speed: kind === 'spear' ? SPEAR.speed : NET.speed,
+      angle: 0 });
+    this._emit('throw', { login: g.login, kind, x: g.x, y: g.y });
+    if (kind === 'net') this._line(g.name + ' бросает сеть в ' + t.name, 'info');
+  }
+
+  // снаряд летит за целью; долетел — удар копьём или сеть
+  _stepProjectiles(dt) {
+    for (const p of this.projectiles) {
+      const tx = p.to.x, ty = p.to.y - 30, dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
+      p.angle = Math.atan2(dy, dx);
+      const stepLen = p.speed * dt;
+      if (d > Math.max(12, stepLen)) {
+        p.x += dx / d * stepLen;
+        p.y += dy / d * stepLen;
+        continue;
+      }
+      p.done = true;
+      const a = p.from, t = p.to, alive = t.fate === 'fight';
+      if (p.kind === 'spear') {
+        if (alive && a.fate === 'fight') this._attack(a, t, { mult: typeOf(a).throw, ranged: true });
+        a.spearOut = { x: t.x + (this.random() - 0.5) * 30, y: t.y + 4 + this.random() * 10 };
+        clampToArena(a.spearOut, 30);
+      } else if (alive) {
+        this._net(a, t);
+      }
+    }
+    this.projectiles = this.projectiles.filter((p) => !p.done);
+  }
+
+  _net(a, t) {
+    if (this.random() < dodgeOf(t)) {
+      this._emit('miss', { x: t.x, y: t.y, login: t.login });
+      return;
+    }
+    if (this._blocked(t)) return;
+    t.stunT = NET.stun;
+    t.fleeT = 0;
+    t.target = null;
+    t.flash = 0.18;
+    if (a.fate === 'fight') {
+      a.target = t;
+      a.retarget = NET.focus;
+    }
+    this._emit('stun', { login: t.login, x: t.x, y: t.y, from: a.login });
+    this._line(a.name + ' опутал сетью ' + t.name, 'down');
+  }
+
+  // щит: шанс отбить любой удар, при отбитии иногда ломается
+  _blocked(d) {
+    if (!shieldUp(d) || d.stunT > 0 || this.random() >= SHIELD.block) return false;
+    this._emit('block', { login: d.login, x: d.x, y: d.y });
+    if (this.random() < SHIELD.breaks) {
+      d.shield = false;
+      this._emit('shieldbreak', { login: d.login, x: d.x, y: d.y });
+      this._line('У ' + d.name + ' раскололся щит', 'warn');
+    }
+    return true;
+  }
+
+  // двуручник бьёт всех перед собой в пределах досягаемости
+  _swing(a, t, fighting) {
+    if (!typeOf(a).cleave) {
+      this._attack(a, t);
+      return;
+    }
+    const reach = reachOf(a) * 1.15;
+    const victims = fighting.filter((v) => v !== a && v.fate === 'fight' && (v === t
+      || (v.x - a.x) * a.face > -6 && Math.hypot(v.x - a.x, v.y - a.y) <= reach));
+    for (const v of victims) if (v.fate === 'fight') this._attack(a, v);
+  }
+
+  _attack(a, d, { mult = 1, ranged = false } = {}) {
+    if (!ranged) a.swing = 0.3;
+    const stunned = d.stunT > 0;
+    if (!stunned && this.random() < dodgeOf(d)) {
       this._emit('miss', { x: d.x, y: d.y, login: d.login });
       return;
     }
+    if (this._blocked(d)) return;
     const crit = this.random() < critOf(a);
-    let dmg = damageOf(a) * (1 + SPREAD * (2 * this.random() - 1)) * (crit ? CRIT_HIT : 1) * (1 - armorOf(d));
+    const armor = typeOf(a).pierce ? 0 : armorOf(d);
+    let dmg = damageOf(a) * mult * (1 + SPREAD * (2 * this.random() - 1)) * (crit ? CRIT_HIT : 1) * (1 - armor);
     dmg = Math.max(1, Math.round(dmg));
     d.hp -= dmg;
     d.flash = 0.18;
     a.dealt += dmg;
-    this._emit('hit', { x: d.x, y: d.y, amount: dmg, crit, login: d.login, from: a.login });
+    this._emit('hit', { x: d.x, y: d.y, amount: dmg, crit, login: d.login, from: a.login, ranged });
     if (d.hp <= 0) {
       this._knockOut(d, a);
       return;
@@ -857,6 +1001,11 @@ export class Game {
     const order = { fight: 0, down: 1, yield: 1, dead: 2 };
     rows.sort((a, b) => order[a.fate] - order[b.fate] || b.kos - a.kos || b.xp - a.xp);
     this.results = { champion: champion ? champion.login : null, rows, fighters: n };
+    this.projectiles = [];
+    for (const g of this.members.values()) {
+      g.spearOut = null;
+      g.stunT = 0;
+    }
     this.roster.save();
     this.fighters = [];
     this.endIn = null;

@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { HEAL_RATE, armorOf, damageOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { HEAL_RATE, NET, SHIELD, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
 import { inArena } from '../../../js/places.js';
@@ -320,13 +320,16 @@ test('сохранение: прогресс переживает перезап
   const g = game({ roster: new Roster(memory, 'k') });
   const [a] = join(g, 'Brutus');
   a.coins = 500;
-  a.weapon = { kind: 'weapon', rarity: 'epic', power: 11 };
+  a.weapon = { kind: 'weapon', rarity: 'epic', power: 11, type: 'spear' };
+  a.shield = true;
+  a.nets = 2;
   g.feed('Brutus', 'сила 2', { login: 'brutus' });
   a.hp = maxHp(a) / 2;
   g.stop();
   const again = game({ roster: new Roster(memory, 'k') });
   const [b] = join(again, 'Brutus');
-  eq([b.weapon, b.str, b.coins], [{ kind: 'weapon', rarity: 'epic', power: 11 }, 2, 500]);
+  eq([b.weapon, b.str, b.coins, b.shield, b.nets], [{ kind: 'weapon', rarity: 'epic', power: 11, type: 'spear' }, 2, 500,
+    true, 2]);
   eq(b.hp, Math.round(maxHp(b) / 2));
 });
 
@@ -553,4 +556,133 @@ test('арена: ударили сбоку — может развернуть�
   g.random = always(0.3);
   g._attack(a, b);
   ok(b.target === a, 'развернулся на A');
+});
+
+const weapon = (type, power = 4) => ({ kind: 'weapon', rarity: 'rare', power, type });
+const queue = (...rolls) => () => (rolls.length ? rolls.shift() : 0.5);
+
+test('оружие: двуручник бьёт реже и сильнее, крит выше; копьё дальше', () => {
+  const g = game();
+  const [s, gs, sp] = join(g, 'S', 'G', 'P');
+  s.weapon = weapon('sword');
+  gs.weapon = weapon('greatsword');
+  sp.weapon = weapon('spear');
+  ok(attackEvery(gs) > attackEvery(s) * 1.4);
+  ok(damageOf(gs) > damageOf(s) * 1.5);
+  ok(critOf(gs) > critOf(s));
+  ok(reachOf(sp) > reachOf(s) * 1.5);
+  eq([attackEvery(s), damageOf(s)], [attackEvery({ agi: 0, weapon: null }), damageOf({ str: 0, weapon: weapon('sword') })]);
+});
+
+test('двуручник задевает всех перед собой, но не тех, кто сзади', () => {
+  const g = game();
+  const [a, front1, front2, back] = join(g, 'A', 'F1', 'F2', 'B');
+  g.next();
+  a.weapon = weapon('greatsword');
+  a.x = 400; a.y = 350; a.face = 1;
+  front1.x = 430; front1.y = 350;
+  front2.x = 425; front2.y = 370;
+  back.x = 370; back.y = 350;
+  for (const v of [front1, front2, back]) v.agi = 0;
+  g.random = always(0.5);
+  const hp = [front1.hp, front2.hp, back.hp];
+  g._swing(a, front1, [a, front1, front2, back]);
+  ok(front1.hp < hp[0] && front2.hp < hp[1], 'передние задеты');
+  eq(back.hp, hp[2], 'задний цел');
+});
+
+test('копьё пробивает броню', () => {
+  const g = game();
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  b.armor = { kind: 'armor', rarity: 'legendary', power: 26 };
+  c.armor = null;
+  a.weapon = weapon('spear');
+  g.random = always(0.5);
+  const hb = b.hp, hc = c.hp;
+  g._attack(a, b);
+  g._attack(a, c);
+  eq(hb - b.hp, hc - c.hp);
+});
+
+test('копьё: в израненного беглеца метают, потом бегут подбирать', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B', 'C');
+  g.next();
+  a.weapon = weapon('spear');
+  a.x = 300; a.y = 350; b.x = 450; b.y = 350;
+  b.hp = maxHp(b) * 0.3;
+  b.fleeT = 3;
+  b.fleeCool = 8;
+  b.agi = 0;
+  a.target = b;
+  a.cool = 0;
+  a.retarget = 10;
+  g.step(0.05);
+  ok(a.spearOut, 'копьё брошено');
+  ok(g.projectiles.some((p) => p.kind === 'spear' && p.from === a));
+  for (let i = 0; i < 20 * 10 && a.spearOut && a.fate === 'fight'; i++) g.step(0.05);
+  if (a.fate === 'fight') eq(a.spearOut, null, 'подобрал');
+  ok(g.events.some((e) => e.type === 'hit' && e.from === 'a' && e.ranged) || g.events.some((e) => e.type === 'miss'));
+});
+
+test('щит: отбивает удар, иногда ломается; с двуручником не работает', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  b.shield = true;
+  b.agi = 0;
+  g.random = queue(0.9, 0.01, 0.5);
+  const hp = b.hp;
+  g._attack(a, b);
+  eq(b.hp, hp, 'отбил');
+  ok(b.shield, 'цел');
+  g.random = queue(0.9, 0.01, 0.01);
+  g._attack(a, b);
+  no(b.shield, 'раскололся');
+  b.shield = true;
+  b.weapon = weapon('greatsword');
+  g.random = queue(0.9, 0.01, 0.9, 0.5);
+  g._attack(a, b);
+  ok(b.hp < hp, 'с двуручником щит не спасает');
+  ok(SHIELD.block > 0 && SHIELD.breaks > 0);
+});
+
+test('сеть: одноразовая, оглушает и цель добивают', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B', 'C');
+  g.next();
+  a.nets = 1;
+  a.x = 300; a.y = 350; b.x = 400; b.y = 350;
+  b.agi = 0;
+  a.target = b;
+  a.retarget = 10;
+  g.random = always(0.001);
+  g.step(0.05);
+  eq(a.nets, 0, 'сеть потрачена');
+  g.random = always(0.5);
+  for (let i = 0; i < 20 && !(b.stunT > 0); i++) g.step(0.05);
+  ok(b.stunT > 0, 'оглушён');
+  ok(a.target === b, 'фокусит');
+  const x = b.x, y = b.y;
+  g.step(0.5);
+  if (b.fate === 'fight' && b.stunT > 0) eq([b.x, b.y], [x, y], 'стоит на месте');
+  ok(NET.stun >= 2);
+});
+
+test('гача: щит и сеть без редкости; сетей не больше трёх, второй щит не нужен', () => {
+  const g = game();
+  const [a] = join(g, 'A');
+  g._prize(a, { kind: 'shield' });
+  ok(a.shield);
+  g._prize(a, { kind: 'shield' });
+  ok(g.lines.some((l) => l.text.includes('второй щит')));
+  for (let i = 0; i < 5; i++) g._prize(a, { kind: 'net' });
+  eq(a.nets, NET.max);
+  const random = rng(9), kinds = new Set(), types = new Set();
+  for (let i = 0; i < 4000; i++) {
+    const r = spin(random);
+    kinds.add(r.kind);
+    if (r.item && r.item.kind === 'weapon') types.add(r.item.type);
+  }
+  ok(kinds.has('shield') && kinds.has('net'));
+  eq(types, new Set(['sword', 'greatsword', 'spear']));
 });
