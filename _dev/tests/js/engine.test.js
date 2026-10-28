@@ -161,7 +161,7 @@ test('оружие и доспех пока не продаются: коман�
   a.coins = 10000;
   g.feed('Brutus', 'оружие', { login: 'brutus' });
   g.feed('Brutus', 'доспех', { login: 'brutus' });
-  eq([a.weapon, a.armor, a.coins], [null, null, 10000]);
+  eq([a.weapon, a.gear, a.coins], [null, { head: null, body: null, legs: null, feet: null }, 10000]);
 });
 
 test('бой не начнётся, пока гладиаторов меньше двух', () => {
@@ -445,7 +445,7 @@ test('гача: вещь надевается, только если лучше;
   eq(damageOf(a), damageOf({ str: a.str, weapon: { type: 'sword', power: 0 } }) + 11);
   g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'common', power: 2, type: 'sword' } });
   eq(a.weapon.power, 11, 'хуже — выброшено');
-  g._prize(a, { kind: 'item', item: { kind: 'armor', rarity: 'rare', power: 8 } });
+  g._prize(a, { kind: 'item', item: { kind: 'armor', slot: 'body', rarity: 'rare', power: 8 } });
   eq(armorOf(a), 0.08);
   g._prize(a, { kind: 'handful', coins: 12 });
   eq(a.coins, START_COINS + 12);
@@ -597,8 +597,7 @@ test('двуручник задевает всех перед собой, но �
 test('копьё пробивает броню', () => {
   const g = game();
   const [a, b, c] = join(g, 'A', 'B', 'C');
-  b.armor = { kind: 'armor', rarity: 'legendary', power: 26 };
-  c.armor = null;
+  b.gear.body = { kind: 'armor', slot: 'body', rarity: 'legendary', power: 26 };
   a.weapon = weapon('spear');
   g.random = always(0.5);
   const hb = b.hp, hc = c.hp;
@@ -755,4 +754,37 @@ test('гача: пока нет оружия, первая прокрутка г
   g.feed('A', 'гача 2', { login: 'a' });
   for (let i = 0; i < 20 * 3 && !(g.spinNow && g.spinNow.done); i++) g.step(0.05);
   ok(a.weapon, 'после первой прокрутки в руке оружие');
+});
+
+test('инвентарь: броня падает в свой слот, слоты складываются, но не выше потолка', () => {
+  const g = game();
+  const [a] = join(g, 'A');
+  const piece = (slot, power, rarity = 'rare') => ({ kind: 'item', item: { kind: 'armor', slot, rarity, power } });
+  g._prize(a, piece('head', 4));
+  g._prize(a, piece('feet', 3));
+  eq([a.gear.head.power, a.gear.feet.power, a.gear.body], [4, 3, null]);
+  eq(armorOf(a), 0.07);
+  g._prize(a, piece('head', 2, 'common'));
+  eq(a.gear.head.power, 4, 'хуже — выброшено');
+  g._prize(a, piece('body', 60, 'legendary'));
+  eq(armorOf(a), 0.6, 'не больше потолка');
+  const random = rng(4), slots = new Set();
+  for (let i = 0; i < 3000; i++) {
+    const r = spin(random, { weapon: { type: 'sword' }, shield: true });
+    if (r.item && r.item.kind === 'armor') slots.add(r.item.slot);
+  }
+  eq(slots, new Set(['head', 'body', 'legs', 'feet']));
+});
+
+test('инвентарь: старое сохранение с одним доспехом переезжает в слот «тело»', () => {
+  const memory = new Memory();
+  memory.setItem('k', JSON.stringify({ alive: { x: { name: 'X', armor: { rarity: 'epic', power: 19 } } } }));
+  const r = new Roster(memory, 'k');
+  eq(r.get('x').gear.body, { kind: 'armor', slot: 'body', rarity: 'epic', power: 19 });
+  const g = game({ roster: r });
+  const [x] = join(g, 'X');
+  eq(armorOf(x), 0.19);
+  x.gear.feet = { kind: 'armor', slot: 'feet', rarity: 'rare', power: 2 };
+  g.stop();
+  eq(new Roster(memory, 'k').get('x').gear.feet.power, 2);
 });

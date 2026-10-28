@@ -16,7 +16,9 @@ export function demoGame(settings) {
     g.level = 1 + Math.floor(Math.random() * 8);
     const any = () => RARITIES[Math.floor(Math.random() * RARITIES.length)];
     g.weapon = Math.random() < 0.7 ? makeItem(Math.random, 'weapon', any()) : null;
-    g.armor = Math.random() < 0.6 ? makeItem(Math.random, 'armor', any()) : null;
+    for (const slot of ['head', 'body', 'legs', 'feet']) {
+      g.gear[slot] = Math.random() < 0.5 ? makeItem(Math.random, 'armor', any(), slot) : null;
+    }
     g.hp = g.hp * (0.5 + Math.random() * 0.5);
     g.coins = 40 + Math.floor(Math.random() * 200);
   }

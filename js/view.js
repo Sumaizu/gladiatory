@@ -1,5 +1,5 @@
-import { STATS, maxHp, twoHanded, xpNeed } from './balance.js';
-import { RARITIES, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
+import { ARMOR_SLOTS, SLOT_IDS, STATS, armorOf, maxHp, twoHanded, xpNeed } from './balance.js';
+import { RARITIES, itemText, outcomeOf, rarityOf, slotText, spin } from './gacha.js';
 import { FIELD_H, FIELD_W, DUMMIES, PLACES } from './places.js';
 import { FONT, drawCrowd, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
@@ -34,6 +34,9 @@ const ICONS = {
   coins: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="currentColor"/><circle cx="8" cy="8" r="3.5" fill="none" stroke="#1e140e" stroke-width="1.5"/></svg>',
   greatsword: '<svg viewBox="0 0 16 16"><path d="M14 0.5h1.5V2L6.5 11 5 9.5z" fill="currentColor"/><path d="M2.5 8.5l5 5-1.2 1.2-1.4-1.4-2 2-1.2-1.2 2-2-1.4-1.4z" fill="currentColor"/></svg>',
   spear: '<svg viewBox="0 0 16 16"><path d="M15.5 0.5l-1 4.2-1.6-1.6z" fill="currentColor"/><path d="M13.2 3.6l.9.9L1.7 16.9.8 16z" fill="currentColor"/></svg>',
+  head: '<svg viewBox="0 0 16 16"><path d="M3 9a5 5 0 0 1 10 0v4h-3v-3H6v3H3z" fill="currentColor"/><path d="M7 1h2v3H7z" fill="currentColor"/></svg>',
+  legs: '<svg viewBox="0 0 16 16"><path d="M4 1h8v4l-1 10H9L8 7l-1 8H5L4 5z" fill="currentColor"/></svg>',
+  feet: '<svg viewBox="0 0 16 16"><path d="M3 2h5v8l6 2v3H3z" fill="currentColor"/></svg>',
   shield: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="currentColor"/><circle cx="8" cy="8" r="2" fill="#1e140e"/></svg>',
   net: '<svg viewBox="0 0 16 16"><path d="M2 2 14 14M2 14 14 2M2 8h12M8 2v12M2 5l9 9M5 2l9 9M2 11l9-9M5 14l9-9" stroke="currentColor" stroke-width="1.1" fill="none"/></svg>',
   void: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/></svg>',
@@ -529,7 +532,7 @@ export class View {
     for (const g of cards) {
       let box = this.cardNodes.get(g.login);
       const key = [g.level, Math.floor(g.xp), Math.round(g.hp), g.coins, g.str, g.agi, g.vit, g.points,
-        JSON.stringify(g.weapon), JSON.stringify(g.armor), g.shield, g.nets, g.fights].join(':');
+        JSON.stringify(g.weapon), JSON.stringify(g.gear), g.shield, g.nets, g.fights].join(':');
       if (!box) {
         box = el('div', 'profile');
         box.dataset.key = '';
@@ -566,22 +569,31 @@ export class View {
       p.append(label + ': ', el('b', '', value));
       return p;
     };
-    const gearLine = (label, item) => {
-      const p = line(label, item ? itemText(item) : label === 'Оружие' ? 'кулаки — крути гачу' : 'нет — крути гачу');
-      if (item) p.lastChild.style.color = rarityOf(item.rarity).color;
-      return p;
+    // инвентарь: шесть слотов, вещи — цветом редкости
+    const inv = el('div', 'inv');
+    const slot = (label, text, color, muted) => {
+      const cell = el('div', 'slot' + (muted ? ' empty' : ''));
+      const value = el('b', '', text);
+      if (color) value.style.color = color;
+      cell.append(el('small', '', label), value);
+      inv.append(cell);
     };
-    gear.append(gearLine('Оружие', g.weapon), gearLine('Доспех', g.armor),
-      line('Вторая рука', g.shield ? 'щит' + (twoHanded(g) ? ' (с двуручником не работает)' : '')
-        : g.nets > 0 ? 'сеть' + (twoHanded(g) ? ' (с двуручником не работает)' : '') : 'свободна'),
-      line('Монеты', String(g.coins)),
+    const offOff = twoHanded(g) ? ' (не с двуручником)' : '';
+    slot('Правая рука', g.weapon ? slotText(g.weapon) : 'кулаки', g.weapon && rarityOf(g.weapon.rarity).color, !g.weapon);
+    slot('Левая рука', g.shield ? 'щит' + offOff : g.nets > 0 ? 'сеть' + offOff : 'пусто', g.shield || g.nets > 0 ? '#d9a441' : '',
+      !g.shield && !(g.nets > 0));
+    for (const id of SLOT_IDS) {
+      const item = g.gear && g.gear[id];
+      slot(ARMOR_SLOTS[id].label, item ? slotText(item) : 'пусто', item && rarityOf(item.rarity).color, !item);
+    }
+    gear.append(line('Броня', Math.round(armorOf(g) * 100) + '% урона долой'), line('Монеты', String(g.coins)),
       line('Бои', g.fights + ' · побед ' + g.wins + ' · нокаутов ' + g.kos + ' · убийств ' + g.kills));
     box.append(top, bar('hp', g.hp / hpMax, Math.round(g.hp) + ' / ' + hpMax + ' здоровья'),
       bar('xp', g.xp / need, Math.floor(g.xp) + ' / ' + need + ' опыта'), stats);
     if (g.points > 0) {
       box.append(el('div', 'gear points', 'Свободных очков: ' + g.points + ' — пиши «сила», «ловкость» или «выносливость»'));
     }
-    box.append(gear);
+    box.append(inv, gear);
     return box.parts;
   }
 
@@ -592,7 +604,8 @@ export class View {
     let color, icon;
     if (result.item) {
       color = rarityOf(result.item.rarity).color;
-      icon = result.item.kind === 'weapon' ? (result.item.type === 'sword' ? 'weapon' : result.item.type) : result.item.kind;
+      icon = result.item.kind === 'weapon' ? (result.item.type === 'sword' ? 'weapon' : result.item.type)
+        : result.item.slot === 'body' ? 'armor' : result.item.slot;
     } else if (result.kind === 'shield' || result.kind === 'net') {
       color = outcomeOf(result.kind).color;
       icon = result.kind;

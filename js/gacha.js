@@ -1,5 +1,5 @@
 // гача в храме Фортуны: шансы редкостей как в Чатобороне, монет не выпадает; щит и сеть — без редкости
-import { WEAPON_TYPES, offhandFree } from './balance.js';
+import { ARMOR_SLOTS, SLOT_IDS, WEAPON_TYPES, offhandFree } from './balance.js';
 export const PRICE = 30;
 export const SPIN_TIME = 2.2;
 export const SHOW_TIME = 3;
@@ -15,11 +15,15 @@ export const OUTCOMES = [
 
 // weapon — прибавка к урону, armor — процент, на который режется входящий урон
 export const RARITIES = [
-  { id: 'common', name: 'Обычный', n: 'Обычное', color: '#4ade80', chance: 0.27, weapon: 2, armor: 4 },
-  { id: 'rare', name: 'Редкий', n: 'Редкое', color: '#60a5fa', chance: 0.2, weapon: 4, armor: 8 },
-  { id: 'mythic', name: 'Мифический', n: 'Мифическое', color: '#c084fc', chance: 0.1, weapon: 7, armor: 13 },
-  { id: 'epic', name: 'Эпический', n: 'Эпическое', color: '#facc15', chance: 0.07, weapon: 11, armor: 19 },
-  { id: 'legendary', name: 'Легендарный', n: 'Легендарное', color: '#f97316', chance: 0.06, weapon: 16, armor: 26 },
+  { id: 'common', name: 'Обычный', n: 'Обычное', f: 'Обычная', p: 'Обычные', color: '#4ade80', chance: 0.27, weapon: 2,
+    armor: 4 },
+  { id: 'rare', name: 'Редкий', n: 'Редкое', f: 'Редкая', p: 'Редкие', color: '#60a5fa', chance: 0.2, weapon: 4, armor: 8 },
+  { id: 'mythic', name: 'Мифический', n: 'Мифическое', f: 'Мифическая', p: 'Мифические', color: '#c084fc', chance: 0.1,
+    weapon: 7, armor: 13 },
+  { id: 'epic', name: 'Эпический', n: 'Эпическое', f: 'Эпическая', p: 'Эпические', color: '#facc15', chance: 0.07,
+    weapon: 11, armor: 19 },
+  { id: 'legendary', name: 'Легендарный', n: 'Легендарное', f: 'Легендарная', p: 'Легендарные', color: '#f97316',
+    chance: 0.06, weapon: 16, armor: 26 },
 ];
 
 export const KINDS = { weapon: { name: 'меч', stat: 'урона' }, armor: { name: 'доспех', stat: 'брони' } };
@@ -37,11 +41,15 @@ function pick(list, random) {
 export const rarityOf = (id) => RARITIES.find((rarity) => rarity.id === id) || null;
 export const rankOf = (item) => (item ? RARITIES.findIndex((rarity) => rarity.id === item.rarity) : -1);
 
+// броня выпадает в случайный слот: шлем, броня, поножи или сапоги
 export function makeItem(random, kind, rarity, type = null) {
-  const base = rarity[kind], roll = 1 - SPREAD + 2 * SPREAD * random();
-  const item = { kind, rarity: rarity.id, power: Math.max(1, Math.round(base * roll)) };
-  if (kind === 'weapon') item.type = type || TYPES[Math.floor(random() * TYPES.length)];
-  return item;
+  const roll = 1 - SPREAD + 2 * SPREAD * random();
+  if (kind === 'armor') {
+    const slot = type || SLOT_IDS[Math.floor(random() * SLOT_IDS.length)];
+    return { kind, slot, rarity: rarity.id, power: Math.max(1, Math.round(rarity.armor * ARMOR_SLOTS[slot].share * roll)) };
+  }
+  return { kind, rarity: rarity.id, power: Math.max(1, Math.round(rarity.weapon * roll)),
+    type: type || TYPES[Math.floor(random() * TYPES.length)] };
 }
 
 // owner — кто крутит: щит и сеть выпадают, только если его вторая рука свободна
@@ -58,11 +66,21 @@ export function spin(random, owner = null) {
   return { kind: 'item', item: makeItem(random, random() < 0.5 ? 'weapon' : 'armor', roll) };
 }
 
+const adjective = (rarity, gender) => (!rarity ? '' : gender === 'n' ? rarity.n : gender === 'f' ? rarity.f
+  : gender === 'p' ? rarity.p : rarity.name);
+
 export function itemName(item) {
   const rarity = rarityOf(item.rarity);
-  if (item.kind !== 'weapon') return (rarity ? rarity.name : '') + ' ' + KINDS[item.kind].name;
-  const type = WEAPON_TYPES[item.type] || WEAPON_TYPES.sword;
-  return (rarity ? (type.gender === 'n' ? rarity.n : rarity.name) : '') + ' ' + type.name;
+  const what = item.kind === 'armor' ? ARMOR_SLOTS[item.slot] || ARMOR_SLOTS.body
+    : WEAPON_TYPES[item.type] || WEAPON_TYPES.sword;
+  return adjective(rarity, what.gender) + ' ' + what.name;
+}
+
+// коротко для слота инвентаря: редкость видна цветом
+export function slotText(item) {
+  const what = item.kind === 'armor' ? ARMOR_SLOTS[item.slot] || ARMOR_SLOTS.body
+    : WEAPON_TYPES[item.type] || WEAPON_TYPES.sword;
+  return what.name + ' +' + item.power + (item.kind === 'armor' ? '%' : '');
 }
 
 export const itemText = (item) => itemName(item) + ' +' + item.power + (item.kind === 'armor' ? '% ' : ' ')
@@ -79,5 +97,6 @@ export function cleanItem(raw, kind) {
   if (!(power > 0)) return null;
   const item = { kind, rarity: raw.rarity, power: Math.min(power, 99) };
   if (kind === 'weapon') item.type = WEAPON_TYPES[raw.type] ? raw.type : 'sword';
+  if (kind === 'armor') item.slot = ARMOR_SLOTS[raw.slot] ? raw.slot : 'body';
   return item;
 }

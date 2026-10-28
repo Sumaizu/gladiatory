@@ -1,5 +1,5 @@
 import { BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
-  START_POINTS, STATS, TRAIN_XP, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
+  START_POINTS, STATS, TRAIN_XP, SLOT_IDS, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
 import { PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemText, spin } from './gacha.js';
@@ -47,7 +47,7 @@ const CIRCLE = 0.3;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const INVISIBLE = /[​‌‍⁠﻿­͏⠀\u{E0000}]/gu;
 const IGNORED = new Set(BOTS);
-const SAVED = ['name', 'color', 'level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'armor', 'shield', 'nets', 'hp',
+const SAVED = ['name', 'color', 'level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'gear', 'shield', 'nets', 'hp',
   'fights', 'wins', 'kos', 'kills', 'born'];
 const COUNTS = ['level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'nets', 'fights', 'wins', 'kos',
   'kills'];
@@ -73,7 +73,7 @@ export function readableColor(color, login) {
 
 export function newGladiator(login, name, color, now) {
   return { login, name, color, level: 1, xp: 0, coins: START_COINS, str: 0, agi: 0, vit: 0, points: START_POINTS,
-    weapon: null, armor: null, shield: false, nets: 0, hp: 1, fights: 0, wins: 0, kos: 0, kills: 0, born: now };
+    weapon: null, gear: emptyGear(), shield: false, nets: 0, hp: 1, fights: 0, wins: 0, kos: 0, kills: 0, born: now };
 }
 
 export class Roster {
@@ -94,7 +94,11 @@ export class Roster {
         }
         g.level = Math.max(1, Math.min(LEVEL_MAX, g.level));
         g.weapon = cleanItem(entry.weapon, 'weapon');
-        g.armor = cleanItem(entry.armor, 'armor');
+        g.gear = emptyGear();
+        for (const slot of SLOT_IDS) g.gear[slot] = cleanItem(entry.gear && entry.gear[slot], 'armor');
+        // старые сохранения: один доспех — в слот «тело»
+        if (!entry.gear && entry.armor) g.gear.body = cleanItem(Object.assign({}, entry.armor, { slot: 'body' }), 'armor');
+        for (const slot of SLOT_IDS) if (g.gear[slot]) g.gear[slot].slot = slot;
         g.shield = entry.shield === true;
         g.nets = Math.min(NET.max, g.nets);
         g.hp = Number.isFinite(Number(entry.hp)) ? Math.max(0.01, Math.min(1, Number(entry.hp))) : 1;
@@ -121,7 +125,7 @@ export class Roster {
   // в хранилище здоровье лежит долей от максимума, чтобы не зависеть от формул
   put(g) {
     const entry = {};
-    for (const field of SAVED) entry[field] = g[field] && typeof g[field] === 'object' ? Object.assign({}, g[field]) : g[field];
+    for (const field of SAVED) entry[field] = g[field] && typeof g[field] === 'object' ? JSON.parse(JSON.stringify(g[field])) : g[field];
     entry.hp = Math.max(0.01, Math.min(1, g.hp / maxHp(g)));
     entry.hp = Math.round(entry.hp * 1000) / 1000;
     this.data.set(g.login, entry);
@@ -287,7 +291,7 @@ export class Game {
     const saved = this.roster.get(login);
     let g;
     if (saved) {
-      g = Object.assign(newGladiator(login, saved.name, saved.color, saved.born), saved, { login });
+      g = Object.assign(newGladiator(login, saved.name, saved.color, saved.born), JSON.parse(JSON.stringify(saved)), { login });
       g.hp = Math.max(1, Math.round(saved.hp * maxHp(g)));
       this._line(g.name + ' возвращается в лудус', 'join');
     } else {
@@ -418,9 +422,12 @@ export class Game {
       this._line(g.name + (result.equipped ? ' берёт сеть' : ': вторая рука занята — сеть выброшена'),
         result.equipped ? 'level' : 'info');
     } else if (result.item) {
-      const item = result.item, current = g[item.kind];
+      const item = result.item;
+      if (item.kind === 'armor' && !g.gear) g.gear = emptyGear();
+      const current = item.kind === 'armor' ? g.gear[item.slot] : g.weapon;
       if (!current || item.power > current.power) {
-        g[item.kind] = item;
+        if (item.kind === 'armor') g.gear[item.slot] = item;
+        else g.weapon = item;
         result.equipped = true;
         this._line(g.name + ' надевает «' + itemText(item) + '»', 'level');
       } else {

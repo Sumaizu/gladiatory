@@ -489,24 +489,42 @@ function muted(color) {
   return hex([r * 0.72 + l * 0.18, g * 0.72 + l * 0.18, b * 0.72 + l * 0.18]);
 }
 
+// снаряжение по слотам видно на фигуре: шлем, броня, поножи, сапоги — каждое своей редкостью
 export function lookOf(g, seed) {
-  const helmet = HELMETS[seed % HELMETS.length];
+  const style = HELMETS[seed % (HELMETS.length - 1)];
+  const gear = g.gear || {};
+  const head = tierOf(gear.head);
   return {
-    color: muted(g.color), armor: tierOf(g.armor), helmet,
+    color: muted(g.color), head, body: tierOf(gear.body), legs: tierOf(gear.legs), feet: tierOf(gear.feet),
+    helmet: head ? style : 'bare',
     skin: SKINS[(seed >>> 3) % SKINS.length], hair: HAIR[(seed >>> 6) % HAIR.length],
-    shield: !shieldUp(g) ? 'none' : helmet === 'murmillo' || helmet === 'secutor' ? 'scutum' : 'parma',
+    shield: !shieldUp(g) ? 'none' : style === 'murmillo' || style === 'secutor' ? 'scutum' : 'parma',
     net: netUp(g) && !(g.netCool > 0),
   };
 }
+
+const gearKey = (look) => [look.head, look.body, look.legs, look.feet].join('');
+const BOOTS = ['#5a3a22', '#6b4329', '#4a3426', '#5c4d3f', '#6c7176', '#868c92', '#b8954a'];
 
 // поза: stand, walk1, walk2, sit, kneel. Ступни на y = 39, центр x = 12, смотрит вправо
 function gladiatorArt(look, pose, dead) {
   const p = new Pix(SPRITE.w, SPRITE.h);
   const skin = look.skin, skinD = darker(skin, 0.8), skinL = darker(skin, 1.07);
-  const metal = METALS[look.armor], metalD = darker(metal, 0.68), metalL = darker(metal, 1.3);
+  const shade3 = (tier) => [METALS[tier], darker(METALS[tier], 0.68), darker(METALS[tier], 1.3)];
+  const [metal, metalD, metalL] = shade3(look.head);
+  const [bodyM, bodyD, bodyL] = shade3(look.body);
+  const [legM, legD, legL] = shade3(look.legs);
   const color = look.color, colorD = darker(color, 0.68), colorL = darker(color, 1.15);
   const dy = pose === 'sit' ? 11 : pose === 'kneel' ? 7 : 0;
   const foot = (x, y) => {
+    if (look.feet) {
+      // сапоги вместо сандалий
+      const boot = BOOTS[look.feet];
+      p.rect(x - 1, y - 3, 3, 3, boot);
+      p.px(x - 1, y - 3, darker(boot, 1.3));
+      p.rect(x - 1, y, 4, 1, darker(boot, 0.7));
+      return;
+    }
     p.rect(x - 1, y, 4, 1, BELT);
     p.px(x - 1, y - 1, BELT);
   };
@@ -518,7 +536,7 @@ function gladiatorArt(look, pose, dead) {
     foot(17, 39);
     p.rect(13, 36, 2, 3, skinD);
     foot(14, 39);
-    if (look.armor >= 1) p.rect(16, 36, 2, 2, metal);
+    if (look.legs) p.rect(16, 36, 2, 2, legM);
   } else if (pose === 'kneel') {
     p.line(11, 31, 8, 38, skinD, 3);
     foot(8, 39);
@@ -535,10 +553,12 @@ function gladiatorArt(look, pose, dead) {
     p.line(knee[0], knee[1], front, 38, skin, 3);
     foot(front + 1, 39);
     for (const y of [26, 28]) p.rect(13 + (knee[0] - 14) * (y - 24) / 7, y, 3, 1, '#d6cab5');
-    if (look.armor >= 1) {
-      p.rect(front - 1, 32, 3, 6, metal);
-      p.rect(front - 1, 32, 1, 6, metalL);
-      p.rect(front + 1, 32, 1, 6, metalD);
+    if (look.legs) {
+      // поножи: на ближней голени пластина, на дальней — тёмная полоса
+      p.rect(front - 1, 31, 3, 5, legM);
+      p.rect(front - 1, 31, 1, 5, legL);
+      p.rect(front + 1, 31, 1, 5, legD);
+      p.line(back + 2, 31, back + 1, 35, legD);
     }
   }
   // дальняя рука с наручем отведена назад — в ней меч
@@ -555,7 +575,7 @@ function gladiatorArt(look, pose, dead) {
     if (y === 24 && (x === 10 || x === 15)) continue;
     p.px(x, y + dy, x === 10 || (x * 2 + y) % 5 === 0 ? CLOTH_D : CLOTH);
   }
-  p.rect(10, 20 + dy, 6, 1, look.armor >= 4 ? '#b8954a' : BELT);
+  p.rect(10, 20 + dy, 6, 1, look.body >= 4 ? '#b8954a' : BELT);
   p.rect(14, 21 + dy, 1, 3, color);
   // торс, чуть подан вперёд
   for (let y = 11; y < 20; y++) {
@@ -566,13 +586,14 @@ function gladiatorArt(look, pose, dead) {
   }
   p.rect(13, 14 + dy, 2, 1, skinD);
   p.px(13, 17 + dy, skinD);
-  if (look.armor >= 2) p.line(11, 11 + dy, 15, 19 + dy, '#6b4a33');
-  if (look.armor >= 3) {
-    p.rect(11, 11 + dy, 5, 6, metal);
-    p.rect(11, 11 + dy, 1, 6, metalD);
-    p.rect(13, 12 + dy, 2, 1, metalL);
+  if (look.body === 1) p.line(11, 11 + dy, 15, 19 + dy, '#6b4a33');
+  if (look.body >= 2) {
+    p.rect(11, 11 + dy, 5, 7, bodyM);
+    p.rect(11, 11 + dy, 1, 7, bodyD);
+    p.rect(13, 12 + dy, 2, 1, bodyL);
+    p.rect(11, 15 + dy, 5, 1, bodyD);
   }
-  if (look.armor >= 5) p.rect(8, 11 + dy, 2, 11, '#8e2c28');
+  if (look.body >= 6) p.rect(8, 11 + dy, 2, 11, '#8e2c28');
   // шлем с гребнем, отброшенным назад
   const H = 4 + dy;
   p.rect(12, 10 + dy, 3, 1, skinD);
@@ -649,14 +670,14 @@ function gladiatorArt(look, pose, dead) {
 // лежит на спине, голова слева: в лазарете под одеялом, на арене — без
 function lyingArt(look, blanket, dead) {
   const p = new Pix(25, 9);
-  const skin = look.skin, skinD = darker(skin, 0.8), metal = METALS[look.armor], metalD = darker(metal, 0.7);
+  const skin = look.skin, skinD = darker(skin, 0.8), metal = METALS[look.head], metalD = darker(metal, 0.7);
   p.rect(14, 5, 8, 2, skin);
   p.rect(14, 7, 8, 1, skinD);
   p.rect(22, 4, 2, 3, BELT);
   p.rect(11, 4, 3, 4, CLOTH);
   p.rect(11, 4, 1, 4, BELT);
   for (let x = 5; x < 11; x++) for (let y = 4; y < 8; y++) p.px(x, y, y === 7 ? skinD : skin);
-  if (look.armor >= 3) p.rect(5, 4, 5, 3, metal);
+  if (look.body >= 2) p.rect(5, 4, 5, 3, METALS[look.body]);
   p.rect(6, 7, 7, 1, GUARD);
   if (look.helmet === 'bare') {
     p.rect(1, 3, 4, 4, skin);
@@ -679,7 +700,7 @@ function lyingArt(look, blanket, dead) {
 }
 
 export function lyingSprite(look, blanket, dead) {
-  return remember(['lie2', look.color, look.armor, look.helmet, look.skin, look.hair, blanket, dead].join(':'),
+  return remember(['lie3', look.color, gearKey(look), look.helmet, look.skin, look.hair, blanket, dead].join(':'),
     () => lyingArt(look, blanket, dead));
 }
 
@@ -739,7 +760,7 @@ function silhouette(canvas) {
 }
 
 export function gladiatorSprite(look, pose, dead = false, flash = false) {
-  const key = ['g4', look.color, look.armor, look.helmet, look.shield, look.net, look.skin, look.hair, pose, dead, flash].join(':');
+  const key = ['g5', look.color, gearKey(look), look.helmet, look.shield, look.net, look.skin, look.hair, pose, dead, flash].join(':');
   return remember(key, () => {
     const art = remember(key.replace(/:(true|false)$/, ':false'), () => gladiatorArt(look, pose, dead));
     return flash ? silhouette(art) : art;

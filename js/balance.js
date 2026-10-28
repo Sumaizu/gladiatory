@@ -79,7 +79,21 @@ export const attackEvery = (g) => ATTACK_EVERY * typeOf(g).rate / (1 + HASTE_PER
 export const dodgeOf = (g) => Math.min(DODGE_MAX, DODGE_BASE + DODGE_PER_AGI * g.agi);
 export const critOf = (g) => CRIT_BASE + CRIT_PER_AGI * g.agi + typeOf(g).crit;
 // доспех из гачи режет входящий урон на свой процент
-export const armorOf = (g) => (g.armor ? g.armor.power / 100 : 0);
+// снаряжение по слотам: share — какая доля «брони» редкости приходится на вещь; вместе режут урон, но не больше ARMOR_CAP
+export const ARMOR_SLOTS = {
+  head: { name: 'шлем', gender: 'm', share: 0.5, label: 'Голова' },
+  body: { name: 'броня', gender: 'f', share: 1, label: 'Тело' },
+  legs: { name: 'поножи', gender: 'p', share: 0.4, label: 'Штаны' },
+  feet: { name: 'сапоги', gender: 'p', share: 0.3, label: 'Ноги' },
+};
+export const SLOT_IDS = Object.keys(ARMOR_SLOTS);
+export const ARMOR_CAP = 0.6;
+export const emptyGear = () => ({ head: null, body: null, legs: null, feet: null });
+export const armorOf = (g) => {
+  let sum = 0;
+  for (const slot of SLOT_IDS) if (g.gear && g.gear[slot]) sum += g.gear[slot].power;
+  return Math.min(ARMOR_CAP, sum / 100);
+};
 
 // чем больше бойцов на арене, тем щедрее награда
 export const crowdBonus = (fighters) => Math.min(2, 1 + 0.03 * Math.max(0, fighters - 2));
