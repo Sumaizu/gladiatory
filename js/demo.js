@@ -12,6 +12,8 @@ export function demoGame(settings) {
   const game = new Game(Object.assign({}, settings, { ludus: 22, battle: 45 }), new Roster());
   game.open();
   NAMES.forEach((name, i) => game.feed(name, 'привет', { login: 'demo' + i, color: COLORS[i] }));
+  // на скамье в бой не ходят — большинство сразу отправляем тренироваться
+  NAMES.forEach((name, i) => { if (i % 4 !== 3) game.feed(name, 'трен', { login: 'demo' + i }); });
   for (const g of game.members.values()) {
     g.level = 1 + Math.floor(Math.random() * 8);
     const any = () => RARITIES[Math.floor(Math.random() * RARITIES.length)];

@@ -21,11 +21,11 @@ const WHERE = {
 };
 
 const COMMANDS = {
-  ludus: [['трен', 'тренироваться: опыт'], ['лазарет', 'лечиться бесплатно'], ['отдых', 'сесть на скамью'],
+  ludus: [['трен', 'тренироваться: опыт'], ['лазарет', 'лечиться бесплатно'], ['отдых', 'сесть на скамью и не идти в бой'],
     ['гача', '30 монет: оружие, доспех, щит, сеть'], ['сила · ловкость · выносливость', 'вложить очко'],
     ['проф', 'твоя карточка']],
   battle: [['сдаюсь', 'сдаться и точно выжить, но награда меньше'], ['проф', 'твоя карточка'],
-    ['что угодно', 'вступить: в бой пойдёшь следующим']],
+    ['трен', 'встать со скамьи: в бой пойдёшь следующим']],
 };
 COMMANDS.results = COMMANDS.ludus;
 
@@ -483,7 +483,7 @@ export class View {
 
   _status(game) {
     const duel = game.duel;
-    const key = game.state + '|' + game.mode + '|' + game.nextMode + '|' + game.notice + '|' + (game.state === 'battle' ? game.waiting : '')
+    const key = game.state + '|' + game.mode + '|' + game.nextMode + '|' + game.notice + '|' + (game.state === 'battle' ? game.waiting + ':' + game.watching : '')
       + '|' + (duel ? duel.betting : '');
     this._set('status', key, (node) => {
       node.replaceChildren();
@@ -496,7 +496,9 @@ export class View {
         node.append(el('small', '', 'Дуэль: ' + duel.left.name + ' против ' + duel.right.name + ' — никто не погибнет'));
       } else if (game.state === 'battle') {
         const what = game.mode === 'pit' ? 'Все вместе против львов — выжившим щедрая награда' : 'Бой до последнего на ногах';
-        node.append(el('small', '', game.waiting ? 'В лудусе ждут следующего боя: ' + game.waiting : what));
+        const off = [game.waiting && 'ждут следующего боя: ' + game.waiting,
+          game.watching && 'смотрят со скамьи: ' + game.watching].filter(Boolean).join(' · ');
+        node.append(el('small', '', off ? off[0].toUpperCase() + off.slice(1) : what));
       } else if (game.state === 'results') {
         node.append(el('small', '', 'Награды розданы — скоро снова в лудус'));
       } else if (game.state === 'ludus' && game.nextMode) {
@@ -543,7 +545,8 @@ export class View {
         const name = nick('name', g.name, g.login);
         if (!starOf(g.login)) name.style.color = g.color;
         li.append(lvl, name, gold,
-          el('span', 'where ' + where, battle && !g.fate ? (bets && bets.has(g.login) ? 'ставка ' + bets.get(g.login) : 'ждёт')
+          el('span', 'where ' + where, battle && !g.fate ? (bets && bets.has(g.login) ? 'ставка ' + bets.get(g.login)
+            : g.place === 'rest' ? 'смотрит' : 'ждёт')
             : WHERE[where] || ''), bar);
         return li;
       }));

@@ -38,7 +38,13 @@ function game(options = {}) {
   return g;
 }
 
+// новички садятся на скамью и боя не видят — в тестах сразу отправляем их на песок
 function join(g, ...names) {
+  for (const name of names) g.feed(name, 'трен', { login: name.toLowerCase() });
+  return names.map((name) => g.members.get(name.toLowerCase()));
+}
+
+function newcomers(g, ...names) {
   for (const name of names) g.feed(name, 'привет', { login: name.toLowerCase() });
   return names.map((name) => g.members.get(name.toLowerCase()));
 }
@@ -97,7 +103,7 @@ test('очки характеристик: сила, все, выносливо�
 
 test('новичок садится на скамью в зоне отдыха и сидит, пока его не отправят', () => {
   const g = game();
-  const [a, b] = join(g, 'Brutus', 'Crixus');
+  const [a, b] = newcomers(g, 'Brutus', 'Crixus');
   for (let i = 0; i < 20 * 20; i++) g.step(0.05);
   eq([a.place, a.pose, a.walking], ['rest', 'sit', false]);
   ok(a.seat !== b.seat, 'у каждого своё место');
@@ -119,7 +125,7 @@ test('лазарет бесплатный и лечит быстрее отды�
 
 test('здоровому в лазарет не надо', () => {
   const g = game();
-  const [a] = join(g, 'Brutus');
+  const [a] = newcomers(g, 'Brutus');
   g.feed('Brutus', 'лазарет', { login: 'brutus' });
   eq(a.place, 'rest');
 });
@@ -984,6 +990,7 @@ test('режим следующего боя выбран заранее, в н�
     while (g.state !== 'ludus') g.next();
     const planned = g.nextMode;
     ok(['ffa', 'pit', 'duel'].includes(planned));
+    for (const m of g.members.values()) g.feed(m.name, 'трен', { login: m.login });
     g.next();
     eq(g.mode, planned);
     seen.add(planned);
@@ -1008,4 +1015,23 @@ test('ник того же цвета, что в твиче: тёмный осв
   g.feed('Vasya', 'привет', { login: 'vasya', color: '#FF8800' });
   g.feed('Vasya', 'трен', { login: 'vasya', color: '#00FF7F' });
   eq(g.members.get('vasya').color, '#00ff7f');
+});
+
+test('кто сидит в зоне отдыха, в бой не выходит, а смотрит', () => {
+  const g = game();
+  const [a, b] = join(g, 'Brutus', 'Crixus');
+  const [c] = newcomers(g, 'Spartak');
+  g.next();
+  eq(g.state, 'battle');
+  ok(g.fighters.includes(a) && g.fighters.includes(b));
+  no(g.fighters.includes(c), 'Spartak на скамье');
+  eq(c.fate, null);
+});
+
+test('на арену некому — все сидят на отдыхе, бой откладывается', () => {
+  const g = game();
+  join(g, 'Brutus');
+  newcomers(g, 'Crixus', 'Spartak');
+  g.next();
+  eq(g.state, 'ludus');
 });

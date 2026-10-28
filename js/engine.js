@@ -266,10 +266,18 @@ export class Game {
     if (this.state !== 'stopped') this.open();
   }
 
+  // не на арене: ждут следующего боя на песке или в лазарете, а со скамьи просто смотрят
   get waiting() {
     if (this.state !== 'battle') return 0;
     let n = 0;
-    for (const g of this.members.values()) if (!g.fate) n++;
+    for (const g of this.members.values()) if (!g.fate && g.place !== 'rest') n++;
+    return n;
+  }
+
+  get watching() {
+    if (this.state !== 'battle') return 0;
+    let n = 0;
+    for (const g of this.members.values()) if (!g.fate && g.place === 'rest') n++;
     return n;
   }
 
@@ -642,10 +650,11 @@ export class Game {
   // --- бой ---
 
   _startBattle() {
-    const ready = Array.from(this.members.values());
+    // кто сидит на скамье в зоне отдыха, в бой не идёт — смотрит со стороны
+    const ready = Array.from(this.members.values()).filter((g) => g.place !== 'rest');
     if (ready.length < MIN_FIGHTERS) {
       this.timer = this.settings.ludus;
-      this.notice = 'Нужно хотя бы ' + MIN_FIGHTERS + ' гладиатора — бой откладывается';
+      this.notice = 'Нужно хотя бы ' + MIN_FIGHTERS + ' гладиатора не на отдыхе — бой откладывается';
       this._line(this.notice, 'warn');
       return false;
     }
