@@ -1,6 +1,6 @@
 import { maxHp } from './balance.js';
 import { ARENA, BAYS, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, bayX } from './places.js';
-import { P, drawDummyArt, gladiatorSprite, lookOf, lyingSprite, paintLudusArt, swordSprite } from './art.js';
+import { P, SPRITE, drawDummyArt, gladiatorSprite, lookOf, lyingSprite, paintLudusArt, swordSprite } from './art.js';
 
 const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
 const SKIN = ['#f0c79e', '#e2b48a', '#c98f62', '#a86e46', '#7d4f32'];
@@ -272,19 +272,19 @@ export function drawGladiator(ctx, g, t, scene) {
   }
   if (lying) {
     if (g.face < 0 && pose !== 'lie') ctx.scale(-1, 1);
-    ctx.drawImage(lyingSprite(look, pose === 'lie', fate === 'dead'), -12, pose === 'lie' ? -9 : -10);
+    ctx.drawImage(lyingSprite(look, pose === 'lie', fate === 'dead'), -12, pose === 'lie' ? -8 : -8);
     ctx.restore();
     return;
   }
   ctx.scale(g.face < 0 ? -1 : 1, 1);
   const bob = g.walking ? (frame === 'walk1' ? 1 : 0) : 0;
-  ctx.drawImage(sprite, -12, -33 - bob + (frame === 'sit' ? 5 : 0));
+  ctx.drawImage(sprite, -SPRITE.x, -SPRITE.foot - bob);
   // меч в дальней руке: в бою и на тренировке им машут
   if (frame === 'stand' || frame === 'walk1' || frame === 'walk2') {
     const swing = g.swing > 0 ? Math.sin((1 - g.swing / 0.3) * Math.PI) : 0;
-    ctx.translate(6, -17 - bob);
-    ctx.rotate(-0.5 + swing * 2.2);
-    ctx.drawImage(swordSprite(g.weapon || 0), -2, -14);
+    ctx.translate(SPRITE.hand[0] - SPRITE.x, SPRITE.hand[1] - SPRITE.foot - bob);
+    ctx.rotate(0.5 + swing * 2);
+    ctx.drawImage(swordSprite(g.weapon || 0), -1, -11);
   }
   ctx.restore();
 }
@@ -295,7 +295,7 @@ export function drawLabel(ctx, g, scene, highlight) {
   const lying = fate === 'down' || fate === 'dead' || pose === 'lie';
   // на скамьях и койках соседи рядом — подписи через одну выше, чтобы не налезали
   const stagger = pose && g.seat !== null && g.seat !== undefined && g.seat % 2 ? 15 : 0;
-  const top = g.y - (lying ? 30 : pose === 'sit' ? 60 : 70) - stagger;
+  const top = g.y - (lying ? 26 : pose === 'sit' ? 64 : 86) - stagger;
   // на скамьях и койках имя не пишем — только полоску здоровья; имя видно у тех, кто ходит и тренируется
   if (pose && !highlight) {
     const part = Math.max(0, Math.min(1, g.hp / maxHp(g)));

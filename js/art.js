@@ -468,150 +468,162 @@ export function drawDummyArt(ctx, kind, x, y, hit, t) {
   ctx.restore();
 }
 
-// --- гладиаторы ---
+// --- гладиаторы: высокие стройные фигуры в профиль, как в Domina — без обводки, только тени ---
 
-const SKINS = ['#f0c79e', '#e2b48a', '#c98f62', '#a86e46', '#7d4f32'];
-const HAIR = ['#2b1d14', '#4a2f1c', '#7a4a22', '#c9a24a', '#1c1410'];
-const METALS = ['#8a6a4a', '#a8743c', '#c58a3e', '#a9b0b6', '#cfd6dc', '#c9cfd6', '#f2c94c'];
-const BLADES = ['#a0743f', '#c98a45', '#9ba4ac', '#dfe6ec', '#bfe3ff', '#b7ffd8', '#ffd34d'];
+const SKINS = ['#e6cdad', '#d7b391', '#bf9472', '#9c7052', '#76523b'];
+const HAIR = ['#2b1d14', '#4a2f1c', '#6e4424', '#a8823e', '#1c1410'];
+const METALS = ['#4b4540', '#5c4d3f', '#7a6243', '#6c7176', '#868c92', '#a2a7ac', '#b8954a'];
+const BLADES = ['#8a6a44', '#b08250', '#9aa1a8', '#d6dde3', '#bcd8ec', '#c4ecd6', '#e8c35a'];
+const CLOTH = '#e9e0cf';
+const CLOTH_D = '#bdb09a';
+const BELT = '#4a3426';
+const GUARD = '#3f3833';
 export const HELMETS = ['murmillo', 'thraex', 'secutor', 'hoplo', 'bare'];
+export const SPRITE = { w: 24, h: 40, x: 12, foot: 39, hand: [6, 19] };
+
+// цвет игрока приглушаем, чтобы щит и гребень не кричали на фоне мягкого лудуса
+function muted(color) {
+  const [r, g, b] = rgb(color), l = (r + g + b) / 3;
+  return hex([r * 0.72 + l * 0.18, g * 0.72 + l * 0.18, b * 0.72 + l * 0.18]);
+}
 
 export function lookOf(g, seed) {
   const helmet = HELMETS[seed % HELMETS.length];
   return {
-    color: g.color, armor: Math.min(6, g.armor || 0), helmet,
+    color: muted(g.color), armor: Math.min(6, g.armor || 0), helmet,
     skin: SKINS[(seed >>> 3) % SKINS.length], hair: HAIR[(seed >>> 6) % HAIR.length],
     shield: helmet === 'murmillo' || helmet === 'secutor' ? 'scutum' : helmet === 'bare' ? 'none' : 'parma',
   };
 }
 
-function shaded(p, x, y, w, h, c) {
-  for (let j = 0; j < h; j++) {
-    for (let i = 0; i < w; i++) p.px(x + i, y + j, i === 0 ? darker(c, 1.18) : i === w - 1 ? darker(c, 0.72) : c);
-  }
-}
-
-// поза: stand, walk1, walk2, sit, kneel. Спрайт 26×34, ступни на y = 33, центр x = 12, смотрит вправо
+// поза: stand, walk1, walk2, sit, kneel. Ступни на y = 39, центр x = 12, смотрит вправо
 function gladiatorArt(look, pose, dead) {
-  const p = new Pix(26, 34);
-  const skin = look.skin, skinD = darker(skin, 0.78), metal = METALS[look.armor], metalD = darker(metal, 0.7);
-  const color = look.color, colorD = darker(color, 0.7);
-  const drop = pose === 'sit' ? 3 : pose === 'kneel' ? 5 : 0;
-  // плащ у богатых доспехов
-  if (look.armor >= 5) p.rect(7, 12 + drop, 3, 14, '#9e2a2a');
-  // ноги
-  const leg = (hx, fx, fy, front) => {
-    p.line(hx, 22 + drop, fx, fy - 2, front ? skin : skinD, 2);
-    p.rect(fx - 1, fy - 1, 3, 1, '#5a3a22');
-    p.px(fx + 1, fy - 2, '#5a3a22');
-    if (look.armor >= 2 && front) p.rect(fx - 1, fy - 6, 2, 4, metal);
+  const p = new Pix(SPRITE.w, SPRITE.h);
+  const skin = look.skin, skinD = darker(skin, 0.8), skinL = darker(skin, 1.07);
+  const metal = METALS[look.armor], metalD = darker(metal, 0.68), metalL = darker(metal, 1.3);
+  const color = look.color, colorD = darker(color, 0.68), colorL = darker(color, 1.15);
+  const dy = pose === 'sit' ? 11 : pose === 'kneel' ? 7 : 0;
+  const foot = (x, y) => {
+    p.rect(x - 1, y, 4, 1, BELT);
+    p.px(x - 1, y - 1, BELT);
   };
+  // ноги: дальняя — темнее, на ближней поножи
   if (pose === 'sit') {
-    p.rect(10, 22 + drop, 7, 2, skinD);
-    p.rect(11, 24 + drop, 7, 2, skin);
-    p.rect(16, 26, 2, 6, skin);
-    p.rect(15, 32, 4, 1, '#5a3a22');
-    p.rect(13, 27, 2, 5, skinD);
-    p.rect(12, 32, 4, 1, '#5a3a22');
+    p.rect(11, 34, 7, 2, skin);
+    p.rect(11, 36, 7, 1, skinD);
+    p.rect(16, 36, 2, 3, skin);
+    foot(17, 39);
+    p.rect(13, 36, 2, 3, skinD);
+    foot(14, 39);
+    if (look.armor >= 1) p.rect(16, 36, 2, 2, metal);
   } else if (pose === 'kneel') {
-    p.line(10, 27, 8, 33, skinD, 2);
-    p.rect(7, 32, 4, 1, '#5a3a22');
-    p.line(13, 27, 17, 29, skin, 2);
-    p.line(17, 29, 17, 33, skin, 2);
-    p.rect(16, 32, 4, 1, '#5a3a22');
+    p.line(11, 31, 8, 38, skinD, 3);
+    foot(8, 39);
+    p.line(14, 31, 18, 33, skin, 3);
+    p.line(18, 33, 18, 38, skin, 3);
+    foot(19, 39);
   } else {
-    const feet = pose === 'walk1' ? [[8, 33], [16, 33]] : pose === 'walk2' ? [[13, 33], [11, 33]] : [[10, 33], [14, 33]];
-    leg(10, feet[0][0], feet[0][1], false);
-    leg(13, feet[1][0], feet[1][1], true);
+    const back = pose === 'walk1' ? 6 : pose === 'walk2' ? 10 : 7;
+    const front = pose === 'walk1' ? 18 : pose === 'walk2' ? 14 : 17;
+    p.line(11, 24, back, 38, skinD, 3);
+    foot(back, 39);
+    const knee = [Math.round((14 + front) / 2) + 1, 31];
+    p.line(14, 24, knee[0], knee[1], skin, 3);
+    p.line(knee[0], knee[1], front, 38, skin, 3);
+    foot(front + 1, 39);
+    for (const y of [26, 28]) p.rect(13 + (knee[0] - 14) * (y - 24) / 7, y, 3, 1, '#d6cab5');
+    if (look.armor >= 1) {
+      p.rect(front - 1, 32, 3, 6, metal);
+      p.rect(front - 1, 32, 1, 6, metalL);
+      p.rect(front + 1, 32, 1, 6, metalD);
+    }
+  }
+  // дальняя рука с наручем отведена назад — в ней меч
+  if (pose === 'kneel') {
+    p.line(14, 13 + dy, 18, 5 + dy, skin, 2);
+    p.rect(17, 0 + dy, 5, 4, '#f2eee4');
+  } else {
+    p.line(11, 13 + dy, 7, 19 + dy, GUARD, 2);
+    p.line(11, 13 + dy, 9, 16 + dy, darker(GUARD, 1.3));
+    p.rect(5, 18 + dy, 2, 2, skinD);
   }
   // набедренная повязка и пояс
-  const y0 = drop;
-  for (let x = 8; x < 17; x++) for (let y = 20; y < 24; y++) {
-    if (y === 23 && (x === 8 || x === 16)) continue;
-    p.px(x, y + y0, (x + y) % 4 === 0 ? '#cfc2a8' : '#ebe0c8');
+  for (let y = 21; y < 25; y++) for (let x = 10; x < 16; x++) {
+    if (y === 24 && (x === 10 || x === 15)) continue;
+    p.px(x, y + dy, x === 10 || (x * 2 + y) % 5 === 0 ? CLOTH_D : CLOTH);
   }
-  p.rect(8, 19 + y0, 9, 2, look.armor >= 4 ? '#c9a24a' : '#5a3a22');
-  p.rect(14, 20 + y0, 2, 4, color);
-  // торс
-  for (let y = 11; y < 19; y++) for (let x = 9; x < 16; x++) {
-    p.px(x, y + y0, x === 9 ? skinD : x === 15 ? darker(skin, 1.1) : skin);
+  p.rect(10, 20 + dy, 6, 1, look.armor >= 4 ? '#b8954a' : BELT);
+  p.rect(14, 21 + dy, 1, 3, color);
+  // торс, чуть подан вперёд
+  for (let y = 11; y < 20; y++) {
+    const lean = y < 14 ? 1 : 0;
+    for (let x = 10 + lean; x < 16 + lean; x++) {
+      p.px(x, y + dy, x === 10 + lean ? skinD : x === 15 + lean ? skinL : skin);
+    }
   }
-  p.px(12, 13 + y0, skinD);
-  p.px(13, 13 + y0, skinD);
-  p.px(12, 16 + y0, skinD);
-  p.px(13, 17 + y0, skinD);
-  if (look.armor >= 1) p.line(9, 11 + y0, 15, 18 + y0, '#6b4329');
+  p.rect(13, 14 + dy, 2, 1, skinD);
+  p.px(13, 17 + dy, skinD);
+  if (look.armor >= 2) p.line(11, 11 + dy, 15, 19 + dy, '#6b4a33');
   if (look.armor >= 3) {
-    shaded(p, 9, 11 + y0, 7, 7, metal);
-    p.rect(10, 13 + y0, 5, 1, metalD);
+    p.rect(11, 11 + dy, 5, 6, metal);
+    p.rect(11, 11 + dy, 1, 6, metalD);
+    p.rect(13, 12 + dy, 2, 1, metalL);
   }
-  // рука с оружием (дальняя) — меч рисуется отдельно
-  if (pose === 'kneel') {
-    p.line(14, 12 + y0, 17, 4 + y0, skin, 2);
-    p.rect(16, 0 + y0, 5, 4, '#f5f2ea');
+  if (look.armor >= 5) p.rect(8, 11 + dy, 2, 11, '#8e2c28');
+  // шлем с гребнем, отброшенным назад
+  const H = 4 + dy;
+  p.rect(12, 10 + dy, 3, 1, skinD);
+  if (look.helmet === 'bare') {
+    p.rect(11, H + 1, 5, 5, skin);
+    p.rect(11, H + 1, 1, 5, skinD);
+    p.rect(11, H, 5, 2, look.hair);
+    p.rect(11, H + 2, 2, 3, look.hair);
+    p.px(15, H + 3, '#3a2a20');
+    p.rect(11, H + 2, 5, 1, color);
+    p.px(10, H + 3, color);
   } else {
-    p.line(14, 12 + y0, 18, 16 + y0, skinD, 2);
-    if (look.armor >= 1) p.rect(15, 13 + y0, 2, 2, metal);
-  }
-  // голова
-  p.ellipse(12.5, 7 + y0, 3.4, 3.8, skin, skinD, darker(skin, 1.12));
-  p.px(15, 7 + y0, '#2a1a10');
-  const helm = (x, y, w, h) => {
-    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-      p.px(x + i, y + j + y0, i === 0 || j === h - 1 ? metalD : i === 1 && j < 2 ? darker(metal, 1.25) : metal);
+    for (let y = 0; y < 6; y++) for (let x = 11; x < 16; x++) {
+      if (y === 0 && (x === 11 || x === 15)) continue;
+      p.px(x, H + y, x === 11 ? metalD : y === 0 || (x === 12 && y < 3) ? metalL : metal);
     }
-  };
-  if (look.helmet === 'murmillo') {
-    helm(9, 3, 8, 6);
-    p.rect(7, 8 + y0, 12, 1, metalD);
-    for (let j = 4; j < 8; j++) for (let i = 14; i < 17; i++) if ((i + j) % 2) p.px(i, j + y0, '#2a1a10');
-    for (let i = 0; i < 9; i++) p.px(8 + i, 2 + y0 - Math.round(Math.sin(i / 8 * Math.PI) * 3), color);
-    for (let i = 1; i < 8; i++) p.px(8 + i, 2 + y0 - Math.round(Math.sin(i / 8 * Math.PI) * 3) + 1, colorD);
-  } else if (look.helmet === 'thraex') {
-    helm(9, 3, 8, 7);
-    p.rect(14, 5 + y0, 3, 1, '#2a1a10');
-    p.line(10, 2 + y0, 16, 0 + y0, metal);
-    p.px(17, 1 + y0, metal);
-    p.px(17, 2 + y0, metalD);
-    p.rect(7, 2 + y0, 3, 3, color);
-    p.px(6, 3 + y0, colorD);
-  } else if (look.helmet === 'secutor') {
-    p.ellipse(12.5, 6.5 + y0, 4.2, 4.6, metal, metalD, darker(metal, 1.25));
-    p.px(15, 6 + y0, '#2a1a10');
-    p.px(13, 6 + y0, '#2a1a10');
-    p.rect(11, 1 + y0, 4, 1, color);
-  } else if (look.helmet === 'hoplo') {
-    helm(9, 3, 8, 6);
-    p.rect(8, 8 + y0, 10, 1, metalD);
-    p.rect(14, 5 + y0, 3, 2, '#2a1a10');
-    p.line(9, 3 + y0, 7, -1 + y0, color);
-    p.line(16, 3 + y0, 18, -1 + y0, color);
-    p.rect(11, 1 + y0, 4, 2, colorD);
-  } else {
-    p.rect(9, 3 + y0, 7, 3, look.hair);
-    p.rect(9, 6 + y0, 2, 3, look.hair);
-    p.rect(9, 5 + y0, 7, 1, color);
-    p.rect(14, 9 + y0, 2, 2, look.hair);
-  }
-  // щит на ближней руке; сидя и на коленях щит отложен
-  if (pose === 'sit' || pose === 'kneel') {
-    // без щита
-  } else if (look.shield === 'scutum') {
-    for (let j = 0; j < 14; j++) for (let i = 0; i < 7; i++) {
-      const rim = i === 0 || i === 6 || j === 0 || j === 13;
-      p.px(14 + i, 12 + j + y0, rim ? metalD : i === 1 ? darker(color, 1.15) : i === 5 ? colorD : color);
+    if (look.helmet === 'secutor') {
+      p.px(15, H + 2, '#1e1915');
+      p.rect(12, H - 1, 3, 1, metal);
+      p.px(13, H - 2, color);
+    } else {
+      p.rect(14, H + 2, 2, 2, '#1e1915');
+      p.px(15, H + 2, darker(metal, 0.5));
+      p.rect(10, H + 5, 7, 1, metalD);
     }
-    p.rect(17, 14 + y0, 1, 10, darker(color, 1.3));
-    p.ellipse(17.5, 19 + y0, 1.6, 1.6, metal);
-  } else if (look.shield === 'parma') {
-    p.ellipse(17, 17 + y0, 4.6, 4.6, metalD);
-    p.ellipse(17, 17 + y0, 3.6, 3.6, color, colorD, darker(color, 1.2));
-    p.ellipse(17, 17 + y0, 1.2, 1.2, metal);
-  } else {
-    p.rect(9, 10 + y0, 4, 3, metal);
-    p.rect(9, 10 + y0, 1, 3, metalD);
+    if (look.helmet === 'murmillo' || look.helmet === 'thraex') {
+      const tall = look.helmet === 'murmillo' ? 3 : 2;
+      for (let i = 0; i < 6; i++) p.rect(14 - i, H - tall + Math.floor(i / 2), 1, tall, i < 2 ? colorL : i < 4 ? color : colorD);
+      p.px(8, H + 1, colorD);
+      if (look.helmet === 'thraex') p.line(14, H - 1, 16, H - 2, metal);
+    } else if (look.helmet === 'hoplo') {
+      p.line(12, H, 10, H - 4, color);
+      p.line(14, H, 15, H - 4, colorL);
+    }
   }
-  p.outline();
+  // щит на ближней руке, на уровне груди
+  if (pose !== 'sit' && pose !== 'kneel') {
+    if (look.shield === 'parma') {
+      p.ellipse(18, 17 + dy, 4.2, 5.6, colorD);
+      p.ellipse(18.3, 17 + dy, 3.3, 4.7, color, colorD, colorL);
+      p.rect(18, 16 + dy, 2, 2, metal);
+      p.px(18, 16 + dy, metalL);
+    } else if (look.shield === 'scutum') {
+      for (let y = 11; y < 27; y++) for (let x = 16; x < 21; x++) {
+        const rim = y === 11 || y === 26 || x === 20;
+        p.px(x, y + dy, rim ? colorD : x === 16 ? colorL : color);
+      }
+      p.rect(18, 13 + dy, 1, 12, colorL);
+      p.rect(17, 18 + dy, 3, 2, metal);
+    } else {
+      p.rect(11, 10 + dy, 4, 2, metal);
+      p.rect(11, 10 + dy, 4, 1, metalL);
+    }
+  }
   if (!dead) return p.canvas();
   return p.canvas((c) => {
     const [r, g, b] = rgb(c), l = (r + g + b) / 3;
@@ -621,31 +633,29 @@ function gladiatorArt(look, pose, dead) {
 
 // лежит на спине, голова слева: в лазарете под одеялом, на арене — без
 function lyingArt(look, blanket, dead) {
-  const p = new Pix(25, 11);
-  const skin = look.skin, skinD = darker(skin, 0.78), metal = METALS[look.armor], metalD = darker(metal, 0.7);
-  p.rect(15, 6, 7, 2, skin);
-  p.rect(15, 8, 7, 1, skinD);
-  p.rect(22, 5, 2, 4, '#5a3a22');
-  p.rect(12, 5, 4, 4, '#ebe0c8');
-  p.rect(12, 5, 1, 4, look.armor >= 4 ? '#c9a24a' : '#5a3a22');
-  for (let x = 6; x < 12; x++) for (let y = 4; y < 9; y++) p.px(x, y, y === 4 ? darker(skin, 1.1) : y === 8 ? skinD : skin);
-  if (look.armor >= 3) p.rect(6, 4, 6, 4, metal);
-  p.ellipse(3.5, 6, 3.2, 3.2, skin, skinD, darker(skin, 1.1));
+  const p = new Pix(25, 9);
+  const skin = look.skin, skinD = darker(skin, 0.8), metal = METALS[look.armor], metalD = darker(metal, 0.7);
+  p.rect(14, 5, 8, 2, skin);
+  p.rect(14, 7, 8, 1, skinD);
+  p.rect(22, 4, 2, 3, BELT);
+  p.rect(11, 4, 3, 4, CLOTH);
+  p.rect(11, 4, 1, 4, BELT);
+  for (let x = 5; x < 11; x++) for (let y = 4; y < 8; y++) p.px(x, y, y === 7 ? skinD : skin);
+  if (look.armor >= 3) p.rect(5, 4, 5, 3, metal);
+  p.rect(6, 7, 7, 1, GUARD);
   if (look.helmet === 'bare') {
-    p.rect(0, 3, 3, 6, look.hair);
-    p.rect(2, 3, 1, 6, look.color);
+    p.rect(1, 3, 4, 4, skin);
+    p.rect(0, 3, 2, 4, look.hair);
   } else {
-    p.rect(0, 3, 3, 6, metal);
-    p.rect(0, 3, 1, 6, metalD);
-    p.rect(0, 5, 1, 2, look.color);
+    p.rect(0, 3, 5, 5, metal);
+    p.rect(0, 3, 5, 1, metalD);
+    p.rect(0, 4, 1, 2, look.color);
   }
   if (blanket) {
-    for (let x = 8; x < 24; x++) for (let y = 3; y < 9; y++) {
-      p.px(x, y, y === 3 ? '#fbf6ea' : (x + y) % 5 === 0 ? '#d2c3a8' : '#e9dfcc');
+    for (let x = 8; x < 24; x++) for (let y = 3; y < 8; y++) {
+      p.px(x, y, y === 3 ? '#f7f1e4' : (x + y) % 5 === 0 ? '#d2c6b0' : '#e7ddca');
     }
-    p.rect(8, 3, 1, 6, '#d2c3a8');
   }
-  p.outline();
   if (!dead) return p.canvas();
   return p.canvas((c) => {
     const [r, g, b] = rgb(c), l = (r + g + b) / 3;
@@ -654,19 +664,19 @@ function lyingArt(look, blanket, dead) {
 }
 
 export function lyingSprite(look, blanket, dead) {
-  return remember(['lie', look.color, look.armor, look.helmet, look.skin, look.hair, blanket, dead].join(':'),
+  return remember(['lie2', look.color, look.armor, look.helmet, look.skin, look.hair, blanket, dead].join(':'),
     () => lyingArt(look, blanket, dead));
 }
 
+// гладиус: рукоять внизу, в точке (1, 11)
 function swordArt(tier) {
-  const p = new Pix(5, 16), blade = BLADES[Math.min(BLADES.length - 1, tier)];
-  p.rect(2, 0, 1, 11, blade);
-  p.rect(1, 1, 1, 10, darker(blade, 0.75));
-  p.rect(3, 1, 1, 10, darker(blade, 1.2));
-  p.rect(0, 11, 5, 1, '#8a6a3a');
-  p.rect(2, 12, 1, 3, '#5a3a22');
-  p.px(2, 15, '#c9a24a');
-  return p.outline().canvas();
+  const p = new Pix(3, 13), blade = BLADES[Math.min(BLADES.length - 1, tier)];
+  p.rect(1, 0, 1, 8, blade);
+  p.rect(2, 1, 1, 7, darker(blade, 0.72));
+  p.rect(0, 8, 3, 1, '#6b5236');
+  p.rect(1, 9, 1, 3, '#4a3426');
+  p.px(1, 12, '#8a7044');
+  return p.canvas();
 }
 
 function silhouette(canvas) {
@@ -682,7 +692,7 @@ function silhouette(canvas) {
 }
 
 export function gladiatorSprite(look, pose, dead = false, flash = false) {
-  const key = ['g', look.color, look.armor, look.helmet, look.skin, look.hair, pose, dead, flash].join(':');
+  const key = ['g3', look.color, look.armor, look.helmet, look.skin, look.hair, pose, dead, flash].join(':');
   return remember(key, () => {
     const art = remember(key.replace(/:(true|false)$/, ':false'), () => gladiatorArt(look, pose, dead));
     return flash ? silhouette(art) : art;
