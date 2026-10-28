@@ -1,4 +1,4 @@
-// гача в храме Фортуны: шансы редкостей как в Чатобороне, монет не выпадает; щит и сеть — без редкости
+// гача в храме Фортуны: редкости в тех же пропорциях, что в Чатобороне; монет и пустоты нет; щит и сеть — без редкости
 import { ARMOR_SLOTS, SLOT_IDS, WEAPON_TYPES, offhandFree } from './balance.js';
 export const PRICE = 30;
 export const SPIN_TIME = 2.2;
@@ -8,7 +8,6 @@ export const QUEUE_CAP = 10;
 export const SPREAD = 0.15;
 
 export const OUTCOMES = [
-  { id: 'void', name: 'Пустота', color: '#8b8f98', chance: 0.132 },
   { id: 'shield', name: 'Щит', color: '#d9a441', chance: 0.04 },
   { id: 'net', name: 'Сеть', color: '#a8c4b0', chance: 0.05 },
 ];

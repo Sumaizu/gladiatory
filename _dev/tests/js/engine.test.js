@@ -489,16 +489,16 @@ test('гача: остановка игры возвращает монеты з
   eq(new Roster(memory, 'k').get('a').coins, PRICE * 4);
 });
 
-test('гача: шансы редкостей как в Чатобороне, монет нет', () => {
+test('гача: редкости в пропорциях Чатобороны, монет и пустоты нет', () => {
   const random = rng(42), counts = {};
   const n = 40000;
   for (let i = 0; i < n; i++) {
     const r = spin(random), key = r.item ? r.item.rarity : r.kind;
     counts[key] = (counts[key] || 0) + 1;
   }
-  const total = 0.132 + 0.04 + 0.05 + RARITIES.reduce((sum, x) => sum + x.chance, 0);
-  for (const id of ['handful', 'bag', 'chest']) eq(counts[id], undefined, 'монет из гачи нет');
-  for (const [id, chance] of [['void', 0.132], ['common', 0.27], ['legendary', 0.06]]) {
+  const total = 0.04 + 0.05 + RARITIES.reduce((sum, x) => sum + x.chance, 0);
+  for (const id of ['handful', 'bag', 'chest', 'void']) eq(counts[id], undefined, 'монет и пустоты из гачи нет');
+  for (const [id, chance] of [['shield', 0.04], ['common', 0.27], ['legendary', 0.06]]) {
     const share = counts[id] / n, want = chance / total;
     ok(Math.abs(share - want) < want * 0.12, id + ': ' + share.toFixed(3) + ' против ' + want.toFixed(3));
   }
