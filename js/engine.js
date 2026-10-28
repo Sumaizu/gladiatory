@@ -2,7 +2,7 @@ import { AFK_ROUNDS, TEAMS, BLEED, HIT_REWARD, YIELD_CUT, PARAGON, pitStrength, 
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
-import { PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemText, spin } from './gacha.js';
+import { DIVINE, PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemText, spin } from './gacha.js';
 
 export const COMMANDS = new Map([
   ['!гладиаторы-пауза', 'pause'],
@@ -53,10 +53,11 @@ export { AFK_ROUNDS };
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const INVISIBLE = /[​‌‍⁠﻿­͏⠀\u{E0000}]/gu;
 const IGNORED = new Set(BOTS);
-const SAVED = ['name', 'color', 'level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'gear', 'shield', 'nets', 'amulet', 'hp',
+const SAVED = ['name', 'color', 'level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'weaponRounds', 'gear', 'shield',
+  'nets', 'amulet', 'hp',
   'fights', 'wins', 'kos', 'kills', 'paragon', 'born'];
 const COUNTS = ['level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'nets', 'fights', 'wins', 'kos',
-  'kills', 'paragon'];
+  'kills', 'paragon', 'weaponRounds'];
 
 const PLACE_BY_WORD = new Map();
 for (const [id, place] of Object.entries(PLACES)) for (const word of place.words) PLACE_BY_WORD.set(word, id);
@@ -218,6 +219,8 @@ export class Game {
   open() {
     if (this.state === 'stopped') this.roundStarts = [];
     this.roundStarts.push(this.clock);
+    // ещё раунд с той же легендаркой — копится к божественному
+    for (const g of this.members.values()) if (g.weapon && g.weapon.rarity === 'legendary') g.weaponRounds = (g.weaponRounds || 0) + 1;
     if (this.roundStarts.length > AFK_ROUNDS) this.roundStarts.shift();
     this.state = 'ludus';
     this.paused = false;
@@ -512,9 +515,15 @@ export class Game {
       const item = result.item;
       if (item.kind === 'armor' && !g.gear) g.gear = emptyGear();
       const current = item.kind === 'armor' ? g.gear[item.slot] : g.weapon;
-      if (!current || item.power > current.power) {
+      if (item.kind === 'weapon' && current && current.rarity === DIVINE.id) {
+        result.locked = true;
+        this._line(g.name + ': божественное оружие гача не меняет — «' + itemText(item) + '» выброшено', 'info');
+      } else if (!current || item.power > current.power) {
         if (item.kind === 'armor') g.gear[item.slot] = item;
-        else g.weapon = item;
+        else {
+          g.weapon = item;
+          g.weaponRounds = 0;
+        }
         result.equipped = true;
         this._line(g.name + ' надевает «' + itemText(item) + '»', 'level');
       } else {
@@ -1305,6 +1314,12 @@ export class Game {
     d.hp = dead ? 0 : Math.max(1, Math.round(hpMax * BEATEN_HP));
     a.kosNow++;
     if (dead) a.killsNow++;
+    // убил насмерть гладиатора легендаркой, с которой провёл DIVINE.rounds раундов подряд, — она становится божественной
+    if (dead && !d.lion && !a.lion && a.weapon && a.weapon.rarity === 'legendary' && (a.weaponRounds || 0) >= DIVINE.rounds) {
+      a.weapon = Object.assign({}, a.weapon, { rarity: DIVINE.id, power: Math.round(a.weapon.power * DIVINE.mult) });
+      this._line('Оружие ' + a.name + ' напилось крови и становится божественным: «' + itemText(a.weapon) + '»', 'champion');
+      this._emit('divine', { login: a.login, x: a.x, y: a.y });
+    }
     a.target = null;
     if (d.lion) this._line(a.name + ' сражает льва!', 'champion');
     else if (a.lion) this._line(dead ? 'Лев растерзал ' + d.name : 'Лев повалил ' + d.name + ' — тот жив', dead ? 'death' : 'down');

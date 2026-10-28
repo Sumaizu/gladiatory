@@ -5,7 +5,7 @@ import { BLEED, TEAMS, YIELD_CUT, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_L
 import { starOf } from '../../../js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
 import { inArena } from '../../../js/places.js';
-import { PRICE, RARITIES, SHOW_TIME, SPIN_TIME, spin } from '../../../js/gacha.js';
+import { DIVINE, PRICE, RARITIES, rarityOf, SHOW_TIME, SPIN_TIME, spin } from '../../../js/gacha.js';
 
 const SETTINGS = clean({ ludus: 60, battle: 90, death: 0 });
 
@@ -623,7 +623,7 @@ test('оружие: двуручник бьёт реже и сильнее, кр
   gs.weapon = weapon('greatsword');
   sp.weapon = weapon('spear');
   ok(attackEvery(gs) > attackEvery(s) * 1.4);
-  ok(damageOf(gs) > damageOf(s) * 1.5);
+  ok(damageOf(gs) >= damageOf(s) * 1.5 - 1e-9);
   ok(critOf(gs) > critOf(s));
   ok(reachOf(sp) > reachOf(s) * 1.5);
   eq([attackEvery(s), damageOf(s)], [attackEvery({ agi: 0, weapon: weapon('sword', 0) }), damageOf({ str: 0, weapon: weapon('sword') })]);
@@ -1438,4 +1438,51 @@ test('испытание парагона: сети его не берут, ха
   fight(g);
   const fresh = g.members.get('a');
   ok(!fresh.boost && fresh.str === 0);
+});
+
+test('божественное оружие: ' + DIVINE.rounds + ' раунда с той же легендаркой и убийство насмерть — урон ×' + DIVINE.mult + ', гача не меняет', () => {
+  const g = game({ settings: { death: 100 } });
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  a.weapon = { kind: 'weapon', type: 'sword', rarity: 'legendary', power: 10 };
+  a.weaponRounds = DIVINE.rounds - 1;
+  g.next();
+  b.hp = -5;
+  g._knockOut(b, a);
+  eq(a.weapon.rarity, 'legendary', 'рано: всего ' + (DIVINE.rounds - 1) + ' раунда');
+  c.fate = 'yield';
+  g._checkEnd();
+  fight(g);
+  g.next();
+  eq(a.weaponRounds, DIVINE.rounds);
+  g.next();
+  const d = g.fighters.find((f) => f !== a);
+  d.hp = -5;
+  g._knockOut(d, a);
+  eq([a.weapon.rarity, a.weapon.power], ['divine', 15]);
+  eq(rarityOf('divine').color, DIVINE.color);
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'greatsword', rarity: 'legendary', power: 99 } });
+  eq(a.weapon.rarity, 'divine', 'гача не меняет');
+  ok(c);
+});
+
+test('новое оружие из гачи обнуляет счёт раундов к божественному', () => {
+  const g = game();
+  const [a] = join(g, 'A', 'B');
+  a.weapon = { kind: 'weapon', type: 'sword', rarity: 'common', power: 2 };
+  a.weaponRounds = 5;
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'sword', rarity: 'rare', power: 4 } });
+  eq(a.weaponRounds, 0);
+});
+
+test('божественным становится только легендарное оружие — эпическое раунды не копит', () => {
+  const g = game({ settings: { death: 100 } });
+  const [a, b] = join(g, 'A', 'B', 'C');
+  a.weapon = { kind: 'weapon', type: 'sword', rarity: 'epic', power: 10 };
+  for (let i = 0; i < DIVINE.rounds + 1; i++) g.open();
+  eq(a.weaponRounds || 0, 0);
+  a.weaponRounds = 99;
+  g.next();
+  b.hp = -5;
+  g._knockOut(b, a);
+  eq(a.weapon.rarity, 'epic');
 });

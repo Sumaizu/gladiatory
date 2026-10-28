@@ -28,6 +28,11 @@ export const RARITIES = [
     chance: 0.06, weapon: 16, armor: 26 },
 ];
 
+// божественное оружие в гаче не выпадает: им становится легендарное, с которым гладиатор провёл rounds раундов подряд
+// (считая с момента, как получил его) и убил кого-то насмерть. Урон оружия ×mult, и гача его больше не меняет — до смерти или парагона
+export const DIVINE = { id: 'divine', name: 'Божественный', n: 'Божественное', f: 'Божественная', p: 'Божественные',
+  color: '#ff3b3b', mult: 1.5, rounds: 3 };
+
 export const KINDS = { weapon: { name: 'меч', stat: 'урона' }, armor: { name: 'доспех', stat: 'брони' } };
 export const TYPES = Object.keys(WEAPON_TYPES).filter((type) => type !== 'fists' && type !== 'claws');
 
@@ -40,8 +45,9 @@ function pick(list, random) {
   return list[list.length - 1];
 }
 
-export const rarityOf = (id) => RARITIES.find((rarity) => rarity.id === id) || null;
-export const rankOf = (item) => (item ? RARITIES.findIndex((rarity) => rarity.id === item.rarity) : -1);
+export const rarityOf = (id) => RARITIES.find((rarity) => rarity.id === id) || (id === DIVINE.id ? DIVINE : null);
+export const rankOf = (item) => (!item ? -1 : item.rarity === DIVINE.id ? RARITIES.length
+  : RARITIES.findIndex((rarity) => rarity.id === item.rarity));
 
 // броня выпадает в случайный слот: шлем, броня, поножи или сапоги
 export function makeItem(random, kind, rarity, type = null) {
@@ -89,8 +95,9 @@ export function slotText(item) {
 export const itemText = (item) => itemName(item) + ' +' + item.power + (item.kind === 'armor' ? '% ' : ' ')
   + KINDS[item.kind].stat;
 
-// для рисунка: 0 — ничего, 1–5 — редкость, легендарное — золото
-export const tierOf = (item) => (item ? rankOf(item) + 1 + (item.rarity === 'legendary' ? 1 : 0) : 0);
+// для рисунка: 0 — ничего, 1–5 — редкость, легендарное — золото, божественное — красное
+export const tierOf = (item) => (item ? rankOf(item) + 1 + (item.rarity === 'legendary' || item.rarity === DIVINE.id ? 1 : 0)
+  : 0);
 
 export const outcomeOf = (id) => OUTCOMES.find((outcome) => outcome.id === id) || null;
 

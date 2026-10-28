@@ -474,8 +474,8 @@ export function drawDummyArt(ctx, kind, x, y, hit, t) {
 
 const SKINS = ['#e6cdad', '#d7b391', '#bf9472', '#9c7052', '#76523b'];
 const HAIR = ['#2b1d14', '#4a2f1c', '#6e4424', '#a8823e', '#1c1410'];
-const METALS = ['#4b4540', '#5c4d3f', '#7a6243', '#6c7176', '#868c92', '#a2a7ac', '#b8954a'];
-const BLADES = ['#8a6a44', '#b08250', '#9aa1a8', '#d6dde3', '#bcd8ec', '#c4ecd6', '#e8c35a'];
+const METALS = ['#4b4540', '#5c4d3f', '#7a6243', '#6c7176', '#868c92', '#a2a7ac', '#b8954a', '#c0282e'];
+const BLADES = ['#8a6a44', '#b08250', '#9aa1a8', '#d6dde3', '#bcd8ec', '#c4ecd6', '#e8c35a', '#ff3b3b'];
 const CLOTH = '#e9e0cf';
 const CLOTH_D = '#bdb09a';
 const BELT = '#4a3426';

@@ -304,6 +304,10 @@ export class View {
       const g = game.fighters.find((f) => f.login === e.login);
       this.floats.push({ x: e.x, y: e.y - 60, text: 'кровотечение', life: 1.6, kind: 'bleed', follow: g });
       this._bleed(e.x, e.y - 22, 10, 1.2);
+    } else if (e.type === 'divine') {
+      const g = game.fighters.find((f) => f.login === e.login);
+      this.floats.push({ x: e.x, y: e.y - 70, text: 'божественное оружие!', life: 3, kind: 'saved', follow: g });
+      sound('jackpot');
     } else if (e.type === 'paragon') {
       sound('champion');
     } else if (e.type === 'level') {
@@ -912,7 +916,8 @@ export class View {
       const r = now.result;
       if (now.done && r.item) {
         prize.style.color = rarityOf(r.item.rarity).color;
-        prize.append(itemText(r.item), el('small', '', r.equipped ? 'надевает' : 'не лучше своего — выброшено'));
+        prize.append(itemText(r.item), el('small', '', r.equipped ? 'надевает' : r.locked ? 'божественное оружие не меняется'
+          : 'не лучше своего — выброшено'));
       } else if (now.done && r.kind === 'amulet') {
         prize.style.color = outcomeOf(r.kind).color;
         prize.append(outcomeOf(r.kind).name, el('small', '', 'один раз спасёт от смерти'));
