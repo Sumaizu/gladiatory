@@ -1,7 +1,7 @@
 import { maxHp } from './balance.js';
 import { ARENA, BAYS, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, bayX } from './places.js';
 import { tierOf } from './gacha.js';
-import { P, SPRITE, drawDummyArt, gladiatorSprite, lookOf, lyingSprite, netSprite, paintLudusArt, weaponSprite } from './art.js';
+import { LION, P, SPRITE, drawDummyArt, lionSprite, gladiatorSprite, lookOf, lyingSprite, netSprite, paintLudusArt, weaponSprite } from './art.js';
 
 const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
 const SKIN = ['#f0c79e', '#e2b48a', '#c98f62', '#a86e46', '#7d4f32'];
@@ -249,7 +249,31 @@ export function drawCrowd(ctx, people, t, roar) {
 
 // --- гладиатор ---
 
+function drawLion(ctx, g, t) {
+  const dead = g.fate !== 'fight';
+  const frame = dead ? 'dead' : g.swing > 0 ? 'pounce' : g.walking ? (Math.sin(t * 9 + g.x) > 0 ? 'walk1' : 'walk2') : 'stand';
+  const x = Math.round(g.x / P) * P, y = Math.round(g.y / P) * P;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(P, P);
+  ctx.fillStyle = 'rgba(30,15,8,.3)';
+  ctx.fillRect(-15, -1, 30, 3);
+  if (dead) {
+    ctx.fillStyle = '#7a1414';
+    ctx.fillRect(-14, 0, 26, 4);
+    ctx.translate(0, -2);
+    ctx.rotate(g.face > 0 ? -0.18 : 0.18);
+  }
+  ctx.scale(g.face < 0 ? -1 : 1, 1);
+  ctx.drawImage(lionSprite(frame), -LION.x, -LION.foot + (dead ? 6 : 0));
+  ctx.restore();
+}
+
 export function drawGladiator(ctx, g, t, scene) {
+  if (g.lion) {
+    drawLion(ctx, g, t);
+    return;
+  }
   const fate = scene === 'arena' ? g.fate : null;
   const pose = scene === 'ludus' && !g.walking ? g.pose : null;
   const lying = fate === 'down' || fate === 'dead' || pose === 'lie';
@@ -349,7 +373,7 @@ export function drawLabel(ctx, g, scene, highlight) {
   const lying = fate === 'down' || fate === 'dead' || pose === 'lie';
   // на скамьях и койках соседи рядом — подписи через одну выше, чтобы не налезали
   const stagger = pose && g.seat !== null && g.seat !== undefined && g.seat % 2 ? 15 : 0;
-  const top = g.y - (lying ? 26 : pose === 'sit' ? 64 : 86) - stagger;
+  const top = g.y - (g.lion ? (fate === 'fight' ? 54 : 30) : lying ? 26 : pose === 'sit' ? 64 : 86) - stagger;
   // на скамьях и койках имя не пишем — только полоску здоровья; имя видно у тех, кто ходит и тренируется
   if (pose && !highlight) {
     const part = Math.max(0, Math.min(1, g.hp / maxHp(g)));

@@ -1,5 +1,5 @@
 import { BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
-  START_POINTS, STATS, TRAIN_XP, SLOT_IDS, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
+  START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
 import { PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemText, spin } from './gacha.js';
@@ -40,6 +40,7 @@ const FLEE = { critChance: 0.75, critTime: [2, 1.5], low: 0.25, lowTime: [3, 2],
   ignored: 220 };
 const RETARGET = [3.5, 3.5];
 const REVENGE = 0.35;
+const GACHA_CLOSE = 5;
 // враг выше уровнем притягивает: за каждый уровень разницы цель «ближе» на per пикселей, не больше cap уровней
 const LEVEL_PULL = { per: 70, cap: 4 };
 const PICK_SOFT = 50;
@@ -206,9 +207,9 @@ export class Game {
   }
 
   stop() {
-    // недокрученные гачи возвращаем монетами
-    for (const s of this.spins.concat(this.spinNow && !this.spinNow.done ? [this.spinNow] : [])) {
-      const g = this.members.get(s.login);
+    // недокрученную гачу возвращаем монетами (в очереди деньги ещё не сняты)
+    if (this.spinNow && !this.spinNow.done) {
+      const g = this.members.get(this.spinNow.login);
       if (g) g.coins += PRICE;
     }
     this._saveAll();
@@ -354,39 +355,52 @@ export class Game {
 
   // --- гача ---
 
+  // монеты снимаются в момент прокрутки; в очередь — не больше, чем хватает денег
   _gacha(g, arg) {
-    if (this.state === 'battle' && g.fate) {
-      this._line(g.name + ': в бою не до гачи — после боя', 'warn');
-      return;
-    }
-    const queued = this.spins.filter((s) => s.login === g.login).length
-      + (this.spinNow && this.spinNow.login === g.login ? 1 : 0);
-    const afford = Math.floor(g.coins / PRICE);
+    const queued = this.spins.filter((s) => s.login === g.login).length;
+    const afford = Math.floor(g.coins / PRICE) - queued;
     const wanted = arg === 'все' || arg === 'всё' ? afford : Math.max(1, Math.trunc(Number(arg)) || 1);
     const n = Math.min(wanted, afford, QUEUE_CAP - queued);
     if (n <= 0) {
-      this._line(afford ? g.name + ': уже крутишь, подожди очереди'
-        : g.name + ': гача стоит ' + PRICE + ' монет, у тебя ' + g.coins, 'warn');
+      this._line(afford > 0 ? g.name + ': очередь полна, подожди'
+        : g.name + ': гача стоит ' + PRICE + ' монет, у тебя ' + g.coins + (queued ? ' (и ' + queued + ' в очереди)' : ''),
+      'warn');
       return;
     }
-    g.coins -= n * PRICE;
     for (let i = 0; i < n; i++) this.spins.push({ login: g.login });
-    this._line(g.name + ' крутит гачу' + (n > 1 ? ' ×' + n : '') + ' (−' + n * PRICE + ' монет)', 'buy');
-    if (g.place !== 'temple' && !g.fate) {
-      g.back = g.place;
-      this._arrive(g, 'temple', true);
-    }
-    this._keep(g);
+    const later = this._gachaOpen(SPIN_TIME) ? '' : ' — закрутится после боя';
+    this._line(g.name + ' встаёт в очередь гачи' + (n > 1 ? ' ×' + n : '') + later, 'buy');
+  }
+
+  // гача крутится в лудусе, пока до боя больше GACHA_CLOSE секунд (и приз успеет выпасть), и на итогах
+  _gachaOpen(spinTime) {
+    if (this.state === 'ludus') return this.timer > GACHA_CLOSE + spinTime;
+    return this.state === 'results';
   }
 
   _stepGacha(dt) {
     if (!this.spinNow) {
-      while (this.spins.length && !this.members.has(this.spins[0].login)) this.spins.shift();
-      if (!this.spins.length) return;
-      const { login } = this.spins.shift(), rush = this.spins.length >= RUSH.queue;
-      this.spinNow = { id: ++this.eventId, login, result: spin(this.random, this.members.get(login)), t: 0, done: false,
-        spin: rush ? RUSH.spin : SPIN_TIME, show: rush ? RUSH.show : SHOW_TIME };
-      this._emit('spin', { login, spinId: this.spinNow.id });
+      const rush = this.spins.length > RUSH.queue, time = rush ? RUSH.spin : SPIN_TIME;
+      if (!this._gachaOpen(time)) return;
+      let next = null, g = null;
+      while (this.spins.length) {
+        next = this.spins.shift();
+        g = this.members.get(next.login);
+        if (!g) continue;
+        if (g.coins >= PRICE) break;
+        this._line(g.name + ': на гачу не хватило монет', 'warn');
+        g = null;
+      }
+      if (!g) return;
+      g.coins -= PRICE;
+      if (g.place !== 'temple' && !g.fate) {
+        g.back = g.place;
+        this._arrive(g, 'temple', true);
+      }
+      this.spinNow = { id: ++this.eventId, login: g.login, result: spin(this.random, g), t: 0, done: false, paid: true,
+        spin: time, show: rush ? RUSH.show : SHOW_TIME };
+      this._emit('spin', { login: g.login, spinId: this.spinNow.id });
+      this._keep(g);
     }
     const s = this.spinNow, g = this.members.get(s.login);
     s.t += dt;
@@ -395,7 +409,18 @@ export class Game {
       if (g) this._prize(g, s.result);
     }
     if (s.t < s.spin + s.show) return;
+    this._closeSpin();
+  }
+
+  _closeSpin() {
+    const s = this.spinNow, g = s && this.members.get(s.login);
     this.spinNow = null;
+    if (!s) return;
+    if (!s.done && g) {
+      // не докрутили — монеты назад, прокрутка снова в начало очереди
+      g.coins += PRICE;
+      this.spins.unshift({ login: s.login });
+    }
     const more = this.spins.some((next) => next.login === s.login);
     if (g && !more && !g.fate && g.place === 'temple') {
       const back = g.back === 'heal' && g.hp >= maxHp(g) ? 'train' : g.back || 'rest';
@@ -595,13 +620,17 @@ export class Game {
       return false;
     }
     this.notice = '';
+    if (this.spinNow) this._closeSpin();
     this.state = 'battle';
     this.timer = this.settings.battle;
     this.endIn = null;
     this.cards = [];
-    this.fighters = ready;
-    const n = ready.length, spots = this._spots(n);
-    ready.forEach((g, i) => {
+    const roll = this.random();
+    this.mode = this.forceMode || (roll < PIT.chance ? 'pit' : 'ffa');
+    const lions = this.mode === 'pit' ? this._lions(Math.ceil(ready.length / PIT.ratio)) : [];
+    this.fighters = ready.concat(lions);
+    const all = this.fighters, n = ready.length, spots = this._spots(all.length);
+    all.forEach((g, i) => {
       while (g.points > 0) {
         g[STATS[Math.floor(this.random() * STATS.length)].id]++;
         g.points--;
@@ -629,8 +658,8 @@ export class Game {
       g.spearOut = null;
       g.by = '';
     });
-    // соседи становятся парами — бой сразу распадается на поединки по всей арене
-    const free = new Set(ready);
+    // соседи становятся парами — бой сразу распадается на поединки по всей арене (в яме цели ищут сами)
+    const free = new Set(this.mode === 'pit' ? [] : ready);
     for (const g of ready) {
       if (!free.has(g)) continue;
       free.delete(g);
@@ -646,8 +675,13 @@ export class Game {
     }
     for (const g of ready) if (g.target) g.face = g.target.x >= g.x ? 1 : -1;
     this.projectiles = [];
-    this._line('Бой начинается! На арене ' + n + ' ' + plural(n, 'гладиатор', 'гладиатора', 'гладиаторов'), 'battle');
-    this._emit('phase', { state: 'battle' });
+    if (this.mode === 'pit') {
+      this._line('Волчья яма! ' + lions.length + ' ' + plural(lions.length, 'лев', 'льва', 'львов') + ' против ' + n + ' '
+        + plural(n, 'гладиатора', 'гладиаторов', 'гладиаторов'), 'battle');
+    } else {
+      this._line('Бой начинается! На арене ' + n + ' ' + plural(n, 'гладиатор', 'гладиатора', 'гладиаторов'), 'battle');
+    }
+    this._emit('phase', { state: 'battle', mode: this.mode });
     return true;
   }
 
@@ -677,6 +711,23 @@ export class Game {
     return this.fighters.filter((g) => g.fate === 'fight');
   }
 
+  // львы для «Волчьей ямы»: не гладиаторы, в лудус и сохранение не попадают
+  _lions(count) {
+    const lions = [];
+    for (let i = 0; i < count; i++) {
+      const lion = Object.assign(newGladiator('lion' + (i + 1), 'Лев', '#c98a3e', 0), PIT.lion, { lion: true,
+        weapon: { kind: 'weapon', type: 'claws', rarity: 'common', power: 0 }, points: 0 });
+      lion.hp = maxHp(lion);
+      lions.push(lion);
+    }
+    return lions;
+  }
+
+  // в обычном бою враги все, в яме — только другая сторона
+  _enemy(a, b) {
+    return a !== b && (this.mode !== 'pit' || Boolean(a.lion) !== Boolean(b.lion));
+  }
+
   // ищем ближайшего, но кого ещё мало кто бьёт: толпа распадается на поединки
   // цель: ближе, раненая, не убегает, ещё не окружена другими — и охотнее та, что выше уровнем
   _pickTarget(g, standing) {
@@ -684,7 +735,7 @@ export class Game {
     for (const other of standing) if (other !== g && other.target) hunted.set(other.target, (hunted.get(other.target) || 0) + 1);
     const best = [];
     for (const other of standing) {
-      if (other === g) continue;
+      if (!this._enemy(g, other)) continue;
       const d = Math.hypot(other.x - g.x, other.y - g.y);
       const busy = (hunted.get(other) || 0) - (other.target === g ? 1 : 0);
       const weak = 1 - Math.max(0, other.hp) / maxHp(other);
@@ -715,7 +766,7 @@ export class Game {
   _runAway(g, standing, dt) {
     let ax = 0, ay = 0;
     for (const other of standing) {
-      if (other === g || other.fleeT > 0) continue;
+      if (!this._enemy(g, other) || other.fleeT > 0) continue;
       const dx = g.x - other.x, dy = g.y - other.y, d = Math.hypot(dx, dy) || 1;
       if (d > FLEE.sense) continue;
       ax += dx / d * (FLEE.sense - d);
@@ -759,7 +810,7 @@ export class Game {
         g.walking = false;
         continue;
       }
-      if (g.fleeT <= 0 && g.fleeCool <= 0 && g.hp < maxHp(g) * FLEE.low && this._standing().length > 2) {
+      if (!g.lion && g.fleeT <= 0 && g.fleeCool <= 0 && g.hp < maxHp(g) * FLEE.low && this._standing().length > 2) {
         this._flee(g, FLEE.lowTime[0] + this.random() * FLEE.lowTime[1], 'low');
       }
       if (g.fleeT > 0) {
@@ -782,7 +833,7 @@ export class Game {
       const t0 = g.target;
       const prey = t0 && this._canThrowSpear(g, t0);
       // цель убегает, а рядом есть другие — переключиться почти сразу (копейщик сначала пробует метнуть)
-      if (t0 && t0.fleeT > 0 && !prey && fighting.some((s) => s !== g && s !== t0 && !(s.fleeT > 0))) {
+      if (t0 && t0.fleeT > 0 && !prey && fighting.some((s) => this._enemy(g, s) && s !== t0 && !(s.fleeT > 0))) {
         g.retarget = Math.min(g.retarget, 0.2 + this.random() * 0.3);
       }
       if (!g.target || g.target.fate !== 'fight' || g.retarget <= 0) {
@@ -941,7 +992,7 @@ export class Game {
       return;
     }
     const reach = reachOf(a) * 1.15;
-    const victims = fighting.filter((v) => v !== a && v.fate === 'fight' && (v === t
+    const victims = fighting.filter((v) => this._enemy(a, v) && v.fate === 'fight' && (v === t
       || (v.x - a.x) * a.face > -6 && Math.hypot(v.x - a.x, v.y - a.y) <= reach));
     for (const v of victims) if (v.fate === 'fight') this._attack(a, v);
   }
@@ -966,7 +1017,7 @@ export class Game {
       this._knockOut(d, a);
       return;
     }
-    if (crit && this.random() < FLEE.critChance) this._flee(d, FLEE.critTime[0] + this.random() * FLEE.critTime[1], 'crit');
+    if (crit && !d.lion && this.random() < FLEE.critChance) this._flee(d, FLEE.critTime[0] + this.random() * FLEE.critTime[1], 'crit');
     // ударили сбоку — может развернуться на обидчика
     else if (d.target !== a && !(d.fleeT > 0) && this.random() < REVENGE) {
       d.target = a;
@@ -976,35 +1027,50 @@ export class Game {
 
   _knockOut(d, a) {
     const hpMax = maxHp(d);
-    const chance = deathChance(this.settings.death / 100, -d.hp, hpMax);
-    const dead = this.random() < chance;
+    // лев погибает всегда; от лап льва гибнут втрое чаще
+    const chance = d.lion ? 1 : deathChance(this.settings.death / 100, -d.hp, hpMax) * (a.lion ? PIT.deathMult : 1);
+    const dead = this.random() < Math.min(0.95, chance) || Boolean(d.lion);
     d.fate = dead ? 'dead' : 'down';
     d.by = a.name;
     d.hp = dead ? 0 : Math.max(1, Math.round(hpMax * BEATEN_HP));
     a.kosNow++;
     if (dead) a.killsNow++;
     a.target = null;
-    if (dead) this._line(d.name + ' погибает от руки ' + a.name, 'death');
+    if (d.lion) this._line(a.name + ' сражает льва!', 'champion');
+    else if (a.lion) this._line(dead ? 'Лев растерзал ' + d.name : 'Лев повалил ' + d.name + ' — тот жив', dead ? 'death' : 'down');
+    else if (dead) this._line(d.name + ' погибает от руки ' + a.name, 'death');
     else this._line(a.name + ' валит ' + d.name + ' — тот сдаётся', 'down');
-    this._emit('down', { login: d.login, fate: d.fate, x: d.x, y: d.y, by: a.login });
+    this._emit('down', { login: d.login, fate: d.fate, x: d.x, y: d.y, by: a.login, lion: Boolean(d.lion) });
     this._checkEnd();
   }
 
   _checkEnd() {
-    if (this.state === 'battle' && this.endIn === null && this._standing().length <= 1) this.endIn = END_DELAY;
+    if (this.state !== 'battle' || this.endIn !== null) return;
+    const standing = this._standing();
+    const over = this.mode === 'pit' ? !standing.some((g) => g.lion) || !standing.some((g) => !g.lion)
+      : standing.length <= 1;
+    if (over) this.endIn = END_DELAY;
   }
 
   _endBattle() {
-    const n = this.fighters.length, bonus = crowdBonus(n), standing = this._standing();
-    const champion = standing.length === 1 ? standing[0] : null;
+    const pit = this.mode === 'pit', people = this.fighters.filter((g) => !g.lion);
+    const lions = this.fighters.filter((g) => g.lion);
+    const n = people.length, bonus = crowdBonus(n), standing = this._standing().filter((g) => !g.lion);
+    const champion = !pit && standing.length === 1 ? standing[0] : null;
     const rows = [];
-    for (const g of this.fighters) {
+    for (const g of people) {
       const fate = g.fate;
       g.fights++;
       g.kos += g.kosNow;
       g.kills += g.killsNow;
       let xp = 0, coins = 0;
-      if (fate === 'fight' || fate === 'down' || fate === 'yield') {
+      if (pit && fate !== 'dead') {
+        // выжил в яме — много опыта и золота
+        const r = fate === 'fight' ? PIT.reward.standing : PIT.reward.beaten;
+        xp = Math.round((r.xp + PIT.reward.perKo.xp * g.kosNow) * bonus);
+        coins = Math.round((r.coins + PIT.reward.perKo.coins * g.kosNow) * bonus);
+        if (fate === 'fight') g.wins++;
+      } else if (fate === 'fight' || fate === 'down' || fate === 'yield') {
         const r = fate === 'fight' ? REWARD.standing : REWARD.beaten;
         const mult = bonus * (g === champion ? REWARD.champion : 1);
         xp = Math.round((r.xp + r.xpPerKo * g.kosNow) * mult);
@@ -1029,7 +1095,8 @@ export class Game {
     }
     const order = { fight: 0, down: 1, yield: 1, dead: 2 };
     rows.sort((a, b) => order[a.fate] - order[b.fate] || b.kos - a.kos || b.xp - a.xp);
-    this.results = { champion: champion ? champion.login : null, rows, fighters: n };
+    this.results = { champion: champion ? champion.login : null, rows, fighters: n, mode: pit ? 'pit' : 'ffa',
+      lions: lions.length, lionsDown: lions.filter((g) => g.fate !== 'fight').length };
     this.projectiles = [];
     for (const g of this.members.values()) {
       g.spearOut = null;
@@ -1039,10 +1106,15 @@ export class Game {
     this.fighters = [];
     this.endIn = null;
     this.state = 'results';
+    this.mode = null;
     this.timer = RESULTS_TIME;
     const wounded = rows.filter((row) => row.fate !== 'dead' && this.members.get(row.login)?.place === 'heal').length;
     if (wounded) this._line('Раненых уносят в лазарет: ' + wounded, 'heal');
-    if (champion) this._line(champion.name + ' — чемпион арены!', 'champion');
+    if (pit) {
+      const won = this.results.lionsDown === lions.length;
+      this._line(won ? 'Львы повержены! Выжившие получают щедрую награду' : !standing.length ? 'Львы победили'
+        : 'Время вышло — львы уходят в клетки', won ? 'champion' : 'battle');
+    } else if (champion) this._line(champion.name + ' — чемпион арены!', 'champion');
     else this._line('Время вышло — бой окончен', 'battle');
     this._emit('phase', { state: 'results' });
   }

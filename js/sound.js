@@ -1,6 +1,6 @@
 // все звуки синтезируются на лету — файлов нет
 const GAP = { hit: 0.07, crit: 0.1, miss: 0.12, down: 0.15, death: 0.4, horn: 1, level: 0.3, coin: 0.15, join: 0.2,
-  cheer: 1.5, champion: 2, reel: 0.5, jackpot: 1, boo: 0.8, block: 0.1, crack: 0.5, net: 0.4, whoosh: 0.2, thwack: 0.09, heal: 0.4, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5 };
+  cheer: 1.5, champion: 2, reel: 0.5, jackpot: 1, boo: 0.8, roar: 1.5, growl: 0.6, block: 0.1, crack: 0.5, net: 0.4, whoosh: 0.2, thwack: 0.09, heal: 0.4, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5 };
 
 let audio = null;
 let master = null;
@@ -133,6 +133,15 @@ const SOUNDS = {
   },
   whoosh(ac) {
     hiss(ac, { dur: 0.25, gain: 0.18, freq: 1400, q: 0.7 });
+  },
+  roar(ac) {
+    tone(ac, { freq: 95, to: 60, dur: 1.4, type: 'sawtooth', gain: 0.16 });
+    tone(ac, { freq: 140, to: 80, dur: 1.2, type: 'sawtooth', gain: 0.08, at: 0.05 });
+    hiss(ac, { dur: 1.3, gain: 0.25, freq: 420, q: 0.9 });
+  },
+  growl(ac) {
+    tone(ac, { freq: 110, to: 75, dur: 0.5, type: 'sawtooth', gain: 0.1 });
+    hiss(ac, { dur: 0.45, gain: 0.15, freq: 380, q: 1 });
   },
   boo(ac) {
     // трибуны гудят и свистят вслед беглецу

@@ -32,6 +32,7 @@ function rng(seed = 1) {
 function game(options = {}) {
   const g = new Game(Object.assign({}, SETTINGS, options.settings || {}), options.roster || new Roster(),
     { random: options.random || rng(7), now: () => 1000 });
+  g.forceMode = options.mode || 'ffa';
   g.open();
   return g;
 }
@@ -404,15 +405,16 @@ const spinAll = (g) => {
   for (let i = 0; i < 20 * 200 && (g.spinNow || g.spins.length); i++) g.step(0.05);
 };
 
-test('гача: 30 монет, гладиатор идёт к храму, приз выдаётся после прокрутки и он возвращается', () => {
+test('гача: монеты снимаются в момент прокрутки, гладиатор идёт к храму и возвращается', () => {
   const g = game({ settings: { ludus: 900 } });
   const [a] = join(g, 'Brutus');
   a.coins = 100;
   g.feed('Brutus', 'трен', { login: 'brutus' });
   g.feed('Brutus', 'гача', { login: 'brutus' });
-  eq([a.coins, a.place, g.spins.length], [100 - PRICE, 'temple', 1]);
+  eq([a.coins, g.spins.length], [100, 1], 'в очереди деньги не сняты');
   g.step(0.1);
   ok(g.spinNow && !g.spinNow.done, 'крутится');
+  eq([a.coins, a.place], [100 - PRICE, 'temple']);
   for (let i = 0; i < 20 * SPIN_TIME + 4; i++) g.step(0.05);
   ok(g.spinNow.done, 'приз выдан');
   spinAll(g);
@@ -420,8 +422,7 @@ test('гача: 30 монет, гладиатор идёт к храму, при
   eq(a.place, 'train', 'вернулся на тренировку');
   ok(SHOW_TIME > 0);
 });
-
-test('гача: без денег нельзя, «гача все» — на все монеты, но не больше 10', () => {
+test('гача: без денег нельзя, «гача все» — на сколько хватает, но не больше 10', () => {
   const g = game();
   const [a, b] = join(g, 'A', 'B');
   a.coins = 29;
@@ -430,12 +431,13 @@ test('гача: без денег нельзя, «гача все» — на в�
   ok(g.lines.some((l) => l.text.includes('30 монет')));
   b.coins = PRICE * 3 + 5;
   g.feed('B', 'гача все', { login: 'b' });
-  eq([g.spins.length, b.coins], [3, 5]);
+  eq(g.spins.length, 3);
+  g.feed('B', 'гача', { login: 'b' });
+  eq(g.spins.length, 3, 'в очередь не больше, чем хватает денег');
   b.coins = 10000;
   g.feed('B', 'гача все', { login: 'b' });
   eq(g.spins.length, 10);
 });
-
 test('гача: вещь надевается, только если лучше; оружие даёт урон, доспех режет урон', () => {
   const g = game();
   const [a] = join(g, 'A');
@@ -451,19 +453,26 @@ test('гача: вещь надевается, только если лучше;
   eq(a.coins, START_COINS + 12);
 });
 
-test('гача: в бою бойцу нельзя, ждущему в лудусе можно', () => {
-  const g = game();
+test('гача: не крутится в последние 5 секунд лудуса и в бою, очередь ждёт итогов', () => {
+  const g = game({ settings: { ludus: 20, battle: 20 } });
   const [a] = join(g, 'A', 'B');
-  a.coins = 100;
-  g.next();
-  g.feed('A', 'гача', { login: 'a' });
-  eq(g.spins.length, 0);
-  const [late] = join(g, 'Late');
-  late.coins = 60;
-  g.feed('Late', 'гача', { login: 'late' });
-  eq(g.spins.length, 1);
+  a.coins = 300;
+  for (let i = 0; i < 20 * 14; i++) g.step(0.05);
+  g.feed('A', 'гача 2', { login: 'a' });
+  for (let i = 0; i < 20 * 5 && g.state === 'ludus'; i++) g.step(0.05);
+  eq(g.state, 'ludus');
+  ok(g.timer <= 5);
+  eq([g.spinNow, g.spins.length, a.coins], [null, 2, 300], 'в последние секунды не крутится');
+  for (let i = 0; i < 20 * 3 && g.state === 'ludus'; i++) g.step(0.05);
+  eq(g.state, 'battle');
+  for (let i = 0; i < 20 * 3; i++) g.step(0.05);
+  eq([g.spinNow, a.coins], [null, 300], 'в бою не крутится');
+  fight(g);
+  const before = a.coins;
+  g.step(0.1);
+  ok(g.spinNow, 'после боя закрутилась');
+  eq(a.coins, before - PRICE);
 });
-
 test('гача: остановка игры возвращает монеты за недокрученное', () => {
   const memory = new Memory();
   const g = game({ roster: new Roster(memory, 'k') });
@@ -471,6 +480,7 @@ test('гача: остановка игры возвращает монеты з
   a.coins = PRICE * 4;
   g.feed('A', 'гача 4', { login: 'a' });
   g.step(0.1);
+  ok(g.spinNow && !g.spinNow.done);
   g.stop();
   eq(new Roster(memory, 'k').get('a').coins, PRICE * 4);
 });
@@ -787,4 +797,56 @@ test('инвентарь: старое сохранение с одним дос
   x.gear.feet = { kind: 'armor', slot: 'feet', rarity: 'rare', power: 2 };
   g.stop();
   eq(new Roster(memory, 'k').get('x').gear.feet.power, 2);
+});
+
+test('стартовый капитал — 100 монет', () => {
+  eq(START_COINS, 100);
+});
+
+test('Волчья яма: львов втрое меньше, все бьют львов, а львы — гладиаторов', () => {
+  const g = game({ mode: 'pit' });
+  const people = join(g, 'A', 'B', 'C', 'D', 'E', 'F', 'G');
+  g.next();
+  const lions = g.fighters.filter((f) => f.lion);
+  eq(lions.length, 3);
+  for (const l of lions) eq([l.level, l.name], [5, 'Лев']);
+  for (let i = 0; i < 20 * 6; i++) g.step(0.05);
+  for (const e of g.events.filter((x) => x.type === 'hit')) {
+    const from = g.fighters.find((f) => f.login === e.from), to = g.fighters.find((f) => f.login === e.login);
+    ok(Boolean(from.lion) !== Boolean(to.lion), e.from + ' бьёт ' + e.login);
+  }
+  fight(g);
+  eq(g.results.mode, 'pit');
+  eq(g.results.rows.length, people.length, 'львов в итогах нет');
+  no(g.results.rows.some((r) => r.login.startsWith('lion')));
+  no(Array.from(g.members.keys()).some((k) => k.startsWith('lion')), 'львы не попали в лудус');
+});
+
+test('Волчья яма: от льва гибнут втрое чаще, выжившие получают много опыта и золота', () => {
+  const g = game({ mode: 'pit', settings: { death: 20 } });
+  const [a, b] = join(g, 'A', 'B', 'C');
+  g.next();
+  const lion = g.fighters.find((f) => f.lion);
+  let dead = 0;
+  g.random = rng(77);
+  for (let i = 0; i < 2000; i++) {
+    a.fate = 'fight';
+    a.hp = -1;
+    g._knockOut(a, lion);
+    if (a.fate === 'dead') dead++;
+  }
+  const share = dead / 2000;
+  ok(share > 0.5 && share < 0.75, 'шанс гибели от льва ' + share.toFixed(2));
+  a.fate = 'fight';
+  a.hp = maxHp(a);
+  g.random = rng(3);
+  for (const l of g.fighters.filter((f) => f.lion)) {
+    l.fate = 'dead';
+  }
+  g._checkEnd();
+  for (let i = 0; i < 20 * 4 && g.state === 'battle'; i++) g.step(0.05);
+  const row = g.results.rows.find((r) => r.login === 'a');
+  ok(row.xp >= 100 && row.coins >= 80, JSON.stringify(row));
+  ok(row.xp > REWARD.standing.xp * 2);
+  ok(b);
 });

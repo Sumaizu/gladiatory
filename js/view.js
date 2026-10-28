@@ -1,5 +1,5 @@
-import { ARMOR_SLOTS, SLOT_IDS, STATS, armorOf, maxHp, twoHanded, xpNeed } from './balance.js';
-import { RARITIES, itemText, outcomeOf, rarityOf, slotText, spin } from './gacha.js';
+import { ARMOR_SLOTS, SLOT_IDS, STATS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
+import { RARITIES, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
 import { FIELD_H, FIELD_W, DUMMIES, PLACES } from './places.js';
 import { FONT, drawCrowd, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
@@ -34,6 +34,7 @@ const ICONS = {
   coins: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="currentColor"/><circle cx="8" cy="8" r="3.5" fill="none" stroke="#1e140e" stroke-width="1.5"/></svg>',
   greatsword: '<svg viewBox="0 0 16 16"><path d="M14 0.5h1.5V2L6.5 11 5 9.5z" fill="currentColor"/><path d="M2.5 8.5l5 5-1.2 1.2-1.4-1.4-2 2-1.2-1.2 2-2-1.4-1.4z" fill="currentColor"/></svg>',
   spear: '<svg viewBox="0 0 16 16"><path d="M15.5 0.5l-1 4.2-1.6-1.6z" fill="currentColor"/><path d="M13.2 3.6l.9.9L1.7 16.9.8 16z" fill="currentColor"/></svg>',
+  fists: '<svg viewBox="0 0 16 16"><path d="M4 6h8a2 2 0 0 1 2 2v3a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7zM4 3.5a1.5 1.5 0 0 1 3 0V6H4zM7.2 3a1.5 1.5 0 0 1 3 0V6h-3zM10.4 3.6a1.4 1.4 0 0 1 2.8 0V6h-2.8z" fill="currentColor"/></svg>',
   head: '<svg viewBox="0 0 16 16"><path d="M3 9a5 5 0 0 1 10 0v4h-3v-3H6v3H3z" fill="currentColor"/><path d="M7 1h2v3H7z" fill="currentColor"/></svg>',
   legs: '<svg viewBox="0 0 16 16"><path d="M4 1h8v4l-1 10H9L8 7l-1 8H5L4 5z" fill="currentColor"/></svg>',
   feet: '<svg viewBox="0 0 16 16"><path d="M3 2h5v8l6 2v3H3z" fill="currentColor"/></svg>',
@@ -180,6 +181,7 @@ export class View {
     const sound = (name) => {
       if (!this.quiet) play(name);
     };
+    if (e.type === 'hit' && e.from && e.from.startsWith('lion') && Math.random() < 0.35) sound('growl');
     if (e.type === 'hit') {
       this._bleed(e.x, e.y - 22, e.crit ? 9 : 4);
       this.floats.push({ x: e.x + (Math.random() - 0.5) * 14, y: e.y - 46, text: String(e.amount), crit: e.crit,
@@ -233,7 +235,7 @@ export class View {
       sound(e.place === 'heal' ? 'heal' : e.place === 'train' ? 'train' : 'step');
     } else if (e.type === 'phase') {
       this._banner(game, e.state);
-      if (e.state === 'battle') sound('horn');
+      if (e.state === 'battle') sound(e.mode === 'pit' ? 'roar' : 'horn');
       if (e.state === 'results') sound(game.results && game.results.champion ? 'champion' : 'cheer');
     }
   }
@@ -245,10 +247,13 @@ export class View {
       return;
     }
     box.className = 'banner ' + state;
-    $('banner-title').textContent = state === 'battle' ? 'В БОЙ!' : 'ЛУДУС';
-    $('banner-text').textContent = state === 'battle' ? 'Все против всех · ' + game.fighters.length + ' '
-      + plural(game.fighters.length, 'гладиатор', 'гладиатора', 'гладиаторов')
-      : 'Готовьтесь к бою: ' + clock(game.timer);
+    const pit = state === 'battle' && game.mode === 'pit';
+    const people = game.fighters.filter((g) => !g.lion).length, lions = game.fighters.length - people;
+    $('banner-title').textContent = pit ? 'ВОЛЧЬЯ ЯМА' : state === 'battle' ? 'В БОЙ!' : 'ЛУДУС';
+    $('banner-text').textContent = pit ? lions + ' ' + plural(lions, 'лев', 'льва', 'львов') + ' против ' + people + ' '
+      + plural(people, 'гладиатора', 'гладиаторов', 'гладиаторов')
+      : state === 'battle' ? 'Все против всех · ' + people + ' ' + plural(people, 'гладиатор', 'гладиатора', 'гладиаторов')
+        : 'Готовьтесь к бою: ' + clock(game.timer);
     box.hidden = true;
     void box.offsetWidth;
     box.hidden = false;
@@ -402,7 +407,8 @@ export class View {
 
   _dom(game) {
     const state = game.state;
-    const phase = { ludus: 'Лудус · подготовка', battle: 'Арена · все против всех', results: 'Итоги боя' }[state] || '';
+    const phase = { ludus: 'Лудус · подготовка', battle: game.mode === 'pit' ? 'Арена · Волчья яма' : 'Арена · все против всех',
+      results: 'Итоги боя' }[state] || '';
     this._set('phase', state, (node) => {
       node.textContent = phase;
       node.className = 'phase ' + state;
@@ -425,14 +431,14 @@ export class View {
   }
 
   _status(game) {
-    const key = game.state + '|' + game.notice + '|' + (game.state === 'battle' ? game.waiting : '');
+    const key = game.state + '|' + game.mode + '|' + game.notice + '|' + (game.state === 'battle' ? game.waiting : '');
     this._set('status', key, (node) => {
       node.replaceChildren();
       if (game.notice) {
         node.append(el('span', 'warn', game.notice));
       } else if (game.state === 'battle') {
-        node.append(el('small', '', game.waiting ? 'В лудусе ждут следующего боя: ' + game.waiting
-          : 'Бой до последнего на ногах'));
+        const what = game.mode === 'pit' ? 'Все вместе против львов — выжившим щедрая награда' : 'Бой до последнего на ногах';
+        node.append(el('small', '', game.waiting ? 'В лудусе ждут следующего боя: ' + game.waiting : what));
       } else if (game.state === 'results') {
         node.append(el('small', '', 'Награды розданы — скоро снова в лудус'));
       } else {
@@ -569,31 +575,37 @@ export class View {
       p.append(label + ': ', el('b', '', value));
       return p;
     };
-    // инвентарь: шесть слотов, вещи — цветом редкости
+    // инвентарь: шесть квадратных иконок, рамка — цвет редкости; ниже только общие цифры
     const inv = el('div', 'inv');
-    const slot = (label, text, color, muted) => {
-      const cell = el('div', 'slot' + (muted ? ' empty' : ''));
-      const value = el('b', '', text);
-      if (color) value.style.color = color;
-      cell.append(el('small', '', label), value);
+    const icon = (label, name, color) => {
+      const cell = el('span', 'icon' + (color ? '' : ' empty'));
+      cell.title = label;
+      cell.style.setProperty('--c', color || '#5b5468');
+      cell.innerHTML = ICONS[name];
       inv.append(cell);
     };
-    const offOff = twoHanded(g) ? ' (не с двуручником)' : '';
-    slot('Правая рука', g.weapon ? slotText(g.weapon) : 'кулаки', g.weapon && rarityOf(g.weapon.rarity).color, !g.weapon);
-    slot('Левая рука', g.shield ? 'щит' + offOff : g.nets > 0 ? 'сеть' + offOff : 'пусто', g.shield || g.nets > 0 ? '#d9a441' : '',
-      !g.shield && !(g.nets > 0));
+    const w = g.weapon;
+    icon('Правая рука', w ? (w.type === 'sword' ? 'weapon' : w.type) : 'fists', w && rarityOf(w.rarity).color);
+    icon('Левая рука', g.shield ? 'shield' : 'net', (g.shield || g.nets > 0) && !twoHanded(g) ? '#d9a441' : '');
     for (const id of SLOT_IDS) {
       const item = g.gear && g.gear[id];
-      slot(ARMOR_SLOTS[id].label, item ? slotText(item) : 'пусто', item && rarityOf(item.rarity).color, !item);
+      icon(ARMOR_SLOTS[id].label, id === 'body' ? 'armor' : id, item && rarityOf(item.rarity).color);
     }
-    gear.append(line('Броня', Math.round(armorOf(g) * 100) + '% урона долой'), line('Монеты', String(g.coins)),
+    const totals = el('div', 'stats totals');
+    for (const [value, label] of [[Math.round(damageOf(g)), 'урон'], [Math.round(armorOf(g) * 100) + '%', 'броня'],
+      [Math.round(critOf(g) * 100) + '%', 'крит']]) {
+      const cell = el('div');
+      cell.append(el('b', '', String(value)), el('small', '', label));
+      totals.append(cell);
+    }
+    gear.append(line('Монеты', String(g.coins)),
       line('Бои', g.fights + ' · побед ' + g.wins + ' · нокаутов ' + g.kos + ' · убийств ' + g.kills));
     box.append(top, bar('hp', g.hp / hpMax, Math.round(g.hp) + ' / ' + hpMax + ' здоровья'),
       bar('xp', g.xp / need, Math.floor(g.xp) + ' / ' + need + ' опыта'), stats);
     if (g.points > 0) {
       box.append(el('div', 'gear points', 'Свободных очков: ' + g.points + ' — пиши «сила», «ловкость» или «выносливость»'));
     }
-    box.append(inv, gear);
+    box.append(inv, totals, gear);
     return box.parts;
   }
 
@@ -674,7 +686,10 @@ export class View {
       if (!r) return;
       const champ = r.rows.find((row) => row.login === r.champion);
       $('champion').replaceChildren();
-      if (champ) {
+      if (r.mode === 'pit') {
+        $('champion').textContent = r.lionsDown === r.lions ? 'Львы повержены! Выжившие получают щедрую награду'
+          : r.rows.some((row) => row.fate === 'fight') ? 'Время вышло — львы уходят в клетки' : 'Львы победили';
+      } else if (champ) {
         $('champion').append('Чемпион арены — ', el('b', '', champ.name));
       } else {
         $('champion').textContent = 'Время вышло — чемпиона нет';

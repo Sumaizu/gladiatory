@@ -27,7 +27,7 @@ export const RARITIES = [
 ];
 
 export const KINDS = { weapon: { name: 'меч', stat: 'урона' }, armor: { name: 'доспех', stat: 'брони' } };
-export const TYPES = Object.keys(WEAPON_TYPES).filter((type) => type !== 'fists');
+export const TYPES = Object.keys(WEAPON_TYPES).filter((type) => type !== 'fists' && type !== 'claws');
 
 function pick(list, random) {
   let roll = random() * list.reduce((sum, item) => sum + item.chance, 0);

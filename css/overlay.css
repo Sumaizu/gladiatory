@@ -179,7 +179,7 @@ body {
 
 .cards { position: absolute; left: 12px; bottom: 66px; z-index: 4; display: flex; gap: 10px; align-items: flex-end; }
 .profile {
-  width: 262px; padding: 9px 11px 10px; border-radius: 14px; background: rgba(23, 19, 31, .94);
+  width: 240px; padding: 9px 11px 10px; border-radius: 14px; background: rgba(23, 19, 31, .94);
   box-shadow: 0 0 0 2px var(--c, var(--accent)), 0 12px 30px rgba(0, 0, 0, .5); animation: card-in .35s ease-out;
   font-size: 12px;
 }
@@ -263,11 +263,12 @@ body {
 .fortune .queue { font-size: 12px; color: var(--muted); }
 .fortune .queue:empty { display: none; }
 
-/* инвентарь в карточке */
-.profile .inv { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin-top: 6px; }
-.profile .slot { min-width: 0; padding: 2px 6px 3px; border-radius: 7px; background: rgba(255, 255, 255, .06); }
-.profile .slot small { display: block; font-size: 10px; line-height: 12px; color: var(--muted); }
-.profile .slot b {
-  display: block; font-size: 11px; line-height: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+/* инвентарь в карточке: квадратные иконки слотов */
+.profile .inv { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-top: 7px; }
+.profile .icon {
+  aspect-ratio: 1; display: grid; place-items: center; border-radius: 7px; border: 2px solid var(--c);
+  background: color-mix(in srgb, var(--c) 20%, #1a1422); color: var(--c);
 }
-.profile .slot.empty b { color: #6f6880; font-weight: 600; }
+.profile .icon svg { width: 70%; height: 70%; }
+.profile .icon.empty { opacity: .45; border-style: dashed; }
+.profile .totals { margin-top: 5px; }

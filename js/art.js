@@ -747,6 +747,56 @@ function netArt() {
 
 export const netSprite = () => remember('net', netArt);
 
+// лев в профиль, смотрит вправо: лапы на y = 23, центр x = 18. frame: stand, walk1, walk2, pounce, dead
+function lionArt(frame) {
+  const p = new Pix(38, 25);
+  const fur = '#c8964f', furD = '#a5763a', furL = '#e2bb7c', mane = '#6e3c1a', maneL = '#8f5426', maneD = '#4e2810';
+  const dead = frame === 'dead';
+  const lift = frame === 'pounce' ? -3 : 0;
+  // хвост с кисточкой
+  p.line(7, 11, 3, 6, furD, 2);
+  p.line(3, 6, 1, 9, furD);
+  p.rect(0, 9, 3, 3, maneD);
+  // лапы: дальние темнее
+  const legs = frame === 'walk1' ? [[9, 7], [12, 14], [25, 22], [28, 30]] : frame === 'walk2' ? [[9, 11], [12, 10], [25, 26],
+    [28, 26]] : frame === 'pounce' ? [[9, 8], [12, 11], [26, 31], [29, 33]] : [[9, 9], [12, 12], [25, 25], [28, 28]];
+  if (!dead) {
+    legs.forEach(([hip, foot], i) => {
+      const far = i % 2 === 0, c = far ? furD : fur, top = i >= 2 ? 15 + lift : 15;
+      p.line(hip, top, foot, 22, c, 3);
+      p.rect(foot - 1, 23, 4, 1, far ? maneD : furD);
+    });
+  }
+  // туловище
+  for (let y = 9; y < 18; y++) {
+    for (let x = 6; x < 29; x++) {
+      const dx = (x + 0.5 - 17) / 11.5, dy = (y + 0.5 - 13 - (x > 20 ? lift * 0.5 : 0)) / 4.6;
+      if (dx * dx + dy * dy > 1) continue;
+      p.px(x, y, y < 11 ? furD : y > 15 ? furL : fur);
+    }
+  }
+  // грива и голова
+  const hx = 29, hy = 9 + lift;
+  p.ellipse(hx - 1, hy, 6.2, 6.6, mane, maneD, maneL);
+  for (let i = 0; i < 10; i++) p.px(hx - 6 + (i % 5) * 2, hy - 5 + Math.floor(i / 5) * 9, maneL);
+  p.ellipse(hx + 2, hy + 1, 3.6, 3.4, fur, furD, furL);
+  p.rect(hx + 4, hy + 1, 3, 3, furL);
+  p.px(hx + 6, hy + 1, '#2a1a10');
+  p.px(hx + 3, hy - 1, '#2a1a10');
+  p.rect(hx + 4, hy + 4, 2, 1, '#7a2a20');
+  p.px(hx, hy - 4, furD);
+  if (!dead) return p.canvas();
+  // мёртвый лев лежит на боку: лапы вытянуты, всё темнее
+  p.rect(10, 18, 18, 2, furD);
+  return p.canvas((c) => {
+    const [r, g, b] = rgb(c), l = (r + g + b) / 3;
+    return hex([l * 0.6 + r * 0.2, l * 0.55 + g * 0.15, l * 0.5 + b * 0.1]);
+  });
+}
+
+export const lionSprite = (frame) => remember('lion:' + frame, () => lionArt(frame));
+export const LION = { x: 18, foot: 23 };
+
 function silhouette(canvas) {
   const c = document.createElement('canvas');
   c.width = canvas.width;

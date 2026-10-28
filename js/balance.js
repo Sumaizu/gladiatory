@@ -1,4 +1,4 @@
-export const START_COINS = 20;
+export const START_COINS = 100;
 export const START_POINTS = 3;
 export const POINTS_PER_LEVEL = 2;
 export const LEVEL_MAX = 99;
@@ -56,6 +56,7 @@ export const WEAPON_TYPES = {
   fists: { name: 'кулаки', gender: 'p', rate: 0.85, dmg: 0.6, reach: 0.85, crit: 0, hands: 1 },
   sword: { name: 'меч', gender: 'm', rate: 1, dmg: 1, reach: 1, crit: 0, hands: 1 },
   greatsword: { name: 'двуручный меч', gender: 'm', rate: 1.5, dmg: 1.6, reach: 1.1, crit: 0.1, hands: 2, cleave: true },
+  claws: { name: 'когти', gender: 'p', rate: 0.95, dmg: 1.15, reach: 1.2, crit: 0.1, hands: 2 },
   spear: { name: 'копьё', gender: 'n', rate: 1.1, dmg: 1, reach: 1.6, crit: 0, hands: 1, pierce: true, throw: 2.2 },
 };
 // без оружия — кулаки
@@ -103,3 +104,10 @@ export function deathChance(base, overkill, hpMax) {
   if (base <= 0) return 0;
   return Math.min(0.9, base * (1 + Math.max(0, overkill) / Math.max(1, hpMax)));
 }
+
+// «Волчья яма»: вместо обычного боя все гладиаторы против львов. Лев — как гладиатор 5 уровня без вещей, но с когтями
+export const PIT = {
+  chance: 0.1, ratio: 3, deathMult: 3,
+  lion: { level: 5, str: 4, agi: 3, vit: 4 },
+  reward: { standing: { xp: 100, coins: 80 }, beaten: { xp: 70, coins: 55 }, perKo: { xp: 20, coins: 15 } },
+};
