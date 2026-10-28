@@ -105,6 +105,9 @@ export function deathChance(base, overkill, hpMax) {
   return Math.min(0.9, base * (1 + Math.max(0, overkill) / Math.max(1, hpMax)));
 }
 
+// кто столько раундов (лудус + бой) подряд ничего не писал в чат — афк и садится на скамью
+export const AFK_ROUNDS = 3;
+
 // «Яма со львами»: вместо обычного боя все гладиаторы против львов. Лев — как гладиатор 5 уровня без вещей, но с когтями.
 // Львов столько, сколько на арене гладиаторов veteran уровня и выше, но хотя бы один
 export const PIT = {

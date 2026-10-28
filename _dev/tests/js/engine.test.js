@@ -3,7 +3,7 @@ import { clean, fromQuery, toQuery } from '../../../js/config.js';
 import { DUEL, HEAL_RATE, NET, SHIELD, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { starOf } from '../../../js/stars.js';
-import { END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
+import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
 import { inArena } from '../../../js/places.js';
 import { PRICE, RARITIES, SHOW_TIME, SPIN_TIME, spin } from '../../../js/gacha.js';
 
@@ -101,9 +101,17 @@ test('очки характеристик: сила, все, выносливо�
   eq(a.agi, 0, 'без очков ничего не меняется');
 });
 
-test('новичок садится на скамью в зоне отдыха и сидит, пока его не отправят', () => {
+test('новичок сразу идёт тренироваться', () => {
+  const g = game();
+  const [a] = newcomers(g, 'Brutus');
+  eq(a.place, 'train');
+});
+
+test('на скамье в зоне отдыха гладиатор сидит, пока его не отправят', () => {
   const g = game();
   const [a, b] = newcomers(g, 'Brutus', 'Crixus');
+  g.feed('Brutus', 'отдых', { login: 'brutus' });
+  g.feed('Crixus', 'отдых', { login: 'crixus' });
   for (let i = 0; i < 20 * 20; i++) g.step(0.05);
   eq([a.place, a.pose, a.walking], ['rest', 'sit', false]);
   ok(a.seat !== b.seat, 'у каждого своё место');
@@ -127,7 +135,7 @@ test('здоровому в лазарет не надо', () => {
   const g = game();
   const [a] = newcomers(g, 'Brutus');
   g.feed('Brutus', 'лазарет', { login: 'brutus' });
-  eq(a.place, 'rest');
+  eq(a.place, 'train');
 });
 
 test('вылечился в лазарете и писал в чат — идёт тренироваться', () => {
@@ -140,27 +148,49 @@ test('вылечился в лазарете и писал в чат — идё�
   eq(a.hp, maxHp(a));
 });
 
-test('афк: не писал ни в прошлом раунде, ни сейчас — после лазарета садится отдыхать', () => {
-  const g = game({ settings: { ludus: 20, battle: 20 } });
+test('афк: молчал ' + AFK_ROUNDS + ' раунда — после боя на скамью, а кто писал — в лазарет и потом на тренировку', () => {
+  const g = game({ settings: { ludus: 20, battle: 20, death: 0 } });
   const [afk, b, c] = join(g, 'Afk', 'B', 'C');
-  // первый раунд: все писали (вступили); второй раунд — Afk молчит
-  for (const round of [1, 2, 3]) {
-    if (round > 1) g.feed('B', 'трен', { login: 'b' });
+  const round = () => {
+    for (const m of [b, c]) if (g.members.has(m.login)) g.feed(m.name, 'трен', { login: m.login });
     g.next();
     fight(g);
-    g.next();
-  }
+  };
+  // в первом раунде Afk ещё писал (вступил) — после боя он в деле
+  round();
+  ok(g.isActive(afk));
+  no(afk.place === 'rest');
+  // ещё два раунда молчит — но первый раунд пока среди последних трёх
+  g.next();
+  round();
+  g.next();
+  round();
+  ok(g.isActive(afk));
+  g.next();
+  round();
+  no(g.isActive(afk), 'Afk молчал ' + AFK_ROUNDS + ' раунда');
   ok(g.isActive(b), 'B писал');
-  no(g.isActive(afk), 'Afk молчал два раунда');
-  for (const m of [afk, b]) {
-    m.hp = maxHp(m) - 1;
-    m.place = 'heal';
-    m.walking = false;
-  }
-  for (let i = 0; i < 20 * 15 && (afk.place === 'heal' || b.place === 'heal'); i++) g.step(0.05);
   eq(afk.place, 'rest');
+  ok(afk.afk);
+  eq(b.place, b.hp < maxHp(b) ? 'heal' : 'train');
+  // вылечился — на тренировку
+  b.hp = maxHp(b) - 0.01;
+  b.place = 'heal';
+  b.walking = false;
+  for (let i = 0; i < 20 * 5 && b.place === 'heal'; i++) g.step(0.05);
   eq(b.place, 'train');
-  ok(c);
+  // афк написал хоть что-то — встаёт со скамьи
+  g.feed('Afk', 'привет', { login: 'afk' });
+  ok(afk.place === 'heal' || afk.place === 'train');
+  no(afk.afk);
+});
+
+test('сам сел на скамью — болтовня в чате его не поднимает', () => {
+  const g = game();
+  const [a] = join(g, 'Brutus');
+  g.feed('Brutus', 'отдых', { login: 'brutus' });
+  g.feed('Brutus', 'привет', { login: 'brutus' });
+  eq(a.place, 'rest');
 });
 
 test('оружие и доспех пока не продаются: команды ничего не делают', () => {
@@ -1019,8 +1049,8 @@ test('ник того же цвета, что в твиче: тёмный осв
 
 test('кто сидит в зоне отдыха, в бой не выходит, а смотрит', () => {
   const g = game();
-  const [a, b] = join(g, 'Brutus', 'Crixus');
-  const [c] = newcomers(g, 'Spartak');
+  const [a, b, c] = join(g, 'Brutus', 'Crixus', 'Spartak');
+  g.feed('Spartak', 'отдых', { login: 'spartak' });
   g.next();
   eq(g.state, 'battle');
   ok(g.fighters.includes(a) && g.fighters.includes(b));
@@ -1030,8 +1060,9 @@ test('кто сидит в зоне отдыха, в бой не выходит,
 
 test('на арену некому — все сидят на отдыхе, бой откладывается', () => {
   const g = game();
-  join(g, 'Brutus');
-  newcomers(g, 'Crixus', 'Spartak');
+  join(g, 'Brutus', 'Crixus', 'Spartak');
+  g.feed('Crixus', 'отдых', { login: 'crixus' });
+  g.feed('Spartak', 'отдых', { login: 'spartak' });
   g.next();
   eq(g.state, 'ludus');
 });

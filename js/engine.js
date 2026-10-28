@@ -1,4 +1,4 @@
-import { BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
+import { AFK_ROUNDS, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
@@ -47,6 +47,7 @@ const TEMPLE_WAIT = 12;
 const LEVEL_PULL = { per: 70, cap: 4 };
 const PICK_SOFT = 50;
 const CIRCLE = 0.3;
+export { AFK_ROUNDS };
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const INVISIBLE = /[​‌‍⁠﻿­͏⠀\u{E0000}]/gu;
 const IGNORED = new Set(BOTS);
@@ -184,12 +185,11 @@ export class Game {
     this.cards = [];
     this.endIn = null;
     this._carry = 0;
-    this.roundStart = 0;
     this.spins = [];
     this.spinNow = null;
     this.projectiles = [];
     this.duel = null;
-    this.lastRoundStart = 0;
+    this.roundStarts = [];
     this._saveIn = SAVE_EVERY;
   }
 
@@ -203,8 +203,9 @@ export class Game {
 
   // раунд — это лудус и бой после него; помним начало прошлого, чтобы отличать активных от афк
   open() {
-    this.lastRoundStart = this.state === 'stopped' ? this.clock : this.roundStart;
-    this.roundStart = this.clock;
+    if (this.state === 'stopped') this.roundStarts = [];
+    this.roundStarts.push(this.clock);
+    if (this.roundStarts.length > AFK_ROUNDS) this.roundStarts.shift();
     this.state = 'ludus';
     this.paused = false;
     this.timer = this.settings.ludus;
@@ -300,6 +301,12 @@ export class Game {
     // сменил цвет в твиче — ник в игре меняется вместе с ним
     else if (COLOR_RE.test(meta.color || '')) g.color = readableColor(meta.color, login);
     g.saidAt = this.clock;
+    // афк со скамьи написал хоть что-то — снова в деле: раненый в лазарет, здоровый на тренировку
+    if (g.afk && !g.fate && g.place === 'rest') {
+      const hurt = g.hp < maxHp(g);
+      this._line(g.name + ' вернулся и ' + (hurt ? 'идёт в лазарет' : 'идёт тренироваться'), 'info');
+      this._arrive(g, hurt ? 'heal' : 'train', true);
+    }
     this._command(g, first, words[1] || '');
   }
 
@@ -329,7 +336,8 @@ export class Game {
     g.name = name.slice(0, NAME_MAX) || g.name;
     g.fate = null;
     this.members.set(login, g);
-    this._arrive(g, 'rest');
+    // только что написал — значит, в деле: сразу на тренировку
+    this._arrive(g, 'train');
     this._emit('join', { login });
     return g;
   }
@@ -530,6 +538,7 @@ export class Game {
   // в отдыхе и лазарете у каждого своё место: сидит или лежит, пока его не отправят дальше
   _arrive(g, place, walk = false) {
     g.place = place;
+    g.afk = false;
     g.seat = null;
     if (!walk || g.x === undefined) {
       g.x = ENTRANCE.x;
@@ -579,6 +588,7 @@ export class Game {
         const active = this.isActive(g);
         this._line(g.name + ' вылечился и ' + (active ? 'идёт тренироваться' : 'садится отдохнуть'), 'heal');
         this._arrive(g, active ? 'train' : 'rest', true);
+        g.afk = !active;
       }
       if (g.place === 'train' && !g.walking) this._gainXp(g, TRAIN_XP * dt);
     }
@@ -590,8 +600,9 @@ export class Game {
   }
 
   // писал в чат хоть раз с начала прошлого раунда — не афк
+  // писал ли хоть что-то за последние AFK_ROUNDS раундов, считая текущий
   isActive(g) {
-    return g.saidAt !== undefined && g.saidAt >= this.lastRoundStart;
+    return g.saidAt !== undefined && g.saidAt >= (this.roundStarts[0] ?? 0);
   }
 
   _stroll(g, dt) {
@@ -1199,7 +1210,10 @@ export class Game {
         row.level = g.level;
         g.fate = null;
         g.target = null;
-        this._arrive(g, g.hp < maxHp(g) ? 'heal' : 'rest');
+        // писал в чат — раненый в лазарет, здоровый на тренировку; молчал AFK_ROUNDS раундов — на скамью
+        const active = this.isActive(g);
+        this._arrive(g, !active ? 'rest' : g.hp < maxHp(g) ? 'heal' : 'train');
+        g.afk = !active;
         this.roster.put(g);
       }
       rows.push(row);
@@ -1237,6 +1251,8 @@ export class Game {
     this.timer = RESULTS_TIME;
     const wounded = rows.filter((row) => row.fate !== 'dead' && this.members.get(row.login)?.place === 'heal').length;
     if (wounded) this._line('Раненых уносят в лазарет: ' + wounded, 'heal');
+    const benched = rows.filter((row) => this.members.get(row.login)?.afk).length;
+    if (benched) this._line('Молчат уже ' + AFK_ROUNDS + ' раунда — на скамью: ' + benched, 'info');
     if (duel) {
       this._line('Дуэль выиграл ' + winner.name + '! Угадали ставку: ' + bettors.length + ' — по ' + DUEL.prize + ' монет',
         'champion');
