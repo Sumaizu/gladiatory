@@ -1,5 +1,5 @@
 import { AFK_ROUNDS, TEAMS, BLEED, HIT_REWARD, YIELD_CUT, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
-  START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
+  START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, runOf, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
 import { DIVINE, PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemText, spin } from './gacha.js';
@@ -655,7 +655,7 @@ export class Game {
       return;
     }
     const dx = g.tx - g.x, dy = g.ty - g.y, d = Math.hypot(dx, dy);
-    const speed = MOVE_SPEED * STROLL;
+    const speed = MOVE_SPEED * STROLL * runOf(g);
     if (d <= speed * dt) {
       g.x = g.tx;
       g.y = g.ty;
@@ -1007,7 +1007,7 @@ export class Game {
       ax = ax / len - cx * pull + tx * side * pull;
       ay = ay / len - cy * pull + ty * side * pull;
     }
-    const len = Math.hypot(ax, ay) || 1, speed = MOVE_SPEED * FLEE.speed * (1 + 0.01 * g.agi) * pace(g);
+    const len = Math.hypot(ax, ay) || 1, speed = MOVE_SPEED * FLEE.speed * runOf(g) * pace(g);
     g.x += ax / len * speed * dt;
     g.y += ay / len * speed * dt;
     if (Math.abs(ax) > 0.01) g.face = ax > 0 ? 1 : -1;
@@ -1111,7 +1111,7 @@ export class Game {
       }
       const reach = reachOf(g);
       if (d > reach) {
-        const speed = MOVE_SPEED * (1 + 0.01 * g.agi) * pace(g);
+        const speed = MOVE_SPEED * runOf(g) * pace(g);
         const stepLen = Math.min(d - reach * 0.8, speed * dt);
         g.x += dx / d * stepLen;
         g.y += dy / d * stepLen;
@@ -1123,7 +1123,7 @@ export class Game {
       } else {
         // между ударами кружит вокруг противника
         if (!g.circle || this.random() < dt * 0.4) g.circle = this.random() < 0.5 ? -1 : 1;
-        const step = MOVE_SPEED * CIRCLE * pace(g) * dt;
+        const step = MOVE_SPEED * CIRCLE * runOf(g) * pace(g) * dt;
         g.x += -dy / d * g.circle * step;
         g.y += dx / d * g.circle * step;
         g.walking = g.cool > 0.25;
@@ -1153,7 +1153,7 @@ export class Game {
   _walkTo(g, x, y, dt) {
     const dx = x - g.x, dy = y - g.y, d = Math.hypot(dx, dy);
     if (d < 1) return d;
-    const stepLen = Math.min(d, MOVE_SPEED * 1.1 * pace(g) * dt);
+    const stepLen = Math.min(d, MOVE_SPEED * 1.1 * runOf(g) * pace(g) * dt);
     g.x += dx / d * stepLen;
     g.y += dy / d * stepLen;
     if (Math.abs(dx) > 1) g.face = dx > 0 ? 1 : -1;

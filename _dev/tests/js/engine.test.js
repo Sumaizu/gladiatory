@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { BLEED, TEAMS, YIELD_CUT, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { BLEED, RUN_PER_AGI, runOf, TEAMS, YIELD_CUT, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { starOf } from '../../../js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
@@ -1506,4 +1506,29 @@ test('двуручник: сектор 100° в сторону цели и в п
   g._swing(a, t, [a, t, far, side, tooFar]);
   ok(t.hp < hp.get(t) && far.hp < hp.get(far), 'цель и тот, что в секторе на полтора маха, задеты');
   eq([side.hp, tooFar.hp], [hp.get(side), hp.get(tooFar)], 'сбоку за 50° и дальше полутора махов — целы');
+});
+
+test('короткие команды характеристик: сил, лов, вын', () => {
+  const g = game();
+  const [a] = join(g, 'A', 'B');
+  g.feed('A', 'сил', { login: 'a' });
+  g.feed('A', 'лов', { login: 'a' });
+  g.feed('A', 'вын', { login: 'a' });
+  eq([a.str, a.agi, a.vit, a.points], [1, 1, 1, 0]);
+});
+
+test('ловкость ускоряет бег: +' + RUN_PER_AGI * 100 + '% за очко', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  g.next();
+  const run = (agi) => {
+    a.agi = agi;
+    a.x = 300;
+    a.y = 352;
+    g._walkTo(a, 700, 352, 0.5);
+    return a.x - 300;
+  };
+  const slow = run(0), fast = run(10);
+  ok(Math.abs(fast / slow - runOf({ agi: 10 })) < 1e-9 && runOf({ agi: 10 }) > 1.15, slow + ' → ' + fast);
+  ok(b);
 });

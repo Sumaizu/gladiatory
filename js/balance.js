@@ -11,6 +11,8 @@ export const DAMAGE_PER_STR = 2;
 export const SPREAD = 0.15;
 export const ATTACK_EVERY = 1.25;
 export const HASTE_PER_AGI = 0.04;
+// ловкость ускоряет и бег: +RUN_PER_AGI к скорости за очко
+export const RUN_PER_AGI = 0.02;
 export const DODGE_BASE = 0.05;
 export const DODGE_PER_AGI = 0.012;
 export const DODGE_MAX = 0.35;
@@ -19,9 +21,11 @@ export const CRIT_PER_AGI = 0.006;
 export const CRIT_HIT = 1.75;
 
 export const STATS = [
-  { id: 'str', name: 'Сила', words: ['сила', 'сил'], text: '+' + DAMAGE_PER_STR + ' к урону' },
-  { id: 'agi', name: 'Ловкость', words: ['ловкость', 'лов'], text: 'быстрее бьёт, чаще уворачивается и критует' },
-  { id: 'vit', name: 'Выносливость', words: ['выносливость', 'вын'], text: '+' + HP_PER_VIT + ' к здоровью' },
+// команды — коротко: сил, лов, вын (полные слова тоже понимаем)
+  { id: 'str', name: 'Сила', command: 'сил', words: ['сил', 'сила'], text: '+' + DAMAGE_PER_STR + ' к урону' },
+  { id: 'agi', name: 'Ловкость', command: 'лов', words: ['лов', 'ловкость'],
+    text: 'быстрее бьёт и бегает, чаще уворачивается и критует' },
+  { id: 'vit', name: 'Выносливость', command: 'вын', words: ['вын', 'выносливость'], text: '+' + HP_PER_VIT + ' к здоровью' },
 ];
 
 
@@ -80,6 +84,9 @@ export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, pickup: 14, cool:
 export function damageOf(g) {
   return (DAMAGE_BASE + DAMAGE_PER_STR * g.str + (g.weapon ? g.weapon.power : 0)) * typeOf(g).dmg * (g.might || 1);
 }
+
+// множитель скорости бега от ловкости
+export const runOf = (g) => 1 + RUN_PER_AGI * (g.agi || 0);
 
 export const attackEvery = (g) => ATTACK_EVERY * typeOf(g).rate / (1 + HASTE_PER_AGI * g.agi);
 export const dodgeOf = (g) => Math.min(DODGE_MAX, DODGE_BASE + DODGE_PER_AGI * g.agi);
