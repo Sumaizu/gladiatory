@@ -332,7 +332,7 @@ test('сохранение: прогресс переживает перезап
   const [b] = join(again, 'Brutus');
   eq([b.weapon, b.str, b.coins, b.shield, b.nets], [{ kind: 'weapon', rarity: 'epic', power: 11, type: 'spear' }, 2, 500,
     false, 1]);
-  eq(b.hp, Math.round(maxHp(b) / 2));
+  eq(b.hp, maxHp(b), 'вернулся в игру — здоровье полное');
 });
 
 test('сброс стирает всех', () => {
@@ -849,4 +849,22 @@ test('Волчья яма: от льва гибнут втрое чаще, вы�
   ok(row.xp >= 100 && row.coins >= 80, JSON.stringify(row));
   ok(row.xp > REWARD.standing.xp * 2);
   ok(b);
+});
+
+test('вступил в игру — здоровье полное; уже в игре — после боя ранен как обычно', () => {
+  const memory = new Memory();
+  const g = game({ roster: new Roster(memory, 'k') });
+  const [a] = join(g, 'A', 'B');
+  a.hp = 10;
+  g.stop();
+  const again = game({ roster: new Roster(memory, 'k') });
+  const [a2] = join(again, 'A', 'B');
+  eq(a2.hp, maxHp(a2), 'раны зажили');
+  again.next();
+  fight(again);
+  const hurt = Array.from(again.members.values()).filter((m) => m.hp < maxHp(m));
+  ok(hurt.length >= 1, 'после боя в той же игре — раненые');
+  const m = hurt[0], before = m.hp;
+  again.feed(m.name, 'привет', { login: m.login });
+  eq(m.hp, before, 'новое сообщение того, кто уже в игре, не лечит');
 });

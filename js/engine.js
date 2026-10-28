@@ -293,7 +293,8 @@ export class Game {
     let g;
     if (saved) {
       g = Object.assign(newGladiator(login, saved.name, saved.color, saved.born), JSON.parse(JSON.stringify(saved)), { login });
-      g.hp = Math.max(1, Math.round(saved.hp * maxHp(g)));
+      // вернулся в игру — раны прошлых боёв успели зажить
+      g.hp = maxHp(g);
       this._line(g.name + ' возвращается в лудус', 'join');
     } else {
       g = newGladiator(login, name.slice(0, NAME_MAX), readableColor(color, login), this.now());
