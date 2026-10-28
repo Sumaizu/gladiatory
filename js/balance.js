@@ -5,7 +5,7 @@ export const LEVEL_MAX = 99;
 
 export const HP_BASE = 150;
 export const HP_PER_LEVEL = 6;
-export const HP_PER_VIT = 15;
+export const HP_PER_VIT = 25;
 export const DAMAGE_BASE = 10;
 export const DAMAGE_PER_STR = 2;
 export const SPREAD = 0.15;
@@ -24,7 +24,7 @@ export const STATS = [
 // команды — коротко: сил, лов, вын (полные слова тоже понимаем)
   { id: 'str', name: 'Сила', command: 'сил', words: ['сил', 'сила'], text: '+' + DAMAGE_PER_STR + ' к урону' },
   { id: 'agi', name: 'Ловкость', command: 'лов', words: ['лов', 'ловкость'],
-    text: 'быстрее бьёт и бегает, чаще уворачивается и критует' },
+    text: 'быстрее бьёт и бегает, чаще уворачивается и критует (сверх потолка уворота — ещё больше крита)' },
   { id: 'vit', name: 'Выносливость', command: 'вын', words: ['вын', 'выносливость'], text: '+' + HP_PER_VIT + ' к здоровью' },
 ];
 
@@ -64,7 +64,7 @@ export const WEAPON_TYPES = {
   greatsword: { name: 'двуручный меч', gender: 'm', rate: 1.5, dmg: 1.8, reach: 1.1, crit: 0.1, hands: 2,
     cleave: { reach: 1.5, arc: 100 } },
   claws: { name: 'когти', gender: 'p', rate: 0.95, dmg: 1.15, reach: 1.2, crit: 0.1, hands: 2 },
-  spear: { name: 'копьё', gender: 'n', rate: 1.1, dmg: 0.9, reach: 1.6, crit: 0, hands: 1, pierce: 0.5, throw: 2.2 },
+  spear: { name: 'копьё', gender: 'n', rate: 1.1, dmg: 1, reach: 1.6, crit: 0, hands: 1, pierce: 0.75, throw: 2.2 },
 };
 // без оружия — кулаки
 export const typeOf = (g) => (g.weapon ? WEAPON_TYPES[g.weapon.type] || WEAPON_TYPES.sword : WEAPON_TYPES.fists);
@@ -78,8 +78,9 @@ export const offhandFree = (g) => !g.shield && !(g.nets > 0) && !twoHanded(g);
 export const SHIELD = { block: 0.35, breaks: 0.1, critBreaks: 2 };
 // сеть многоразовая: после броска reload секунд на то, чтобы её подобрать, и шанс tear, что она порвётся
 export const NET = { stun: 3, range: [50, 170], chance: 1.2, speed: 320, focus: 6, max: 1, reload: 5, tear: 0.15 };
-// cool — сколько секунд после подбора копьё нельзя метнуть снова
-export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, pickup: 14, cool: 5 };
+// cool — сколько секунд после подбора копьё нельзя метнуть снова; копьё метают в израненного беглеца (low), а ещё —
+// в цель дальше far: каждую секунду с шансом farChance
+export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, pickup: 14, cool: 5, far: 110, farChance: 0.7 };
 
 export function damageOf(g) {
   return (DAMAGE_BASE + DAMAGE_PER_STR * g.str + (g.weapon ? g.weapon.power : 0)) * typeOf(g).dmg * (g.might || 1);
@@ -90,7 +91,10 @@ export const runOf = (g) => 1 + RUN_PER_AGI * (g.agi || 0);
 
 export const attackEvery = (g) => ATTACK_EVERY * typeOf(g).rate / (1 + HASTE_PER_AGI * g.agi);
 export const dodgeOf = (g) => Math.min(DODGE_MAX, DODGE_BASE + DODGE_PER_AGI * g.agi);
-export const critOf = (g) => CRIT_BASE + CRIT_PER_AGI * g.agi + typeOf(g).crit;
+// ловкость сверх потолка уворота уходит в крит: каждое такое очко даёт ещё столько крита, сколько давало бы уворота
+export const AGI_CAP = Math.round((DODGE_MAX - DODGE_BASE) / DODGE_PER_AGI);
+export const critOf = (g) => CRIT_BASE + CRIT_PER_AGI * g.agi + DODGE_PER_AGI * Math.max(0, (g.agi || 0) - AGI_CAP)
+  + typeOf(g).crit;
 // доспех из гачи режет входящий урон на свой процент
 // снаряжение по слотам: share — какая доля «брони» редкости приходится на вещь; вместе режут урон, но не больше ARMOR_CAP
 export const ARMOR_SLOTS = {
@@ -147,7 +151,7 @@ export function powerOf(g) {
 // Сила стороны — (сумма урона в секунду) × (сумма живучести). Толпа бьёт слаженнее, поэтому доля растёт от strength[0]
 // при grow[0] бойцах до strength[1] при grow[1] и больше. Подобрано симуляцией: игроки побеждают ~9 боёв из 10, но с потерями
 export const PIT = {
-  chance: 0.1, deathMult: 2, per: 2.5, max: 6, strength: [0.47, 0.58], grow: [3, 8], might: [0.4, 12], tilt: [2.5, 1.07],
+  chance: 0.1, deathMult: 2, per: 2.5, max: 6, strength: [0.47, 0.58], grow: [3, 8], might: [0.25, 12], tilt: [2.5, 1.07],
   lion: { level: 5, str: 4, agi: 3, vit: 4 },
   reward: { standing: { xp: 100, coins: 80 }, beaten: { xp: 70, coins: 55 }, perKo: { xp: 20, coins: 15 } },
 };

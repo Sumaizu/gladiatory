@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { BLEED, RUN_PER_AGI, runOf, TEAMS, YIELD_CUT, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { AGI_CAP, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, YIELD_CUT, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { starOf } from '../../../js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
@@ -96,7 +96,7 @@ test('очки характеристик: сила, все, выносливо�
   const before = a.hp;
   g.feed('Brutus', 'выносливость все', { login: 'brutus' });
   eq([a.vit, a.points], [2, 0]);
-  eq(a.hp, before + 30);
+  eq(a.hp, before + 2 * HP_PER_VIT);
   g.feed('Brutus', 'лов 5', { login: 'brutus' });
   eq(a.agi, 0, 'без очков ничего не меняется');
 });
@@ -649,7 +649,7 @@ test('двуручник задевает всех перед собой, но �
   eq(back.hp, hp[2], 'задний цел');
 });
 
-test('копьё в ближнем бою пробивает половину брони, брошенное — всю', () => {
+test('копьё в ближнем бою пробивает три четверти брони, брошенное — всю', () => {
   const g = game();
   const [a, b, c] = join(g, 'A', 'B', 'C');
   b.gear.body = { kind: 'armor', slot: 'body', rarity: 'legendary', power: 26 };
@@ -661,7 +661,7 @@ test('копьё в ближнем бою пробивает половину б
   ok(hb - b.hp < hc - c.hp, 'в ближнем бою броня помогает');
   const sword = join(g, 'S')[0];
   sword.weapon = weapon('sword');
-  ok(Math.abs((hb - b.hp) / (hc - c.hp) - (1 - armorOf(b) * 0.5)) < 0.05, 'режет вдвое меньше');
+  ok(Math.abs((hb - b.hp) / (hc - c.hp) - (1 - armorOf(b) * 0.25)) < 0.05, 'броня режет вчетверо меньше');
   hb = b.hp;
   hc = c.hp;
   g._attack(a, b, { ranged: true });
@@ -1584,4 +1584,30 @@ test('гача: с мечом или копьём и пустой второй �
   }
   eq(share(Object.assign({ weapon: { type: 'greatsword' } }, free)).slice(0, 2), [0, 0], 'с двуручником — никогда');
   eq(share(Object.assign({ weapon: { type: 'sword' } }, free, { shield: true })).slice(0, 2), [0, 0], 'рука занята — никогда');
+});
+
+test('копейщик может метнуть копьё и в далёкую цель, а в ближнюю — нет', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  g.next();
+  a.weapon = weapon('spear');
+  g.random = () => 0;
+  ok(g._canThrowFar(a, b, SPEAR.far + 20, 0.05), 'далеко — может');
+  no(g._canThrowFar(a, b, SPEAR.far - 20, 0.05), 'близко — бьёт в руках');
+  a.spearCool = 1;
+  no(g._canThrowFar(a, b, SPEAR.far + 20, 0.05), 'после подбора — ждёт');
+  a.spearCool = 0;
+  a.weapon = weapon('sword');
+  no(g._canThrowFar(a, b, SPEAR.far + 20, 0.05), 'только копьё');
+});
+
+test('ловкость сверх потолка уворота даёт больше крита', () => {
+  const at = (agi) => critOf({ agi, weapon: weapon('sword') });
+  const before = at(AGI_CAP) - at(AGI_CAP - 1), after = at(AGI_CAP + 1) - at(AGI_CAP);
+  ok(after > before * 2.5, before + ' → ' + after);
+  eq(dodgeOf({ agi: AGI_CAP + 10 }), dodgeOf({ agi: AGI_CAP }), 'уворот упёрся в потолок');
+});
+
+test('выносливость: +' + HP_PER_VIT + ' здоровья за очко', () => {
+  eq(maxHp({ level: 1, vit: 1 }) - maxHp({ level: 1, vit: 0 }), 25);
 });

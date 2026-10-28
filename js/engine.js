@@ -1100,7 +1100,7 @@ export class Game {
       }
       const dx = t.x - g.x, dy = t.y - g.y, d = Math.hypot(dx, dy) || 1;
       if (Math.abs(dx) > 2) g.face = dx > 0 ? 1 : -1;
-      if (g.cool <= 0 && this._canThrowSpear(g, t)) {
+      if (g.cool <= 0 && (this._canThrowSpear(g, t) || this._canThrowFar(g, t, d, dt))) {
         this._throw(g, t, 'spear');
         g.cool = attackEvery(g);
         continue;
@@ -1164,6 +1164,12 @@ export class Game {
   }
 
   // копьё метают в убегающего и израненного, если он не слишком далеко
+  // далёкую цель копейщик тоже может достать броском, не дожидаясь, пока подбежит
+  _canThrowFar(g, t, d, dt) {
+    if (!g.weapon || g.weapon.type !== 'spear' || g.spearOut || g.spearCool > 0 || t.fate !== 'fight') return false;
+    return d >= SPEAR.far && d <= SPEAR.range[1] && this.random() < dt * SPEAR.farChance;
+  }
+
   _canThrowSpear(g, t) {
     if (!g.weapon || g.weapon.type !== 'spear' || g.spearOut || g.spearCool > 0 || t.fate !== 'fight' || !(t.fleeT > 0)) {
       return false;
