@@ -98,54 +98,70 @@ function paragonTag(paragon) {
   return node;
 }
 
-// иконки характеристик — в стиле иконки атаки из Чатобороны: цветной диск с тёмным ободком, блик и знак поверх
+// иконки характеристик — фигуры в стиле сердца из Чатобороны: светлый край сверху-слева, тень снизу-справа, тёмная обводка.
+// # — заливка, k — складка, s — подошва
 const STAT_ICONS = {
-  // сила — гантеля
-  str: { rim: '#7c2d12', fill: '#ea580c', glint: '#fdba74', colors: { W: '#f1f5f9', G: '#94a3b8', D: '#475569' }, rows: [
-    '..........',
-    '.GG....GG.',
-    '.WG....WG.',
-    'GWG....WGG',
-    'GWWWWWWWGG',
-    'GGDDDDDDGG',
-    'GGG....GGG',
-    '.GG....GG.',
-    '.DD....DD.',
-    '..........'] },
-  // ловкость — молния
-  agi: { rim: '#14532d', fill: '#16a34a', glint: '#86efac', colors: { W: '#fefce8', Y: '#facc15', O: '#ca8a04' }, rows: [
-    '......WY..',
-    '.....WYO..',
-    '....WYO...',
-    '...WYO....',
-    '..WYYYYYO.',
-    '.....WYO..',
-    '....WYO...',
-    '...WYO....',
-    '..WYO.....',
-    '..YO......'] },
-  // выносливость — щит с крестом
-  vit: { rim: '#1e3a8a', fill: '#2563eb', glint: '#93c5fd', colors: { W: '#f8fafc', G: '#cbd5e1', D: '#64748b', R: '#ef4444' }, rows: [
-    '.WWWWWWWW.',
-    '.WGGRRGGW.',
-    '.WGGRRGGW.',
-    '.WRRRRRRW.',
-    '.WRRRRRRD.',
-    '.WGGRRGGD.',
-    '..WGRRGD..',
-    '..WGGGGD..',
-    '...WGGD...',
-    '....DD....'] },
+  // сила — красный кулак
+  str: { base: '#dc2626', light: '#fca5a5', dark: '#7f1d1d', k: '#991b1b', rows: [
+    '...##.##.##.',
+    '..##########',
+    '..##########',
+    '.#k##k##k###',
+    '############',
+    '##kkkkkk####',
+    '############',
+    '.##########.',
+    '..#########.',
+    '..########..',
+    '...######...',
+    '...######...',
+    '...######...'] },
+  // ловкость — зелёный ботинок
+  agi: { base: '#16a34a', light: '#86efac', dark: '#14532d', k: '#bbf7d0', s: '#3b2a1c', rows: [
+    '.#######....',
+    '.#######....',
+    '..#####.....',
+    '..##k##.....',
+    '..#####.....',
+    '..##k##.....',
+    '..#####.....',
+    '..##k####...',
+    '..########..',
+    '..#########.',
+    '.##########.',
+    '.ssssssssss.',
+    '.sss........'] },
+  // выносливость — жёлтый крест
+  vit: { base: '#facc15', light: '#fef9c3', dark: '#a16207', rows: [
+    '....####....',
+    '....####....',
+    '....####....',
+    '....####....',
+    '############',
+    '############',
+    '############',
+    '############',
+    '....####....',
+    '....####....',
+    '....####....',
+    '....####....'] },
 };
 const statUrls = {};
 function statIcon(id) {
   if (!statUrls[id]) {
-    const spec = STAT_ICONS[id], p = new Pix(16, 16);
-    p.ellipse(8, 8, 7.4, 7.4, spec.rim);
-    p.ellipse(8, 8, 6.4, 6.4, spec.fill);
-    for (const [x, y] of [[4, 3], [3, 4], [5, 3], [3, 5]]) p.px(x, y, spec.glint);
-    spec.rows.forEach((row, y) => {
-      for (let x = 0; x < row.length; x++) if (spec.colors[row[x]]) p.px(x + 3, y + 3, spec.colors[row[x]]);
+    const spec = STAT_ICONS[id], p = new Pix(16, 16), rows = spec.rows;
+    const ox = Math.floor((16 - rows[0].length) / 2), oy = Math.floor((16 - rows.length) / 2);
+    const on = (x, y) => y >= 0 && y < rows.length && x >= 0 && x < rows[y].length && rows[y][x] !== '.';
+    rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) {
+        const ch = row[x];
+        if (ch === '.') continue;
+        let color = spec.base;
+        if (ch === 's' || ch === 'k') color = spec[ch];
+        else if (!on(x, y - 1) || !on(x - 1, y)) color = spec.light;
+        else if (!on(x, y + 1) || !on(x + 1, y)) color = spec.dark;
+        p.px(ox + x, oy + y, color);
+      }
     });
     p.outline('#15111d');
     const src = p.canvas(), big = document.createElement('canvas');
