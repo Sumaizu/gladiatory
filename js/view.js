@@ -39,6 +39,7 @@ const ICONS = {
   void: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/></svg>',
 };
 // ширина окна барабана = ширина .fortune (312) минус отступы (20)
+const ROLL = { speed: 18, wait: 2.5 };
 const REEL = { cells: 30, stop: 25, size: 44, width: 292 };
 
 const $ = (id) => document.getElementById(id);
@@ -80,7 +81,10 @@ export class View {
     this.time = 0;
     this.settings = null;
     this.quiet = false;
-    window.addEventListener('resize', () => this._fit());
+    window.addEventListener('resize', () => {
+      this._fit();
+      this.rosterFit = null;
+    });
     this._fit();
     $('stage').hidden = false;
   }
@@ -90,6 +94,7 @@ export class View {
     document.body.classList.toggle('nocam', !settings.webcam);
     document.body.classList.toggle('nobg', !settings.bg);
     setSound(settings.sound, settings.volume);
+    this.rosterFit = null;
   }
 
   _fit() {
@@ -143,6 +148,7 @@ export class View {
     this.roar = Math.max(0, this.roar - dt * 0.8);
     for (let i = 0; i < this.dummyHits.length; i++) this.dummyHits[i] = Math.max(0, this.dummyHits[i] - dt);
     this._draw(game, scene, dt);
+    this._scrollRoster(dt);
     this.domIn -= dt;
     if (this.domIn <= 0) {
       this.domIn = DOM_EVERY;
@@ -443,12 +449,10 @@ export class View {
     const fateOrder = { fight: 0, yield: 1, down: 1, dead: 2 };
     list.sort((a, b) => (battle ? (fateOrder[a.fate] ?? 3) - (fateOrder[b.fate] ?? 3) : 0)
       || b.level - a.level || b.xp - a.xp || a.name.localeCompare(b.name));
-    const room = this.settings && this.settings.webcam ? 6 : 14;
-    const shown = list.slice(0, room);
-    const key = shown.map((g) => [g.login, g.level, Math.round(g.hp / maxHp(g) * 20), battle ? g.fate : g.place,
-      g.walking && !battle].join(':')).join('|') + '#' + list.length + '#' + game.roster.fallen.length;
+    const key = list.map((g) => [g.login, g.level, g.coins, Math.round(g.hp / maxHp(g) * 20), battle ? g.fate : g.place,
+      g.walking && !battle].join(':')).join('|') + '#' + game.roster.fallen.length;
     this._set('roster', key, (node) => {
-      node.replaceChildren(...shown.map((g) => {
+      node.replaceChildren(...list.map((g) => {
         const li = el('li', g.fate === 'dead' && battle ? 'gone' : '');
         const lvl = el('span', 'lvl', String(g.level));
         lvl.style.background = g.color;
@@ -457,16 +461,44 @@ export class View {
         const bar = el('span', 'hp'), fill = el('i', part > 0.5 ? '' : part > 0.25 ? 'mid' : 'low');
         fill.style.width = (part * 100).toFixed(0) + '%';
         bar.append(fill);
-        li.append(lvl, el('span', 'name', g.name), el('span', 'where ' + where, battle && !g.fate ? 'ждёт' : WHERE[where]),
-          bar);
+        const gold = el('span', 'gold');
+        gold.append(el('i'), String(g.coins));
+        li.append(lvl, el('span', 'name', g.name), gold,
+          el('span', 'where ' + where, battle && !g.fate ? 'ждёт' : WHERE[where] || ''), bar);
         return li;
       }));
       $('count').textContent = list.length ? String(list.length) : '';
-      $('more').textContent = list.length > room ? '…и ещё ' + (list.length - room) : '';
       $('empty').hidden = list.length > 0;
       const fallen = game.roster.fallen.length;
       $('fallen').textContent = fallen ? 'павших: ' + fallen : '';
+      this.rosterFit = null;
     });
+  }
+
+  // не влезли — список плавно едет вниз, стоит, едет обратно вверх
+  _scrollRoster(dt) {
+    const box = $('roster-box'), list = $('roster');
+    if (!this.rosterFit) this.rosterFit = { over: Math.max(0, list.scrollHeight - box.clientHeight) };
+    const over = this.rosterFit.over, s = this.rollState || (this.rollState = { y: 0, dir: 1, wait: ROLL.wait });
+    if (over <= 0) {
+      s.y = 0;
+      s.dir = 1;
+      s.wait = ROLL.wait;
+    } else if (s.wait > 0) {
+      s.wait -= dt;
+    } else {
+      s.y += s.dir * ROLL.speed * dt;
+      if (s.y >= over || s.y <= 0) {
+        s.y = Math.max(0, Math.min(over, s.y));
+        s.dir = -s.dir;
+        s.wait = ROLL.wait;
+      }
+    }
+    const y = Math.round(Math.min(s.y, over));
+    if (y !== this.rollShown) {
+      this.rollShown = y;
+      list.style.transform = 'translateY(' + -y + 'px)';
+    }
   }
 
   _feed(game) {

@@ -109,8 +109,13 @@ body {
 .list ol { margin: 0; padding: 0; list-style: none; min-height: 0; overflow: hidden; }
 
 .roster { flex: 1; }
+.roster .scroller {
+  flex: 1; min-height: 0; overflow: hidden;
+  mask-image: linear-gradient(transparent, #000 6px, #000 calc(100% - 8px), transparent);
+}
+.roster .scroller ol { overflow: visible; will-change: transform; }
 .roster li {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto 44px; align-items: center; gap: 7px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto 30px; align-items: center; gap: 6px;
   height: 25px; font-size: 14px;
 }
 .roster .lvl {
@@ -118,7 +123,7 @@ body {
   line-height: 18px; color: #12141a; font-variant-numeric: tabular-nums;
 }
 .roster .name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.roster .where { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.roster .where { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 .roster .where.train { color: #ffd98f; }
 .roster .where.heal { color: #9af0b8; }
 .roster .where.forge { color: #f9a26c; }
@@ -130,8 +135,14 @@ body {
 .roster .hp i.mid { background: var(--warn); }
 .roster .hp i.low { background: var(--bad); }
 .roster li.gone { opacity: .5; }
-.more { flex: none; margin: 4px 0 0; font-size: 13px; color: var(--muted); }
-.more:empty { display: none; }
+.roster .gold {
+  display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; font-weight: 800; color: #ffd98f;
+  font-variant-numeric: tabular-nums;
+}
+.roster .gold i {
+  width: 11px; height: 11px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ffe9a3, #f0b44c 55%, #a8742a);
+  box-shadow: inset 0 0 0 1px rgba(90, 55, 10, .6);
+}
 .empty { margin: 6px 0 0; font-size: 14px; color: var(--muted); }
 
 .feed { flex: none; height: 186px; }

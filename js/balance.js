@@ -39,7 +39,7 @@ export const BODY = 28;
 
 export const REWARD = {
   standing: { xp: 40, coins: 25, xpPerKo: 15, coinsPerKo: 8 },
-  beaten: { xp: 15, coins: 8, xpPerKo: 10, coinsPerKo: 5 },
+  beaten: { xp: 15, coins: 18, xpPerKo: 10, coinsPerKo: 5 },
   champion: 1.5,
 };
 
