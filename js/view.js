@@ -867,7 +867,7 @@ export class View {
     }
   }
 
-  // карточка: сверху имя и уровень; ниже кукла со снаряжением, характеристики столбиком и здоровье, урон, монеты, бои
+  // карточка: сверху имя и уровень; ниже кукла со снаряжением, характеристики столбиком, здоровье, урон и мелкие цифры
   _profile(g) {
     const top = el('div', 'top');
     const lv = el('span', 'lv');
@@ -900,16 +900,15 @@ export class View {
       const item = g.gear && g.gear[id];
       slot(id, ARMOR_SLOTS[id].label, id === 'body' ? 'armor' : id, item && rarityOf(item.rarity).color);
     }
-    // характеристики столбиком, под ними крит и броня; справа здоровье, урон, монеты и бои
+    // характеристики столбиком; справа здоровье, урон, а мелко — крит, броня и бои (монеты — в списке гладиаторов)
     const stats = el('div', 'col stats');
-    stats.append(...STATS.map((stat) => chip(iconImg(statIcon(stat.id), 'ico small'), String(g[stat.id]), stat.name, ' small')),
-      el('div', 'small-line', 'крит ' + Math.round(critOf(g) * 100) + '%'),
-      el('div', 'small-line', 'броня ' + Math.round(armorOf(g) * 100) + '%'));
+    stats.append(...STATS.map((stat) => chip(iconImg(statIcon(stat.id), 'ico small'), String(g[stat.id]), stat.name, ' small')));
     const info = el('div', 'col info');
+    const notes = el('div', 'small-line');
+    notes.append('крит ' + Math.round(critOf(g) * 100) + '%', el('br'), 'броня ' + Math.round(armorOf(g) * 100) + '%', el('br'),
+      'боёв: ' + g.fights);
     info.append(chip(iconImg('images/heart.png'), String(Math.round(hpMax)), 'Максимум здоровья'),
-      chip(iconImg('images/might.png'), String(Math.round(damageOf(g))), 'Урон'),
-      chip(el('i', 'coin'), String(g.coins), 'Монеты'),
-      el('div', 'small-line', 'боёв: ' + g.fights));
+      chip(iconImg('images/might.png'), String(Math.round(damageOf(g))), 'Урон'), notes);
     const body = el('div', 'body');
     body.append(doll, stats, info);
     return [top, body];
