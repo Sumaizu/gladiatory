@@ -527,8 +527,8 @@ export class View {
     list.sort((a, b) => (battle ? (fateOrder[a.fate] ?? 3) - (fateOrder[b.fate] ?? 3) : 0)
       || b.level - a.level || b.xp - a.xp || a.name.localeCompare(b.name));
     const bets = game.duel ? game.duel.bets : null;
-    const key = (bets ? Array.from(bets).join(',') : '') + list.map((g) => [g.login, g.level, g.points, g.coins, Math.round(g.hp / maxHp(g) * 20), battle ? g.fate : g.place,
-      g.walking && !battle].join(':')).join('|') + '#' + game.roster.fallen.length;
+    const key = (bets ? Array.from(bets).join(',') : '') + list.map((g) => [g.login, g.color, g.level, g.points, g.coins, Math.round(g.hp / maxHp(g) * 20), battle ? g.fate : g.place,
+      g.walking && !battle].join(':')).join('|');
     this._set('roster', key, (node) => {
       node.replaceChildren(...list.map((g) => {
         const li = el('li', g.fate === 'dead' && battle ? 'gone' : '');
@@ -552,8 +552,6 @@ export class View {
       }));
       $('count').textContent = list.length ? String(list.length) : '';
       $('empty').hidden = list.length > 0;
-      const fallen = game.roster.fallen.length;
-      $('fallen').textContent = fallen ? 'павших: ' + fallen : '';
       this.rosterFit = null;
     });
   }

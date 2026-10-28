@@ -108,7 +108,6 @@ body {
   letter-spacing: .12em; text-transform: uppercase; color: var(--accent);
 }
 .list h3 .count { color: var(--ink); letter-spacing: 0; }
-.list h3 .fallen { margin-left: auto; color: var(--muted); font-size: 12px; letter-spacing: 0; text-transform: none; }
 .list ol { margin: 0; padding: 0; list-style: none; min-height: 0; overflow: hidden; }
 
 .roster { flex: 1; }
