@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { DUEL, HEAL_RATE, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { BLEED, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { starOf } from '../../../js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
@@ -985,8 +985,8 @@ test('Дуэль: никто не гибнет, обоим опыт, побед�
   for (const row of r.rows) ok(row.xp >= DUEL.xp, row.name + ' опыт ' + row.xp);
   const win = r.rows[0], winner = g.members.get(win.login);
   const side = winner === left ? 1 : 2, against = side === 1 ? 1 : 3;
-  eq(win.coins, DUEL.perBet * against, 'победителю за ставки против него');
-  eq(r.rows[1].coins, 0);
+  eq(win.coins, DUEL.perBet * against + HIT_REWARD.coins * win.hits, 'победителю за ставки против него и за удары');
+  eq(r.rows[1].coins, HIT_REWARD.coins * r.rows[1].hits);
   const lucky = others.filter((m, i) => (i < 3 ? 1 : 2) === side);
   eq(r.bettors.length, lucky.length);
   for (const m of lucky) eq(m.coins, coins.get(m.login) + DUEL.prize);
@@ -1250,4 +1250,49 @@ test('Яма со львами: раненым выходят львы слаб�
     return g.fighters.find((f) => f.lion).might;
   };
   ok(mightFor(0.4) < mightFor(1) * 0.8);
+});
+
+test('смертность: перебор урона почти не влияет, новичка крит не добивает чаще чем в 1.25 раза', () => {
+  eq(deathChance(0.1, 0, 150), 0.1);
+  ok(Math.abs(deathChance(0.1, 1000, 150) - 0.125) < 1e-9);
+  eq(deathChance(1, 0, 150), 1);
+});
+
+test('за каждый удар по врагу — +' + HIT_REWARD.xp + ' опыта и +' + HIT_REWARD.coins + ' монеты к итогам', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  g.next();
+  g.random = () => 0.5;
+  for (let i = 0; i < 3; i++) g._attack(a, b);
+  eq(a.hitsNow, 3);
+  b.fate = 'yield';
+  g._checkEnd();
+  fight(g);
+  const ra = g.results.rows.find((r) => r.login === 'a');
+  eq(ra.hits, 3);
+  ok(ra.coins >= HIT_REWARD.coins * 3 && ra.xp >= HIT_REWARD.xp * 3);
+});
+
+test('кровотечение: после крита течёт кровь, на бегу отнимает здоровье, павший с ним гибнет чаще', () => {
+  const g = game({ settings: { death: 10 } });
+  const [a, b] = join(g, 'A', 'B', 'C');
+  g.next();
+  b.bleedT = BLEED.time;
+  b.bledBy = a;
+  b.walking = true;
+  b.fleeT = 2;
+  const hp = b.hp;
+  g.step(0.05);
+  ok(b.hp < hp, 'на бегу теряет здоровье');
+  let dead = 0;
+  g.random = rng(5);
+  for (let i = 0; i < 4000; i++) {
+    b.fate = 'fight';
+    b.hp = -1;
+    b.bleedT = 1;
+    g._knockOut(b, a);
+    if (b.fate === 'dead') dead++;
+  }
+  const share = dead / 4000;
+  ok(share > 0.12 && share < 0.18, 'с кровотечением гибнет ' + share.toFixed(3));
 });

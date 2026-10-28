@@ -57,7 +57,7 @@ export function maxHp(g) {
 export const WEAPON_TYPES = {
   fists: { name: 'кулаки', gender: 'p', rate: 0.85, dmg: 0.6, reach: 0.85, crit: 0, hands: 1 },
   sword: { name: 'меч', gender: 'm', rate: 1, dmg: 1, reach: 1, crit: 0, hands: 1 },
-  greatsword: { name: 'двуручный меч', gender: 'm', rate: 1.5, dmg: 1.6, reach: 1.1, crit: 0.1, hands: 2, cleave: true },
+  greatsword: { name: 'двуручный меч', gender: 'm', rate: 1.5, dmg: 1.85, reach: 1.1, crit: 0.1, hands: 2, cleave: true },
   claws: { name: 'когти', gender: 'p', rate: 0.95, dmg: 1.15, reach: 1.2, crit: 0.1, hands: 2 },
   spear: { name: 'копьё', gender: 'n', rate: 1.1, dmg: 0.9, reach: 1.6, crit: 0, hands: 1, pierce: true, throw: 2.2 },
 };
@@ -102,11 +102,22 @@ export const armorOf = (g) => {
 // чем больше бойцов на арене, тем щедрее награда
 export const crowdBonus = (fighters) => Math.min(2, 1 + 0.03 * Math.max(0, fighters - 2));
 
-// шанс смертельной травмы растёт, если удар пришёлся сильно ниже нуля
+// шанс смертельной травмы чуть растёт, если удар пришёлся сильно ниже нуля — но не больше чем в 1 + weight раз,
+// иначе новички с маленьким здоровьем гибли почти от любого крита
+export const OVERKILL = { weight: 0.25 };
 export function deathChance(base, overkill, hpMax) {
   if (base <= 0) return 0;
-  return Math.min(0.9, base * (1 + Math.max(0, overkill) / Math.max(1, hpMax)));
+  // «смерть 100%» в настройках — значит гибнут все
+  if (base >= 1) return 1;
+  return Math.min(0.9, base * (1 + OVERKILL.weight * Math.min(1, Math.max(0, overkill) / Math.max(1, hpMax))));
 }
+
+// крит с шансом chance пускает кровь на time секунд: пока раненый бегает, теряет rate здоровья в секунду (доля
+// от максимума); свалили с кровотечением — гибнет в deathMult раз чаще
+export const BLEED = { chance: 0.2, time: 5, rate: 0.03, deathMult: 1.5 };
+
+// за каждый удар по врагу — к итогам боя
+export const HIT_REWARD = { xp: 3, coins: 2 };
 
 // кто столько раундов (лудус + бой) подряд ничего не писал в чат — афк и садится на скамью
 export const AFK_ROUNDS = 3;

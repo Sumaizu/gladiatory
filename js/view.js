@@ -15,6 +15,8 @@ const FLOAT_TIME = 1.1;
 // мир рисуется в низком разрешении и растягивается крупными пикселями — как в Domina
 const PIXEL = 1;
 const BLOOD = ['#8f1414', '#a8191b', '#6e0d0f', '#c22a22'];
+const shadeBlood = (hex, k) => '#' + [1, 3, 5].map((i) => Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16)
+  * k))).toString(16).padStart(2, '0')).join('');
 const WHERE = {
   train: 'трен', heal: 'лазарет', rest: 'отдых',
   fight: 'в бою', down: 'пал', yield: 'сдался', dead: 'погиб',
@@ -195,14 +197,22 @@ export class View {
     this.ratio = ratio;
     this.canvas.width = Math.round(FIELD_W * ratio);
     this.canvas.height = Math.round(FIELD_H * ratio);
-    this.backs = {};
+    // мир — в разрешении экрана: пиксель-арт растягивается без сглаживания, а кровь рисуется гладко и чётко
+    this.world.width = this.canvas.width;
+    this.world.height = this.canvas.height;
+    if (this.stains) {
+      const old = this.stains;
+      this.stains = this._stainLayer();
+      this.stains.getContext('2d').drawImage(old, 0, 0, this.stains.width, this.stains.height);
+    }
   }
 
   _back(name) {
     if (this.backs[name]) return this.backs[name];
     const back = document.createElement('canvas');
-    back.width = this.world.width;
-    back.height = this.world.height;
+    // фон — в разрешении поля, на экран растягивается без сглаживания
+    back.width = Math.round(FIELD_W / PIXEL);
+    back.height = Math.round(FIELD_H / PIXEL);
     const ctx = back.getContext('2d');
     ctx.scale(1 / PIXEL, 1 / PIXEL);
     if (name === 'arena') this.people = paintArena(ctx);
@@ -284,6 +294,10 @@ export class View {
       this.floats.push({ x: e.x, y: e.y - 60, text, life: e.saved ? 3 : 2.2, kind: e.saved ? 'saved' : e.fate });
       this.roar = 1;
       sound(e.saved ? 'jackpot' : e.fate === 'dead' ? 'death' : 'down');
+    } else if (e.type === 'bleed') {
+      const g = game.fighters.find((f) => f.login === e.login);
+      this.floats.push({ x: e.x, y: e.y - 60, text: 'кровотечение', life: 1.6, kind: 'bleed', follow: g });
+      this._bleed(e.x, e.y - 22, 10, 1.2);
     } else if (e.type === 'paragon') {
       sound('champion');
     } else if (e.type === 'level') {
@@ -359,22 +373,63 @@ export class View {
     }, 2400);
   }
 
-  _bleed(x, y, n) {
+  // брызги: z — высота над песком; спрей мелких капель и несколько крупных
+  _bleed(x, y, n, spread = 1) {
     if (this.scene !== 'arena') return;
     for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2, v = 40 + Math.random() * 110;
-      this.drops.push({ x, y, z: 0, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.5, vz: 60 + Math.random() * 90,
-        r: 1.5 + Math.random() * 2.5, color: BLOOD[Math.floor(Math.random() * BLOOD.length)] });
+      const a = Math.random() * Math.PI * 2, v = (30 + Math.random() * 120) * spread, big = Math.random() < 0.3;
+      this.drops.push({ x, y: y + 22, z: 22, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.45,
+        vz: 40 + Math.random() * 110, r: big ? 1.6 + Math.random() * 1.4 : 0.6 + Math.random() * 0.9,
+        color: BLOOD[Math.floor(Math.random() * BLOOD.length)] });
     }
   }
 
+  _stainLayer() {
+    const layer = document.createElement('canvas');
+    layer.width = this.world.width;
+    layer.height = this.world.height;
+    return layer;
+  }
+
+  // пятно на песке: неровная лужица с тёмным краем, мелкие брызги вокруг и блик
   _stain(x, y, r, color = BLOOD[2]) {
     if (!this.stains) return;
     const ctx = this.stains.getContext('2d');
-    ctx.fillStyle = color;
+    ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
+    const lobes = 5 + Math.floor(Math.random() * 4), turn = Math.random() * Math.PI * 2;
     ctx.beginPath();
-    ctx.ellipse(x / PIXEL, y / PIXEL, r / PIXEL, r * 0.45 / PIXEL, 0, 0, Math.PI * 2);
+    for (let i = 0; i <= lobes * 2; i++) {
+      const a = turn + i / (lobes * 2) * Math.PI * 2, k = i % 2 ? 0.7 + Math.random() * 0.2 : 0.95 + Math.random() * 0.35;
+      const px = x + Math.cos(a) * r * k, py = y + Math.sin(a) * r * k * 0.5;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.quadraticCurveTo(x + Math.cos(a - 0.3) * r * k * 1.1, y + Math.sin(a - 0.3) * r * k * 0.55, px, py);
+    }
+    ctx.closePath();
+    const fill = ctx.createRadialGradient(x - r * 0.2, y - r * 0.12, r * 0.1, x, y, r * 1.2);
+    fill.addColorStop(0, shadeBlood(color, 1.15));
+    fill.addColorStop(0.65, color);
+    fill.addColorStop(1, shadeBlood(color, 0.6));
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = fill;
     ctx.fill();
+    // влажный блик
+    if (r > 3) {
+      ctx.globalAlpha = 0.28;
+      ctx.fillStyle = '#ff9a8a';
+      ctx.beginPath();
+      ctx.ellipse(x - r * 0.3, y - r * 0.15, r * 0.25, r * 0.08, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // мелкие брызги вокруг
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = shadeBlood(color, 0.8);
+    for (let i = 0, n = Math.round(r / 2); i < n; i++) {
+      const a = Math.random() * Math.PI * 2, d = r * (1.1 + Math.random() * 0.9);
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.5, 0.3 + Math.random() * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
 
   _blood(ctx, dt) {
@@ -385,11 +440,22 @@ export class View {
       d.y += d.vy * dt;
       if (d.z <= 0) {
         d.dead = true;
-        this._stain(d.x, d.y, d.r * 1.6, d.color);
+        this._stain(d.x, d.y, d.r * 1.8, d.color);
         continue;
       }
+      // капля в полёте: круглая, вытянута по скорости, с бликом
+      const sx = d.x, sy = d.y - d.z, speed = Math.hypot(d.vx, d.vy - d.vz) || 1;
+      const stretch = Math.min(2.4, 1 + speed / 260), ang = Math.atan2(d.vy - d.vz, d.vx);
       ctx.fillStyle = d.color;
-      ctx.fillRect(d.x - d.r / 2, d.y - d.z - d.r / 2, d.r, d.r);
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, d.r * stretch, d.r, ang, 0, Math.PI * 2);
+      ctx.fill();
+      if (d.r > 1.2) {
+        ctx.fillStyle = 'rgba(255,170,160,.45)';
+        ctx.beginPath();
+        ctx.arc(sx - d.r * 0.3, sy - d.r * 0.3, d.r * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     this.drops = this.drops.filter((d) => !d.dead);
   }
@@ -398,16 +464,12 @@ export class View {
     const w = this.wctx;
     w.setTransform(1, 0, 0, 1, 0, 0);
     w.imageSmoothingEnabled = false;
-    w.drawImage(this._back(scene), 0, 0);
+    w.drawImage(this._back(scene), 0, 0, this.world.width, this.world.height);
     if (scene === 'arena') {
-      if (!this.stains) {
-        this.stains = document.createElement('canvas');
-        this.stains.width = this.world.width;
-        this.stains.height = this.world.height;
-      }
+      if (!this.stains) this.stains = this._stainLayer();
       w.drawImage(this.stains, 0, 0);
     }
-    w.setTransform(1 / PIXEL, 0, 0, 1 / PIXEL, 0, 0);
+    w.setTransform(this.ratio / PIXEL, 0, 0, this.ratio / PIXEL, 0, 0);
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -436,6 +498,12 @@ export class View {
     for (const g of figures) drawGladiator(w, g, t, scene);
     if (scene === 'arena') {
       drawThrown(w, game);
+      // кровотечение: с бегущего капает, за ним остаётся дорожка
+      for (const g of figures) {
+        if (!(g.bleedT > 0) || g.fate !== 'fight' || Math.random() > dt * (g.walking ? 14 : 5)) continue;
+        this.drops.push({ x: g.x + (Math.random() - 0.5) * 8, y: g.y, z: 14 + Math.random() * 10, vx: 0, vy: 0, vz: 0,
+          r: 0.7 + Math.random() * 0.8, color: BLOOD[Math.floor(Math.random() * BLOOD.length)] });
+      }
       this._blood(w, dt);
     }
     const cards = new Set(game.cards.map((c) => c.login));
@@ -509,6 +577,9 @@ export class View {
       } else if (f.kind === 'level') {
         size = 17;
         color = '#ffd34d';
+      } else if (f.kind === 'bleed') {
+        size = 14;
+        color = '#ff4b4b';
       } else if (f.kind === 'saved') {
         size = 20;
         color = '#ff5a64';

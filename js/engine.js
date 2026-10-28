@@ -1,4 +1,4 @@
-import { AFK_ROUNDS, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
+import { AFK_ROUNDS, BLEED, HIT_REWARD, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
@@ -744,6 +744,9 @@ export class Game {
       g.spearOut = null;
       g.spearCool = 0;
       g.savedNow = false;
+      g.bleedT = 0;
+      g.bledBy = null;
+      g.hitsNow = 0;
       g.by = '';
     });
     // соседи становятся парами — бой сразу распадается на поединки по всей арене (в яме цели ищут сами)
@@ -986,6 +989,15 @@ export class Game {
       g.fleeCool = Math.max(0, (g.fleeCool || 0) - dt);
       g.netCool = Math.max(0, (g.netCool || 0) - dt);
       g.spearCool = Math.max(0, (g.spearCool || 0) - dt);
+      if (g.bleedT > 0) {
+        // кровотечение: пока бегает (и в прошлый такт двигался) — теряет здоровье
+        g.bleedT = Math.max(0, g.bleedT - dt);
+        if (g.walking) g.hp -= BLEED.rate * maxHp(g) * dt;
+        if (g.hp <= 0) {
+          this._knockOut(g, g.bledBy || g);
+          continue;
+        }
+      }
       if (g.stunT > 0) {
         // в сети: стоит, не бьёт и не убегает
         g.stunT = Math.max(0, g.stunT - dt);
@@ -1201,10 +1213,16 @@ export class Game {
     d.hp -= dmg;
     d.flash = 0.18;
     a.dealt += dmg;
+    if (!a.lion) a.hitsNow = (a.hitsNow || 0) + 1;
     this._emit('hit', { x: d.x, y: d.y, amount: dmg, crit, login: d.login, from: a.login, ranged });
     if (d.hp <= 0) {
       this._knockOut(d, a);
       return;
+    }
+    if (crit && this.random() < BLEED.chance) {
+      if (!(d.bleedT > 0)) this._emit('bleed', { login: d.login, x: d.x, y: d.y });
+      d.bleedT = BLEED.time;
+      d.bledBy = a;
     }
     if (crit && !d.lion && this.random() < FLEE.critChance) this._flee(d, FLEE.critTime[0] + this.random() * FLEE.critTime[1], 'crit');
     // ударили сбоку — может развернуться на обидчика
@@ -1218,8 +1236,9 @@ export class Game {
     const hpMax = maxHp(d);
     // лев погибает всегда; от лап льва гибнут втрое чаще
     const chance = d.lion ? 1 : this.duel || d === this.boss ? 0
-      : deathChance(this.settings.death / 100, -d.hp, hpMax) * (a.lion ? PIT.deathMult : 1);
-    let dead = Boolean(d.lion) || chance > 0 && this.random() < Math.min(0.95, chance);
+      : deathChance(this.settings.death / 100, -d.hp, hpMax) * (a.lion ? PIT.deathMult : 1)
+        * (d.bleedT > 0 ? BLEED.deathMult : 1);
+    let dead = Boolean(d.lion) || chance > 0 && this.random() < (chance >= 1 ? 1 : Math.min(0.95, chance));
     // божественный амулет забирает смерть на себя и рассыпается
     const saved = dead && !d.lion && d.amulet;
     if (saved) {
@@ -1229,6 +1248,7 @@ export class Game {
     }
     d.fate = dead ? 'dead' : 'down';
     d.by = a.name;
+    d.bleedT = 0;
     d.hp = dead ? 0 : Math.max(1, Math.round(hpMax * BEATEN_HP));
     a.kosNow++;
     if (dead) a.killsNow++;
@@ -1300,7 +1320,13 @@ export class Game {
         coins = Math.round((r.coins + r.coinsPerKo * g.kosNow) * mult);
         if (fate === 'fight') g.wins++;
       }
+      // за каждый удар по врагу — сверху, если выжил (парагону ни к чему — он начинает заново)
+      if (fate !== 'dead' && g !== this.boss) {
+        xp += HIT_REWARD.xp * (g.hitsNow || 0);
+        coins += HIT_REWARD.coins * (g.hitsNow || 0);
+      }
       const row = { login: g.login, name: g.name, color: g.color, fate, xp, coins, kos: g.kosNow, kills: g.killsNow,
+        hits: g.hitsNow || 0,
         by: g.by, level: g.level, ups: 0, saved: Boolean(g.savedNow) };
       g.savedNow = false;
       if (fate === 'dead') {
@@ -1362,6 +1388,8 @@ export class Game {
     for (const g of this.members.values()) {
       g.spearOut = null;
       g.stunT = 0;
+      g.bleedT = 0;
+      g.bledBy = null;
     }
     this.roster.save();
     this.fighters = [];

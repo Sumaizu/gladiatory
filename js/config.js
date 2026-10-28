@@ -2,7 +2,7 @@ export const DEFAULTS = {
   channel: '',
   ludus: 60,
   battle: 90,
-  death: 15,
+  death: 10,
   chat_commands: true,
   sound: true,
   volume: 70,

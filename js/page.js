@@ -28,6 +28,11 @@ function restore() {
       saved.ludus = 60;
       localStorage.setItem(STORAGE_KEY + '.ludus60', '1');
     }
+    // и смертность по умолчанию стала 10% вместо 15%
+    if (saved && saved.death === 15 && !localStorage.getItem(STORAGE_KEY + '.death10')) {
+      saved.death = 10;
+      localStorage.setItem(STORAGE_KEY + '.death10', '1');
+    }
     return clean(saved);
   } catch (error) {
     return clean({});
