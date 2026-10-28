@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Гладиаторы — бои на арене всем чатом, игра для Twitch</title>
+<meta name="description" content="Игра для чата Twitch на русском: зрители становятся гладиаторами, готовятся к бою в лудусе и сражаются на арене все против всех. Прогресс копится, но погибший гладиатор пропадает навсегда. Играй в браузере или вставь ссылку в OBS — ставить ничего не нужно.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg stroke-linecap='round'%3E%3Cpath d='M5 5l17 17' stroke='%23e6ebf0' stroke-width='3.2'/%3E%3Cpath d='M27 5 10 22' stroke='%23e6ebf0' stroke-width='3.2'/%3E%3Cpath d='M18 25l7-7M14 25l-7-7' stroke='%23f0b44c' stroke-width='3'/%3E%3Cpath d='M24.5 24.5l3 3M7.5 24.5l-3 3' stroke='%238a5a2b' stroke-width='3.4'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/page.css">
+</head>
+<body>
+<main class="page">
+  <header class="top">
+    <a class="logo" href="https://gamesonstream.ru/" title="Все игры"><img src="images/logo.png" alt="Games on Stream" width="527" height="121"></a>
+    <form class="controls" id="start" autocomplete="off">
+      <input type="text" id="s-channel" placeholder="канал Twitch" spellcheck="false" aria-label="Канал Twitch">
+      <button type="submit" class="primary" id="play" disabled>Начать</button>
+      <button type="button" id="pause" disabled>Пауза</button>
+      <button type="button" id="next" title="Не ждать отсчёта: сразу бой, итоги или лудус" disabled>Дальше</button>
+      <button type="button" id="reset" title="Стереть всех гладиаторов канала" disabled>Сброс</button>
+      <button type="button" id="toggle-settings" aria-expanded="false" aria-controls="settings">Настройки</button>
+      <button type="button" id="toggle-link" aria-expanded="false" aria-controls="link-panel">Ссылка для OBS</button>
+      <button type="button" id="open-rules">Правила</button>
+    </form>
+    <section class="panel popover" id="link-panel" hidden>
+      <div class="row">
+        <input type="text" id="link" readonly aria-label="Ссылка на оверлей">
+        <button type="button" id="copy">Копировать</button>
+      </div>
+      <p class="status" id="link-status"></p>
+      <p class="hint">Вставь ссылку в источник «Браузер» в OBS, размер 1920×1080. Игра начинается сама, как только источник появился на экране. Пока источник скрыт, игра стоит на паузе.</p>
+    </section>
+  </header>
+  <p class="alpha">Тестовая альфа-версия <span>— возможны ошибки, баланс и правила ещё будут меняться</span></p>
+
+  <div class="layout" id="layout">
+    <div class="stage">
+      <div class="screen">
+        <iframe id="game" title="Гладиаторы"></iframe>
+        <p class="note" id="example-note">Пример: гладиаторы выдуманные</p>
+      </div>
+    </div>
+
+    <form class="panel settings" id="settings" autocomplete="off" hidden>
+      <fieldset>
+        <legend>Игра</legend>
+        <div class="field">
+          <label for="s-ludus">Лудус</label>
+          <div class="row"><input type="number" id="s-ludus" min="20" max="900"><span class="hint">секунд подготовки перед каждым боем</span></div>
+        </div>
+        <div class="field">
+          <label for="s-battle">Бой</label>
+          <div class="row"><input type="number" id="s-battle" min="20" max="600"><span class="hint">секунд, не дольше; бой кончится раньше, если на ногах остался один</span></div>
+        </div>
+        <div class="field">
+          <label for="s-death">Шанс гибели</label>
+          <div class="row"><input type="number" id="s-death" min="0" max="100"><span class="hint">% — для упавшего гладиатора; от сильного удара выше. 0 — никто не гибнет</span></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Чат</legend>
+        <label class="check">
+          <input type="checkbox" id="s-chat_commands">
+          <span>Команды для стримера и модераторов
+            <span class="hint"><code>!гладиаторы-пауза</code> — пауза, ещё раз — продолжить</span>
+            <span class="hint"><code>!гладиаторы-дальше</code> — не ждать отсчёта</span>
+            <span class="hint"><code>!гладиаторы-сброс</code> — стереть всех гладиаторов</span>
+          </span>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Звук</legend>
+        <label class="check"><input type="checkbox" id="s-sound"><span>Звуки игры</span></label>
+        <div class="field">
+          <label for="s-volume">Громкость</label>
+          <div class="row">
+            <input type="range" id="s-volume" min="0" max="100" step="5">
+            <span class="hint" id="volume-text"></span>
+            <button type="button" id="listen">Послушать</button>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Вид</legend>
+        <div class="split">
+          <div class="group">
+            <div class="switch" role="group" aria-label="Окошко под вебку">
+              <button type="button" data-webcam="1">С вебкой</button><button type="button" data-webcam="0">Без вебки</button>
+            </div>
+          </div>
+          <div class="group">
+            <label class="check"><input type="checkbox" id="hide-bg"><span>Прозрачный фон</span></label>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="footer"><button type="button" class="quiet" id="defaults">Рекомендуемые настройки</button></div>
+    </form>
+  </div>
+  <footer class="foot">
+    <p class="tagline" id="status">Бои гладиаторов всем чатом: лудус, арена, прокачка — и смерть навсегда</p>
+    <p class="author">Создано <a href="https://www.twitch.tv/sumaizu" target="_blank" rel="noopener">Sumaizu</a></p>
+  </footer>
+</main>
+<dialog class="rules" id="rules" aria-labelledby="rules-title">
+  <header class="rules-head">
+    <h2 id="rules-title"></h2>
+    <button type="button" class="rules-x" id="rules-x" aria-label="Закрыть">×</button>
+  </header>
+  <div class="rules-body" id="rules-body"></div>
+  <footer class="rules-foot">
+    <button type="button" class="primary" id="rules-close">Закрыть</button>
+  </footer>
+</dialog>
+<script type="module" src="js/page.js"></script>
+</body>
+</html>

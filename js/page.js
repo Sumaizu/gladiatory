@@ -1,0 +1,240 @@
+import { clean, fromQuery, toQuery } from './config.js';
+import { RULES_TITLE, renderRules } from './rules.js';
+
+const STORAGE_KEY = 'gladiatory.settings';
+const NUMBERS = ['ludus', 'battle', 'death', 'volume'];
+const FLAGS = ['chat_commands', 'sound'];
+const HIDDEN_PARTS = { bg: 'hide-bg' };
+const CONFIRMED = { reset: 'Сброс' };
+const SYNC_MS = 500;
+const CONFIRM_MS = 4000;
+
+const $ = (id) => document.getElementById(id);
+const frame = $('game'), form = $('settings'), channelField = $('s-channel'), linkPanel = $('link-panel');
+const TAGLINE = $('status').textContent;
+
+let settings = restore();
+let playing = false;
+let connected = false;
+let notice = '';
+const armedUntil = { reset: 0 };
+
+function restore() {
+  if (location.search.length > 1) return fromQuery(location.search);
+  try {
+    return clean(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'));
+  } catch (error) {
+    return clean({});
+  }
+}
+
+function remember() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch (error) {
+    return;
+  }
+}
+
+function overlayLink(query) {
+  return new URL('overlay.html', location.href).href + (query ? '?' + query : '');
+}
+
+function overlay() {
+  return (frame.contentWindow && frame.contentWindow.gladiatory) || null;
+}
+
+function fillForm() {
+  channelField.value = settings.channel;
+  for (const key of NUMBERS) $('s-' + key).value = settings[key];
+  for (const key of FLAGS) $('s-' + key).checked = settings[key];
+  for (const key of Object.keys(HIDDEN_PARTS)) $(HIDDEN_PARTS[key]).checked = !settings[key];
+  showDependentFields(settings);
+}
+
+function readForm() {
+  const raw = { channel: settings.channel, webcam: settings.webcam };
+  for (const key of NUMBERS) raw[key] = $('s-' + key).value === '' ? null : Number($('s-' + key).value);
+  for (const key of FLAGS) raw[key] = $('s-' + key).checked;
+  for (const key of Object.keys(HIDDEN_PARTS)) raw[key] = !$(HIDDEN_PARTS[key]).checked;
+  return clean(raw);
+}
+
+function showDependentFields(shown) {
+  $('volume-text').textContent = shown.volume + '%';
+  for (const button of document.querySelectorAll('[data-webcam]')) {
+    button.classList.toggle('on', (button.dataset.webcam === '1') === shown.webcam);
+  }
+}
+
+function showStatus(id, kind, text) {
+  const node = $(id);
+  node.classList.remove('ok', 'warn');
+  if (kind) node.classList.add(kind);
+  node.textContent = text;
+  node.title = text;
+}
+
+function showLink() {
+  $('link').value = overlayLink(toQuery(settings));
+  showStatus('link-status', 'warn', settings.channel ? '' : 'Впиши канал Twitch — без него оверлей не увидит чат.');
+}
+
+function adopt(candidate, refill) {
+  settings = candidate;
+  remember();
+  if (refill) fillForm();
+  else showDependentFields(settings);
+  showLink();
+  const api = overlay();
+  if (api) api.apply(settings);
+}
+
+function commitChannel() {
+  const channel = clean({ channel: channelField.value }).channel;
+  if (channel !== settings.channel) adopt(clean(Object.assign({}, settings, { channel })), false);
+  channelField.value = settings.channel;
+}
+
+function toggleGame() {
+  const api = overlay();
+  if (!api) return;
+  commitChannel();
+  if (playing) {
+    api.stop();
+    playing = false;
+    armedUntil.reset = 0;
+  } else if (!settings.channel) {
+    notice = 'Впиши канал Twitch — без него игра не увидит чат.';
+    channelField.focus();
+  } else {
+    api.start();
+    playing = true;
+    showLinkPanel(false);
+  }
+  sync();
+}
+
+function confirmed(name, action) {
+  const api = overlay();
+  if (!api || !playing) return;
+  if (Date.now() < armedUntil[name]) {
+    action(api);
+    armedUntil[name] = 0;
+  } else {
+    armedUntil[name] = Date.now() + CONFIRM_MS;
+  }
+  sync();
+}
+
+function sync() {
+  const api = overlay();
+  $('play').disabled = !api;
+  if (!api) {
+    showStatus('status', '', 'Загружаю игру…');
+    return;
+  }
+  if (!connected) {
+    connected = true;
+    api.apply(settings);
+  }
+  const game = api.game, paused = playing && game.paused;
+  $('play').textContent = playing ? 'Остановить' : 'Начать';
+  $('pause').disabled = $('reset').disabled = !playing;
+  $('pause').textContent = paused ? 'Продолжить' : 'Пауза';
+  $('next').disabled = !playing || paused || game.state === 'stopped';
+  for (const name of Object.keys(CONFIRMED)) {
+    const asking = playing && Date.now() < armedUntil[name];
+    $(name).textContent = asking ? 'Точно?' : CONFIRMED[name];
+    $(name).classList.toggle('armed', asking);
+  }
+  $('example-note').hidden = playing;
+  if (paused) {
+    notice = '';
+    showStatus('status', 'warn', 'Пауза');
+  } else if (playing) {
+    notice = '';
+    const chat = api.chat.status;
+    const text = chat.text.charAt(0).toUpperCase() + chat.text.slice(1);
+    showStatus('status', chat.state === 'connected' ? 'ok' : 'warn', text);
+  } else if (notice) {
+    showStatus('status', 'warn', notice);
+  } else {
+    showStatus('status', '', TAGLINE);
+  }
+}
+
+function toggleSettings() {
+  const open = form.hidden;
+  form.hidden = !open;
+  $('layout').classList.toggle('with-settings', open);
+  $('toggle-settings').setAttribute('aria-expanded', String(open));
+}
+
+function showLinkPanel(open) {
+  linkPanel.hidden = !open;
+  $('toggle-link').setAttribute('aria-expanded', String(open));
+}
+
+async function copyLink() {
+  const link = $('link'), button = $('copy');
+  try {
+    await navigator.clipboard.writeText(link.value);
+  } catch (error) {
+    link.select();
+    document.execCommand('copy');
+  }
+  button.textContent = 'Скопировано';
+  setTimeout(() => { button.textContent = 'Копировать'; }, 1500);
+}
+
+form.addEventListener('input', () => adopt(readForm(), false));
+form.addEventListener('change', () => adopt(readForm(), true));
+form.addEventListener('submit', (event) => event.preventDefault());
+for (const button of document.querySelectorAll('[data-webcam]')) {
+  button.addEventListener('click', () => {
+    adopt(clean(Object.assign(readForm(), { webcam: button.dataset.webcam === '1' })), true);
+  });
+}
+$('defaults').addEventListener('click', () => adopt(clean({ channel: settings.channel }), true));
+$('listen').addEventListener('click', () => {
+  const api = overlay();
+  if (api) api.playSounds(settings.volume);
+});
+$('start').addEventListener('submit', (event) => {
+  event.preventDefault();
+  toggleGame();
+});
+$('pause').addEventListener('click', () => {
+  const api = overlay();
+  if (api && playing) api.pause();
+  sync();
+});
+$('next').addEventListener('click', () => {
+  const api = overlay();
+  if (api && playing) api.game.next();
+  sync();
+});
+$('reset').addEventListener('click', () => confirmed('reset', (api) => api.reset()));
+channelField.addEventListener('change', commitChannel);
+channelField.addEventListener('input', () => { notice = ''; });
+$('toggle-settings').addEventListener('click', toggleSettings);
+$('toggle-link').addEventListener('click', () => showLinkPanel(linkPanel.hidden));
+$('copy').addEventListener('click', copyLink);
+for (const id of ['rules-x', 'rules-close']) $(id).addEventListener('click', () => $('rules').close());
+$('open-rules').addEventListener('click', () => $('rules').showModal());
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') showLinkPanel(false);
+});
+document.addEventListener('click', (event) => {
+  if (!linkPanel.contains(event.target) && event.target !== $('toggle-link')) showLinkPanel(false);
+});
+
+fillForm();
+showLink();
+$('rules-title').textContent = RULES_TITLE;
+renderRules($('rules-body'));
+$('rules').showModal();
+frame.src = overlayLink(['embed=1', toQuery(settings)].filter(Boolean).join('&'));
+sync();
+setInterval(sync, SYNC_MS);

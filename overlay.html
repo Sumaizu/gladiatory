@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Гладиаторы</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
+<link rel="stylesheet" href="css/overlay.css">
+</head>
+<body>
+<div id="stage" hidden>
+  <div class="card" id="card">
+    <header class="head">
+      <div class="brand"><i class="swords"></i>Гладиаторы<span class="alpha">альфа</span></div>
+      <div class="phase" id="phase"></div>
+      <div class="status" id="status"></div>
+      <div class="clock" id="clock"></div>
+    </header>
+    <section class="field" id="field">
+      <canvas id="world"></canvas>
+      <canvas id="canvas"></canvas>
+      <div class="banner" id="banner" hidden><b id="banner-title"></b><span id="banner-text"></span></div>
+      <div class="cards" id="cards"></div>
+      <div class="screen results" id="results" hidden>
+        <h2>Итоги боя</h2>
+        <p class="champion" id="champion"></p>
+        <div class="columns">
+          <div class="column alive"><h3>Выстояли</h3><ol id="res-alive"></ol></div>
+          <div class="column beaten"><h3>Пали, но живы</h3><ol id="res-beaten"></ol></div>
+          <div class="column dead"><h3>Погибли</h3><ol id="res-dead"></ol></div>
+        </div>
+        <p class="next" id="res-next"></p>
+      </div>
+      <div class="screen pause" id="pause" hidden><h2>Пауза</h2><p id="pause-text"></p></div>
+    </section>
+    <aside class="side" id="side">
+      <div class="list roster">
+        <h3>Гладиаторы <span class="count" id="count"></span><span class="fallen" id="fallen"></span></h3>
+        <ol id="roster"></ol>
+        <p class="more" id="more"></p>
+        <p class="empty" id="empty">Напиши в чат что угодно — и ты гладиатор</p>
+      </div>
+      <div class="list feed">
+        <h3>Хроника</h3>
+        <ol id="feed"></ol>
+      </div>
+      <div class="cam"></div>
+    </aside>
+  </div>
+</div>
+<script type="module" src="js/overlay.js"></script>
+</body>
+</html>
