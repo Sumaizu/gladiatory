@@ -1444,52 +1444,8 @@ test('испытание парагона: сети его не берут, зд
   ok(!fresh.might && fresh.str === 0);
 });
 
-test('божественное оружие: ' + DIVINE.rounds + ' раунда с той же легендаркой и убийство насмерть — урон ×' + DIVINE.mult + ', гача не меняет', () => {
-  const g = game({ settings: { death: 100 } });
-  const [a, b, c] = join(g, 'A', 'B', 'C');
-  a.weapon = { kind: 'weapon', type: 'sword', rarity: 'legendary', power: 10 };
-  a.weaponRounds = DIVINE.rounds - 1;
-  g.next();
-  b.hp = -5;
-  g._knockOut(b, a);
-  eq(a.weapon.rarity, 'legendary', 'рано: всего ' + (DIVINE.rounds - 1) + ' раунда');
-  c.fate = 'yield';
-  g._checkEnd();
-  fight(g);
-  g.next();
-  eq(a.weaponRounds, DIVINE.rounds);
-  g.next();
-  const d = g.fighters.find((f) => f !== a);
-  d.hp = -5;
-  g._knockOut(d, a);
-  eq([a.weapon.rarity, a.weapon.power], ['divine', 15]);
-  eq(rarityOf('divine').color, DIVINE.color);
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'greatsword', rarity: 'legendary', power: 99 } });
-  eq(a.weapon.rarity, 'divine', 'гача не меняет');
-  ok(c);
-});
 
-test('новое оружие из гачи обнуляет счёт раундов к божественному', () => {
-  const g = game();
-  const [a] = join(g, 'A', 'B');
-  a.weapon = { kind: 'weapon', type: 'sword', rarity: 'common', power: 2 };
-  a.weaponRounds = 5;
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'sword', rarity: 'rare', power: 4 } });
-  eq(a.weaponRounds, 0);
-});
 
-test('божественным становится только легендарное оружие — эпическое раунды не копит', () => {
-  const g = game({ settings: { death: 100 } });
-  const [a, b] = join(g, 'A', 'B', 'C');
-  a.weapon = { kind: 'weapon', type: 'sword', rarity: 'epic', power: 10 };
-  for (let i = 0; i < DIVINE.rounds + 1; i++) g.open();
-  eq(a.weaponRounds || 0, 0);
-  a.weaponRounds = 99;
-  g.next();
-  b.hp = -5;
-  g._knockOut(b, a);
-  eq(a.weapon.rarity, 'epic');
-});
 
 test('двуручник: сектор 100° в сторону цели и в полтора маха длиной', () => {
   const g = game();
@@ -1534,4 +1490,53 @@ test('ловкость ускоряет бег: +' + RUN_PER_AGI * 100 + '% за
   const slow = run(0), fast = run(10);
   ok(Math.abs(fast / slow - runOf({ agi: 10 })) < 1e-9 && runOf({ agi: 10 }) > 1.15, slow + ' → ' + fast);
   ok(b);
+});
+
+const legendary = (kind, extra) => Object.assign({ kind, rarity: 'legendary', power: 16 }, extra);
+
+test('убил гладиатора насмерть — легендарное оружие становится божественным (×' + DIVINE.mult + '), гача его не меняет', () => {
+  const g = game({ settings: { death: 100 } });
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  a.weapon = legendary('weapon', { type: 'sword' });
+  a.gear.body = legendary('armor', { slot: 'body', power: 26 });
+  g.next();
+  b.hp = -5;
+  g._knockOut(b, a);
+  eq([a.weapon.rarity, a.weapon.power], ['divine', 24]);
+  eq(a.gear.body.rarity, 'legendary', 'сперва оружие, доспех ждёт следующего убийства');
+  c.hp = -5;
+  g._knockOut(c, a);
+  eq([a.gear.body.rarity, a.gear.body.power], ['divine', 39]);
+  eq(rarityOf('divine').color, DIVINE.color);
+  const r = { kind: 'item', item: { kind: 'weapon', type: 'greatsword', rarity: 'legendary', power: 99 } };
+  g._prize(a, r);
+  ok(a.weapon.rarity === 'divine' && r.locked, 'гача не меняет оружие');
+  g._prize(a, { kind: 'item', item: { kind: 'armor', slot: 'body', rarity: 'legendary', power: 99 } });
+  eq(a.gear.body.rarity, 'divine', 'и доспех');
+});
+
+test('божественным становится случайный легендарный доспех, если оружие не легендарное', () => {
+  const g = game({ settings: { death: 100 } });
+  const [a, b] = join(g, 'A', 'B', 'C');
+  a.weapon = { kind: 'weapon', type: 'sword', rarity: 'epic', power: 11 };
+  a.gear.head = legendary('armor', { slot: 'head', power: 13 });
+  a.gear.feet = legendary('armor', { slot: 'feet', power: 8 });
+  a.gear.legs = { kind: 'armor', slot: 'legs', rarity: 'epic', power: 8 };
+  g.next();
+  b.hp = -5;
+  g._knockOut(b, a);
+  eq(a.weapon.rarity, 'epic');
+  eq(a.gear.legs.rarity, 'epic');
+  eq([a.gear.head.rarity, a.gear.feet.rarity].filter((x) => x === 'divine').length, 1, 'ровно одна вещь');
+});
+
+test('без смерти, льва или легендарных вещей божественного не бывает', () => {
+  const g = game({ settings: { death: 0 } });
+  const [a, b] = join(g, 'A', 'B', 'C');
+  a.weapon = legendary('weapon', { type: 'sword' });
+  g.next();
+  b.hp = -5;
+  g._knockOut(b, a);
+  eq(b.fate, 'down');
+  eq(a.weapon.rarity, 'legendary', 'просто повалил — не считается');
 });

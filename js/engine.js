@@ -53,11 +53,11 @@ export { AFK_ROUNDS };
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const INVISIBLE = /[​‌‍⁠﻿­͏⠀\u{E0000}]/gu;
 const IGNORED = new Set(BOTS);
-const SAVED = ['name', 'color', 'level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'weaponRounds', 'gear', 'shield',
+const SAVED = ['name', 'color', 'level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'gear', 'shield',
   'nets', 'amulet', 'hp',
   'fights', 'wins', 'kos', 'kills', 'paragon', 'born'];
 const COUNTS = ['level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'nets', 'fights', 'wins', 'kos',
-  'kills', 'paragon', 'weaponRounds'];
+  'kills', 'paragon'];
 
 const PLACE_BY_WORD = new Map();
 for (const [id, place] of Object.entries(PLACES)) for (const word of place.words) PLACE_BY_WORD.set(word, id);
@@ -219,8 +219,6 @@ export class Game {
   open() {
     if (this.state === 'stopped') this.roundStarts = [];
     this.roundStarts.push(this.clock);
-    // ещё раунд с той же легендаркой — копится к божественному
-    for (const g of this.members.values()) if (g.weapon && g.weapon.rarity === 'legendary') g.weaponRounds = (g.weaponRounds || 0) + 1;
     if (this.roundStarts.length > AFK_ROUNDS) this.roundStarts.shift();
     this.state = 'ludus';
     this.paused = false;
@@ -515,15 +513,12 @@ export class Game {
       const item = result.item;
       if (item.kind === 'armor' && !g.gear) g.gear = emptyGear();
       const current = item.kind === 'armor' ? g.gear[item.slot] : g.weapon;
-      if (item.kind === 'weapon' && current && current.rarity === DIVINE.id) {
+      if (current && current.rarity === DIVINE.id) {
         result.locked = true;
-        this._line(g.name + ': божественное оружие гача не меняет — «' + itemText(item) + '» выброшено', 'info');
+        this._line(g.name + ': божественную вещь гача не меняет — «' + itemText(item) + '» выброшено', 'info');
       } else if (!current || item.power > current.power) {
         if (item.kind === 'armor') g.gear[item.slot] = item;
-        else {
-          g.weapon = item;
-          g.weaponRounds = 0;
-        }
+        else g.weapon = item;
         result.equipped = true;
         this._line(g.name + ' надевает «' + itemText(item) + '»', 'level');
       } else {
@@ -1323,12 +1318,7 @@ export class Game {
     d.hp = dead ? 0 : Math.max(1, Math.round(hpMax * BEATEN_HP));
     a.kosNow++;
     if (dead) a.killsNow++;
-    // убил насмерть гладиатора легендаркой, с которой провёл DIVINE.rounds раундов подряд, — она становится божественной
-    if (dead && !d.lion && !a.lion && a.weapon && a.weapon.rarity === 'legendary' && (a.weaponRounds || 0) >= DIVINE.rounds) {
-      a.weapon = Object.assign({}, a.weapon, { rarity: DIVINE.id, power: Math.round(a.weapon.power * DIVINE.mult) });
-      this._line('Оружие ' + a.name + ' напилось крови и становится божественным: «' + itemText(a.weapon) + '»', 'champion');
-      this._emit('divine', { login: a.login, x: a.x, y: a.y });
-    }
+    if (dead && !d.lion && !a.lion) this._bless(a);
     a.target = null;
     if (d.lion) this._line(a.name + ' сражает льва!', 'champion');
     else if (a.lion) this._line(dead ? 'Лев растерзал ' + d.name : 'Лев повалил ' + d.name + ' — тот жив', dead ? 'death' : 'down');
@@ -1337,6 +1327,24 @@ export class Game {
     else this._line(a.name + ' валит ' + d.name + ' — тот сдаётся', 'down');
     this._emit('down', { login: d.login, fate: d.fate, x: d.x, y: d.y, by: a.login, lion: Boolean(d.lion), saved });
     this._checkEnd();
+  }
+
+  // убил гладиатора насмерть — одна легендарная вещь становится божественной: сперва оружие, потом случайный доспех
+  _bless(g) {
+    let slot = null;
+    if (g.weapon && g.weapon.rarity === 'legendary') slot = 'weapon';
+    else {
+      const armor = SLOT_IDS.filter((id) => g.gear && g.gear[id] && g.gear[id].rarity === 'legendary');
+      if (armor.length) slot = armor[Math.floor(this.random() * armor.length)];
+    }
+    if (!slot) return;
+    const was = slot === 'weapon' ? g.weapon : g.gear[slot];
+    const item = Object.assign({}, was, { rarity: DIVINE.id, power: Math.round(was.power * DIVINE.mult) });
+    if (slot === 'weapon') g.weapon = item;
+    else g.gear[slot] = item;
+    this._line(g.name + ': «' + itemText(was) + '» напивается крови и становится божественным — «' + itemText(item) + '»',
+      'champion');
+    this._emit('divine', { login: g.login, x: g.x, y: g.y, slot });
   }
 
   _checkEnd() {

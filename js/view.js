@@ -306,7 +306,8 @@ export class View {
       this._bleed(e.x, e.y - 22, 10, 1.2);
     } else if (e.type === 'divine') {
       const g = game.fighters.find((f) => f.login === e.login);
-      this.floats.push({ x: e.x, y: e.y - 70, text: 'божественное оружие!', life: 3, kind: 'saved', follow: g });
+      this.floats.push({ x: e.x, y: e.y - 70, text: e.slot === 'weapon' ? 'божественное оружие!' : 'божественный доспех!',
+        life: 3, kind: 'saved', follow: g });
       sound('jackpot');
     } else if (e.type === 'paragon') {
       sound('champion');
@@ -916,7 +917,7 @@ export class View {
       const r = now.result;
       if (now.done && r.item) {
         prize.style.color = rarityOf(r.item.rarity).color;
-        prize.append(itemText(r.item), el('small', '', r.equipped ? 'надевает' : r.locked ? 'божественное оружие не меняется'
+        prize.append(itemText(r.item), el('small', '', r.equipped ? 'надевает' : r.locked ? 'божественная вещь не меняется'
           : 'не лучше своего — выброшено'));
       } else if (now.done && r.kind === 'amulet') {
         prize.style.color = outcomeOf(r.kind).color;
