@@ -1379,16 +1379,23 @@ test('кровотечение замедляет на ' + BLEED.slow * 100 + '%
   ok(b);
 });
 
-test('стенка на стенку: змейкой по силе — 1 красные, 2–3 синие, 4–5 красные…', () => {
-  const g = game({ mode: 'teams' });
-  const people = join(g, 'A', 'B', 'C', 'D', 'E', 'F', 'G');
-  people.forEach((m, i) => { m.level = 20 - i; });
-  g.next();
-  eq(people.map((m) => m.team), ['red', 'blue', 'blue', 'red', 'red', 'blue', 'blue']);
-  ok(g._enemy(people[0], people[1]));
-  no(g._enemy(people[0], people[3]), 'свои');
-  const reds = people.filter((m) => m.team === 'red'), blues = people.filter((m) => m.team === 'blue');
-  ok(Math.max(...reds.map((m) => m.x)) < Math.max(...blues.map((m) => m.x)), 'красные слева');
+test('стенка на стенку: команды случайные, но поровну', () => {
+  const sizes = new Set(), firsts = new Set();
+  for (let seed = 1; seed <= 12; seed++) {
+    const g = game({ mode: 'teams', random: rng(seed) });
+    const people = join(g, 'A', 'B', 'C', 'D', 'E', 'F', 'G');
+    g.next();
+    const reds = people.filter((m) => m.team === 'red'), blues = people.filter((m) => m.team === 'blue');
+    eq(reds.length + blues.length, 7);
+    ok(Math.abs(reds.length - blues.length) === 1, 'разница не больше одного');
+    sizes.add(reds.length);
+    firsts.add(people[0].team);
+    ok(g._enemy(reds[0], blues[0]));
+    no(g._enemy(reds[0], reds[1]), 'свои');
+    ok(Math.max(...reds.map((m) => m.x)) < Math.max(...blues.map((m) => m.x)), 'красные слева');
+  }
+  eq(sizes, new Set([3, 4]), 'лишний попадает то к красным, то к синим');
+  eq(firsts.size, 2, 'один и тот же игрок попадает в разные команды');
 });
 
 test('стенка на стенку: бой до последней команды, победителям больше, устоявшим ещё больше, смерть возможна', () => {
@@ -1396,7 +1403,9 @@ test('стенка на стенку: бой до последней коман�
   const people = join(g, 'A', 'B', 'C', 'D');
   g.next();
   const [a, b, c, d] = people;
-  // a — красные; b, c — синие; d — красные
+  // команды случайные — для проверки расставляем сами
+  a.team = d.team = 'red';
+  b.team = c.team = 'blue';
   b.hp = -5;
   g._knockOut(b, a);
   eq(b.fate, 'dead');

@@ -736,10 +736,15 @@ export class Game {
     }
     for (const g of this.members.values()) g.team = null;
     if (this.mode === 'teams') {
-      // змейкой по силе: 1 — красные, 2 и 3 — синие, 4 и 5 — красные…
-      const order = ready.slice().sort((a, b) => b.level - a.level || b.xp - a.xp);
+      // случайно, но поровну: перемешиваем и раздаём через одного; лишний при нечётном — в случайную команду
+      const order = ready.slice();
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(this.random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      const first = this.random() < 0.5 ? 'red' : 'blue', second = first === 'red' ? 'blue' : 'red';
       order.forEach((g, i) => {
-        g.team = Math.floor((i + 1) / 2) % 2 === 0 ? 'red' : 'blue';
+        g.team = i % 2 === 0 ? first : second;
       });
     }
     const lions = this.mode === 'pit' ? this._lions(ready) : [];
