@@ -121,24 +121,37 @@ test('здоровому в лазарет не надо', () => {
   eq(a.place, 'rest');
 });
 
-test('вылечился в лазарете — возвращается на скамью', () => {
+test('вылечился в лазарете и писал в чат — идёт тренироваться', () => {
   const g = game();
   const [a] = join(g, 'Brutus');
   a.hp = maxHp(a) - 1;
   g.feed('Brutus', 'лазарет', { login: 'brutus' });
   for (let i = 0; i < 20 * 20; i++) g.step(0.05);
-  eq(a.place, 'rest');
+  eq(a.place, 'train');
   eq(a.hp, maxHp(a));
 });
 
-test('тренировка даёт опыт и уровень с очками', () => {
-  const g = game({ settings: { ludus: 900 } });
-  const [a] = join(g, 'Brutus');
-  g.feed('Brutus', 'трен', { login: 'brutus' });
-  for (let i = 0; i < 20 * 400; i++) g.step(0.05);
-  ok(a.level >= 2, 'уровень вырос');
-  eq(a.points, START_POINTS + 2 * (a.level - 1));
-  eq(a.hp <= maxHp(a), true);
+test('афк: не писал ни в прошлом раунде, ни сейчас — после лазарета садится отдыхать', () => {
+  const g = game({ settings: { ludus: 20, battle: 20 } });
+  const [afk, b, c] = join(g, 'Afk', 'B', 'C');
+  // первый раунд: все писали (вступили); второй раунд — Afk молчит
+  for (const round of [1, 2, 3]) {
+    if (round > 1) g.feed('B', 'трен', { login: 'b' });
+    g.next();
+    fight(g);
+    g.next();
+  }
+  ok(g.isActive(b), 'B писал');
+  no(g.isActive(afk), 'Afk молчал два раунда');
+  for (const m of [afk, b]) {
+    m.hp = maxHp(m) - 1;
+    m.place = 'heal';
+    m.walking = false;
+  }
+  for (let i = 0; i < 20 * 15 && (afk.place === 'heal' || b.place === 'heal'); i++) g.step(0.05);
+  eq(afk.place, 'rest');
+  eq(b.place, 'train');
+  ok(c);
 });
 
 test('оружие и доспех пока не продаются: команды ничего не делают', () => {

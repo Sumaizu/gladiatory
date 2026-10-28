@@ -159,6 +159,8 @@ export class Game {
     this.cards = [];
     this.endIn = null;
     this._carry = 0;
+    this.roundStart = 0;
+    this.lastRoundStart = 0;
     this._saveIn = SAVE_EVERY;
   }
 
@@ -170,7 +172,10 @@ export class Game {
 
   // --- фазы ---
 
+  // раунд — это лудус и бой после него; помним начало прошлого, чтобы отличать активных от афк
   open() {
+    this.lastRoundStart = this.state === 'stopped' ? this.clock : this.roundStart;
+    this.roundStart = this.clock;
     this.state = 'ludus';
     this.paused = false;
     this.timer = this.settings.ludus;
@@ -243,6 +248,7 @@ export class Game {
     }
     let g = this.members.get(login);
     if (!g) g = this._join(login, name || login, meta.color);
+    g.saidAt = this.clock;
     this._command(g, first, words[1] || '');
   }
 
@@ -389,8 +395,9 @@ export class Game {
       const rate = g.walking ? 0 : HEAL_RATE[g.place] || 0;
       g.hp = Math.min(hpMax, g.hp + rate * hpMax * dt);
       if (g.place === 'heal' && g.hp >= hpMax) {
-        this._line(g.name + ' вылечился и выходит из лазарета', 'heal');
-        this._arrive(g, 'rest', true);
+        const active = this.isActive(g);
+        this._line(g.name + ' вылечился и ' + (active ? 'идёт тренироваться' : 'садится отдохнуть'), 'heal');
+        this._arrive(g, active ? 'train' : 'rest', true);
       }
       if (g.place === 'train' && !g.walking) this._gainXp(g, TRAIN_XP * dt);
     }
@@ -399,6 +406,11 @@ export class Game {
       this._saveIn = SAVE_EVERY;
       this._saveAll();
     }
+  }
+
+  // писал в чат хоть раз с начала прошлого раунда — не афк
+  isActive(g) {
+    return g.saidAt !== undefined && g.saidAt >= this.lastRoundStart;
   }
 
   _stroll(g, dt) {
