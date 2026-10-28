@@ -618,6 +618,7 @@ export class Game {
       g.fleeCool = 0;
       g.circle = 0;
       g.stunT = 0;
+      g.netCool = 0;
       g.spearOut = null;
       g.by = '';
     });
@@ -744,6 +745,7 @@ export class Game {
       g.cool = Math.max(0, g.cool - dt);
       g.fleeT = Math.max(0, (g.fleeT || 0) - dt);
       g.fleeCool = Math.max(0, (g.fleeCool || 0) - dt);
+      g.netCool = Math.max(0, (g.netCool || 0) - dt);
       if (g.stunT > 0) {
         // в сети: стоит, не бьёт и не убегает
         g.stunT = Math.max(0, g.stunT - dt);
@@ -792,8 +794,9 @@ export class Game {
         g.cool = attackEvery(g);
         continue;
       }
-      if (netUp(g) && !(t.stunT > 0) && d >= NET.range[0] && d <= NET.range[1] && this.random() < dt * NET.chance) {
-        g.nets--;
+      if (netUp(g) && !(g.netCool > 0) && !(t.stunT > 0) && d >= NET.range[0] && d <= NET.range[1]
+        && this.random() < dt * NET.chance) {
+        g.netCool = NET.reload;
         this._throw(g, t, 'net');
         continue;
       }
@@ -882,8 +885,13 @@ export class Game {
         if (alive && a.fate === 'fight') this._attack(a, t, { mult: typeOf(a).throw, ranged: true });
         a.spearOut = { x: t.x + (this.random() - 0.5) * 30, y: t.y + 4 + this.random() * 10 };
         clampToArena(a.spearOut, 30);
-      } else if (alive) {
-        this._net(a, t);
+      } else {
+        if (alive) this._net(a, t);
+        if (this.random() < NET.tear && a.nets > 0) {
+          a.nets = 0;
+          this._emit('nettear', { login: a.login, x: t.x, y: t.y });
+          this._line('У ' + a.name + ' порвалась сеть', 'warn');
+        }
       }
     }
     this.projectiles = this.projectiles.filter((p) => !p.done);

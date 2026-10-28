@@ -207,6 +207,9 @@ export class View {
     } else if (e.type === 'shieldbreak') {
       this.floats.push({ x: e.x, y: e.y - 78, text: 'щит сломан', life: 1.8, kind: 'flee' });
       sound('crack');
+    } else if (e.type === 'nettear') {
+      this.floats.push({ x: e.x, y: e.y - 84, text: 'сеть порвалась', life: 1.8, kind: 'flee' });
+      sound('crack');
     } else if (e.type === 'stun') {
       this.floats.push({ x: e.x, y: e.y - 70, text: 'в сети!', life: 1.8, kind: 'flee' });
       this.roar = Math.min(1, this.roar + 0.4);

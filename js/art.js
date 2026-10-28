@@ -495,7 +495,7 @@ export function lookOf(g, seed) {
     color: muted(g.color), armor: tierOf(g.armor), helmet,
     skin: SKINS[(seed >>> 3) % SKINS.length], hair: HAIR[(seed >>> 6) % HAIR.length],
     shield: !shieldUp(g) ? 'none' : helmet === 'murmillo' || helmet === 'secutor' ? 'scutum' : 'parma',
-    net: netUp(g),
+    net: netUp(g) && !(g.netCool > 0),
   };
 }
 

@@ -648,7 +648,7 @@ test('щит: отбивает удар, иногда ломается; с дв�
   ok(SHIELD.block > 0 && SHIELD.breaks > 0);
 });
 
-test('сеть: одноразовая, оглушает и цель добивают', () => {
+test('сеть: оглушает, цель добивают, сеть остаётся для нового броска', () => {
   const g = game();
   const [a, b] = join(g, 'A', 'B', 'C');
   g.next();
@@ -659,7 +659,8 @@ test('сеть: одноразовая, оглушает и цель добив�
   a.retarget = 10;
   g.random = always(0.001);
   g.step(0.05);
-  eq(a.nets, 0, 'сеть потрачена');
+  eq(a.nets, 1, 'сеть не тратится');
+  ok(a.netCool > 0, 'пока не подобрал — второй раз не бросить');
   g.random = always(0.5);
   for (let i = 0; i < 20 && !(b.stunT > 0); i++) g.step(0.05);
   ok(b.stunT > 0, 'оглушён');
@@ -712,4 +713,21 @@ test('арена: врага выше уровнем выбирают чаще, 
   g.random = rng(11);
   for (let i = 0; i < 300; i++) picks[g._pickTarget(a, [a, strong, equal, weak]).login]++;
   ok(picks.strong > picks.equal && picks.strong > picks.weak, JSON.stringify(picks));
+});
+
+test('сеть: после броска с небольшим шансом рвётся', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B', 'C');
+  g.next();
+  a.nets = 1;
+  a.x = 300; a.y = 350; b.x = 400; b.y = 350;
+  b.agi = 0;
+  a.target = b;
+  a.retarget = 10;
+  g.random = always(0.001);
+  g.step(0.05);
+  for (let i = 0; i < 20 && g.projectiles.length; i++) g.step(0.05);
+  eq(a.nets, 0, 'порвалась');
+  ok(g.events.some((e) => e.type === 'nettear' && e.login === 'a'));
+  ok(NET.tear > 0 && NET.tear < 0.5 && NET.reload > NET.stun);
 });
