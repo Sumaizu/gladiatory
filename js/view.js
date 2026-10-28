@@ -5,6 +5,7 @@ import { FONT, drawCrowd, drawGladiator, drawThrown, drawLabel, drawLudusLife, d
 import { plural } from './engine.js';
 import { ambience, play, setSound } from './sound.js';
 import { P } from './art.js';
+import { RAINBOW_CYCLE, SNOW_CYCLE, starOf } from './stars.js';
 
 const STAGE_WIDTH = 1280;
 const STAGE_HEIGHT = 720;
@@ -27,6 +28,19 @@ const COMMANDS = {
     ['что угодно', 'вступить: в бой пойдёшь следующим']],
 };
 COMMANDS.results = COMMANDS.ludus;
+
+// ник стримера получает свой класс: радуга, белый, тимьян, сердце или снег
+function nick(className, name, login, tag = 'span') {
+  const star = starOf(login);
+  return el(tag, [className, star && 'star ' + star].filter(Boolean).join(' '), name);
+}
+
+// узлы списка пересоздаются — без этого радуга каждый раз начиналась бы заново и ники мигали бы вразнобой
+const CYCLES = new Map([['rainbow', RAINBOW_CYCLE], ['snow-glint', SNOW_CYCLE]]);
+function keepInStep(event) {
+  const cycle = CYCLES.get(event.animationName);
+  if (cycle) event.target.style.setProperty('--phase', -(Date.now() % cycle) + 'ms');
+}
 
 const ICONS = {
   weapon: '<svg viewBox="0 0 16 16"><path d="M13 1h2v2L7.5 10.5 5.5 8.5z" fill="currentColor"/><path d="M3.5 9l3.5 3.5-1.2 1.2-1.2-1.2-1.6 1.6-1.2-1.2 1.6-1.6-1.2-1.2z" fill="currentColor"/></svg>',
@@ -87,6 +101,7 @@ export class View {
     this.time = 0;
     this.settings = null;
     this.quiet = false;
+    document.addEventListener('animationstart', keepInStep);
     window.addEventListener('resize', () => {
       this._fit();
       this.rosterFit = null;
@@ -526,7 +541,7 @@ export class View {
         // свободные очки характеристик — перед монетой, только если есть
         if (g.points > 0) gold.append(el('em', 'points', '+' + g.points));
         gold.append(el('i'), String(g.coins));
-        li.append(lvl, el('span', 'name', g.name), gold,
+        li.append(lvl, nick('name', g.name, g.login), gold,
           el('span', 'where ' + where, battle && !g.fate ? (bets && bets.has(g.login) ? 'ставка ' + bets.get(g.login) : 'ждёт')
             : WHERE[where] || ''), bar);
         return li;
@@ -607,7 +622,7 @@ export class View {
   _profile(g) {
     const box = { parts: [], append(...items) { this.parts.push(...items); } };
     const top = el('div', 'top');
-    top.append(el('span', 'who', g.name), el('span', 'lv', g.level + ' ур.'));
+    top.append(nick('who', g.name, g.login), el('span', 'lv', g.level + ' ур.'));
     const bar = (kind, part, text) => {
       const node = el('div', 'bar ' + kind), fill = el('i');
       fill.style.width = (Math.max(0, Math.min(1, part)) * 100).toFixed(1) + '%';
@@ -706,7 +721,7 @@ export class View {
     if (!now) return;
     if (this.reelId !== now.id) this._reel(game);
     const g = game.members.get(now.login);
-    $('fortune-who').textContent = (g ? g.name : now.login) + (now.done ? '' : ' крутит гачу…');
+    $('fortune-who').replaceChildren(nick('', g ? g.name : now.login, now.login), now.done ? '' : ' крутит гачу…');
     const prize = $('fortune-prize');
     const key = now.id + ':' + now.done;
     if (prize.dataset.key !== key) {
@@ -743,21 +758,21 @@ export class View {
       $('res-beaten-title').textContent = duelView ? 'Проигравший' : 'Пали, но живы';
       $('res-dead-title').textContent = duelView ? 'Угадали ставку' : 'Погибли';
       if (duelView) {
-        $('champion').append('Дуэль выиграл ', el('b', '', champ ? champ.name : ''), ' · ставки ' + r.bets[0] + ' : '
+        $('champion').append('Дуэль выиграл ', champ ? nick('', champ.name, champ.login, 'b') : '', ' · ставки ' + r.bets[0] + ' : '
           + r.bets[1]);
       } else if (r.mode === 'pit') {
         $('champion').textContent = r.lionsDown === r.lions ? 'Львы повержены! Выжившие получают щедрую награду'
           : r.rows.some((row) => row.fate === 'fight') ? 'Время вышло — львы уходят в клетки' : 'Львы победили';
       } else if (champ) {
-        $('champion').append('Чемпион арены — ', el('b', '', champ.name));
+        $('champion').append('Чемпион арены — ', nick('', champ.name, champ.login, 'b'));
       } else {
         $('champion').textContent = 'Время вышло — чемпиона нет';
       }
       const fill = (id, rows, describe) => {
         const items = rows.slice(0, 11).map((row) => {
           const li = el('li');
-          const name = el('b', '', row.name);
-          name.style.color = row.color;
+          const name = nick('', row.name, row.login, 'b');
+          if (!starOf(row.login)) name.style.color = row.color;
           li.append(name, describe(row));
           return li;
         });

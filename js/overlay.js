@@ -6,7 +6,8 @@ import { playAll, unlock } from './sound.js';
 import { View } from './view.js';
 
 const CODE_FILES = ['overlay.html', 'css/overlay.css', 'js/overlay.js', 'js/view.js', 'js/draw.js', 'js/engine.js',
-  'js/balance.js', 'js/places.js', 'js/chat.js', 'js/config.js', 'js/demo.js', 'js/sound.js', 'js/art.js', 'js/gacha.js'];
+  'js/balance.js', 'js/places.js', 'js/chat.js', 'js/config.js', 'js/demo.js', 'js/sound.js', 'js/art.js', 'js/gacha.js',
+  'js/stars.js'];
 const LOCAL = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 const UPDATE_CHECK_SECONDS = LOCAL ? 5 : 300;
 const RELOAD_PAUSE_SECONDS = LOCAL ? 0 : 600;

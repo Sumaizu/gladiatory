@@ -279,3 +279,21 @@ body {
 .profile .icon svg { width: 70%; height: 70%; }
 .profile .icon.empty { opacity: .45; border-style: dashed; }
 .profile .totals { margin-top: 5px; }
+
+/* ники стримеров — как в Чатобороне */
+#stage .star.rainbow {
+  background: linear-gradient(90deg, #ff6b6b, #ffb547, #f2e96e, #7be3a0, #6ec3ff, #b79bff, #ff8fd0, #ff6b6b)
+    0 0 / 120px 100%;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  animation: rainbow 2.4s linear var(--phase, 0s) infinite;
+}
+@keyframes rainbow { to { background-position: 120px 0; } }
+#stage .star.white { color: #fff; }
+#stage .star.thyme { color: #5edc1f; }
+#stage .star.heart { color: #d42426; }
+#stage .star.snow {
+  background: linear-gradient(105deg, #a6d6ff 0 46.5%, #fff 49.5% 50.5%, #a6d6ff 53.5% 100%) -230px 0 / 400px 100%;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  animation: snow-glint 6s ease-in-out var(--phase, 0s) infinite;
+}
+@keyframes snow-glint { 0%, 70% { background-position: -230px 0; } 100% { background-position: 20px 0; } }

@@ -2,6 +2,7 @@ import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
 import { DUEL, HEAL_RATE, NET, SHIELD, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
+import { starOf } from '../../../js/stars.js';
 import { END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
 import { inArena } from '../../../js/places.js';
 import { PRICE, RARITIES, SHOW_TIME, SPIN_TIME, spin } from '../../../js/gacha.js';
@@ -979,4 +980,12 @@ test('режим следующего боя выбран заранее, в н�
     for (const m of g.members.values()) m.hp = 1e9;
   }
   eq(seen, new Set(['ffa', 'pit', 'duel']));
+});
+
+test('ники стримеров узнаются по логину без учёта регистра', () => {
+  eq(starOf('sumaizu'), 'rainbow');
+  eq(starOf('SukoshiSSRB'), 'white');
+  eq(starOf('higashi_vo'), 'snow');
+  eq(starOf('brutus'), null);
+  eq(starOf(undefined), null);
 });

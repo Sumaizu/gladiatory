@@ -1,6 +1,7 @@
 import { maxHp } from './balance.js';
 import { ARENA, BAYS, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, bayX } from './places.js';
 import { tierOf } from './gacha.js';
+import { RAINBOW, RAINBOW_CYCLE, RAINBOW_W, SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
 import { LION, P, SPRITE, darker, drawDummyArt, lionSprite, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, paintLudusArt, shieldSprite, weaponSprite } from './art.js';
 
 const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
@@ -467,8 +468,17 @@ export function drawLabel(ctx, g, scene, highlight) {
   ctx.fillStyle = '#10131a';
   ctx.fillText(lvl, x0 + lvlW / 2, top);
   ctx.font = '700 12px ' + FONT;
-  ctx.fillStyle = highlight ? '#2a1a02' : fate === 'dead' ? '#c9c2b8' : '#fff';
-  ctx.fillText(g.name, x0 + lvlW + 2 + nameW / 2, top + 1);
+  const nameX = x0 + lvlW + 2;
+  const star = fate === 'dead' || g.lion ? null : starOf(g.login);
+  ctx.fillStyle = star ? starPaint(ctx, star, nameX, nameW)
+    : highlight ? '#2a1a02' : fate === 'dead' ? '#c9c2b8' : '#fff';
+  if (star && highlight) {
+    // на жёлтой подложке выбранного светлые ники теряются — даём им тёмный контур
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(20,16,30,.85)';
+    ctx.strokeText(g.name, nameX + nameW / 2, top + 1);
+  }
+  ctx.fillText(g.name, nameX + nameW / 2, top + 1);
   if (fate === 'dead') return;
   const hpMax = maxHp(g), part = Math.max(0, Math.min(1, g.hp / hpMax));
   const bw = 34, bx = g.x - bw / 2, by = top + 6;
@@ -476,6 +486,30 @@ export function drawLabel(ctx, g, scene, highlight) {
   ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
   ctx.fillStyle = part > 0.5 ? '#4ade80' : part > 0.25 ? '#fbbf24' : '#f87171';
   ctx.fillRect(bx, by, bw * part, 4);
+}
+
+// ники стримеров на холсте — та же радуга и тот же снежный блик, что в CSS
+function starPaint(ctx, star, x, w) {
+  const now = Date.now();
+  if (star === 'rainbow') {
+    const shift = (now % RAINBOW_CYCLE) / RAINBOW_CYCLE * RAINBOW_W;
+    const from = x - RAINBOW_W + shift, bands = Math.ceil(w / RAINBOW_W) + 1, last = RAINBOW.length - 1;
+    const grad = ctx.createLinearGradient(from, 0, from + RAINBOW_W * bands, 0);
+    for (let b = 0; b < bands; b++) RAINBOW.forEach((color, i) => grad.addColorStop((b + i / last) / bands, color));
+    return grad;
+  }
+  if (star === 'snow') {
+    // блик пробегает по нику раз в 6 секунд, остальное время ник просто голубой
+    const t = (now % SNOW_CYCLE) / SNOW_CYCLE;
+    if (t < 0.7) return STAR_COLORS.snow;
+    const at = x - 20 + (w + 40) * ((t - 0.7) / 0.3);
+    const grad = ctx.createLinearGradient(at - 14, 0, at + 14, 0);
+    grad.addColorStop(0, STAR_COLORS.snow);
+    grad.addColorStop(0.5, '#ffffff');
+    grad.addColorStop(1, STAR_COLORS.snow);
+    return grad;
+  }
+  return STAR_COLORS[star] || '#fff';
 }
 
 export function drawMark(ctx, g, fate) {
