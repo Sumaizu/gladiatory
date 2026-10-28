@@ -1629,3 +1629,24 @@ test('испытание парагона: от критов не убегает
   g._knockOut(c, a);
   eq(c.fate, 'dead', 'убитый парагоном погибает как обычно');
 });
+
+test('сеть бросают и вплотную, не только издали — иначе на дуэли сеть часто так и не летит', () => {
+  const g = game({ mode: 'duel' });
+  join(g, 'A', 'B', 'C');
+  g.next();
+  g.next();
+  const { left, right } = g.duel;
+  left.nets = 1;
+  left.shield = false;
+  left.weapon = weapon('sword');
+  right.x = left.x + 30;
+  right.y = left.y;
+  left.target = right;
+  left.retarget = 10;
+  let thrown = false;
+  for (let i = 0; i < 20 * 15 && !thrown; i++) {
+    g.step(0.05);
+    thrown = g.events.some((e) => e.type === 'throw' && e.kind === 'net' && e.login === left.login);
+  }
+  ok(thrown, 'вплотную сеть тоже летит');
+});

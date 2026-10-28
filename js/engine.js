@@ -1105,8 +1105,8 @@ export class Game {
         g.cool = attackEvery(g);
         continue;
       }
-      if (netUp(g) && !(g.netCool > 0) && !(t.stunT > 0) && t !== this.boss && d >= NET.range[0] && d <= NET.range[1]
-        && this.random() < dt * NET.chance) {
+      if (netUp(g) && !(g.netCool > 0) && !(t.stunT > 0) && t !== this.boss && d <= NET.range[1]
+        && this.random() < dt * (d >= NET.range[0] ? NET.chance : NET.close)) {
         g.netCool = NET.reload;
         this._throw(g, t, 'net');
         continue;

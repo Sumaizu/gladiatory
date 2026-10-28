@@ -80,8 +80,9 @@ export const netUp = (g) => g.nets > 0 && !g.shield && !twoHanded(g);
 export const offhandFree = (g) => !g.shield && !(g.nets > 0) && !twoHanded(g);
 // принял на щит удар, который был бы критом, — щит ломается в critBreaks раз чаще
 export const SHIELD = { block: 0.35, breaks: 0.1, critBreaks: 2 };
-// сеть многоразовая: после броска reload секунд на то, чтобы её подобрать, и шанс tear, что она порвётся
-export const NET = { stun: 3, range: [50, 170], chance: 1.2, speed: 320, focus: 6, max: 1, reload: 5, tear: 0.15 };
+// сеть многоразовая: после броска reload секунд на то, чтобы её подобрать, и шанс tear, что она порвётся.
+// Бросают с range (шанс chance в секунду) — пока сближаются, почти всегда успевают; а вплотную тоже, но реже (close)
+export const NET = { stun: 3, range: [50, 170], chance: 2.5, close: 0.5, speed: 320, focus: 6, max: 1, reload: 5, tear: 0.15 };
 // cool — сколько секунд после подбора копьё нельзя метнуть снова; копьё метают в израненного беглеца (low), а ещё —
 // в цель дальше far: каждую секунду с шансом farChance
 export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, pickup: 14, cool: 5, far: 110, farChance: 0.7 };
