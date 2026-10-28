@@ -714,6 +714,7 @@ export class Game {
       g.stunT = 0;
       g.netCool = 0;
       g.spearOut = null;
+      g.spearCool = 0;
       g.by = '';
     });
     // соседи становятся парами — бой сразу распадается на поединки по всей арене (в яме цели ищут сами)
@@ -854,7 +855,8 @@ export class Game {
   }
 
   _flee(g, time, why) {
-    if (g.fleeT > 0 || g.fate !== 'fight') return;
+    // в сети не убежать, пока она не спадёт
+    if (g.fleeT > 0 || g.stunT > 0 || g.fate !== 'fight') return;
     g.fleeT = time;
     g.fleeCool = time + FLEE.rest;
     g.target = null;
@@ -907,6 +909,7 @@ export class Game {
       g.fleeT = Math.max(0, (g.fleeT || 0) - dt);
       g.fleeCool = Math.max(0, (g.fleeCool || 0) - dt);
       g.netCool = Math.max(0, (g.netCool || 0) - dt);
+      g.spearCool = Math.max(0, (g.spearCool || 0) - dt);
       if (g.stunT > 0) {
         // в сети: стоит, не бьёт и не убегает
         g.stunT = Math.max(0, g.stunT - dt);
@@ -928,6 +931,7 @@ export class Game {
         }
         if (this._walkTo(g, g.spearOut.x, g.spearOut.y, dt) < SPEAR.pickup) {
           g.spearOut = null;
+          g.spearCool = SPEAR.cool;
           this._emit('pickup', { login: g.login, x: g.x, y: g.y });
         }
         continue;
@@ -1015,7 +1019,9 @@ export class Game {
 
   // копьё метают в убегающего и израненного, если он не слишком далеко
   _canThrowSpear(g, t) {
-    if (!g.weapon || g.weapon.type !== 'spear' || g.spearOut || t.fate !== 'fight' || !(t.fleeT > 0)) return false;
+    if (!g.weapon || g.weapon.type !== 'spear' || g.spearOut || g.spearCool > 0 || t.fate !== 'fight' || !(t.fleeT > 0)) {
+      return false;
+    }
     const d = Math.hypot(t.x - g.x, t.y - g.y);
     return t.hp < maxHp(t) * SPEAR.low && d >= SPEAR.range[0] && d <= SPEAR.range[1];
   }

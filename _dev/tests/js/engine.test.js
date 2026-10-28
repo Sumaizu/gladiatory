@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../../js/config.js';
-import { DUEL, HEAL_RATE, NET, SHIELD, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { DUEL, HEAL_RATE, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../../js/balance.js';
 import { starOf } from '../../../js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
@@ -1076,4 +1076,41 @@ test('лев в полтора раза сильнее гладиатора 5 у
   ok(Math.abs(maxHp(lion) - 1.5 * maxHp(twin)) < 1e-9);
   ok(Math.abs(damageOf(lion) - 1.5 * damageOf(twin)) < 1e-9);
   eq(lion.hp, maxHp(lion));
+});
+
+test('в сети не убежать: крит не заставляет бежать, пока сеть не спала', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  g.next();
+  b.stunT = NET.stun;
+  g._flee(b, 3, 'crit');
+  eq(b.fleeT, 0);
+  b.stunT = 0;
+  g._flee(b, 3, 'crit');
+  ok(b.fleeT > 0);
+  ok(a);
+});
+
+test('копьё после подбора метают снова не раньше чем через ' + SPEAR.cool + ' секунд', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  g.next();
+  a.weapon = { kind: 'weapon', type: 'spear', rarity: 'common', power: 2 };
+  b.x = a.x + 150;
+  b.y = a.y;
+  b.hp = 1;
+  b.fleeT = 2;
+  ok(g._canThrowSpear(a, b));
+  a.spearOut = { x: a.x, y: a.y };
+  for (let i = 0; i < 3; i++) g.step(0.05);
+  eq(a.spearOut, null);
+  ok(a.spearCool > SPEAR.cool - 0.5);
+  b.fleeT = 2;
+  no(g._canThrowSpear(a, b));
+  a.spearCool = 0;
+  ok(g._canThrowSpear(a, b));
+});
+
+test('щит блокирует чаще (35%), а ломается вдвое реже (4%)', () => {
+  eq([SHIELD.block, SHIELD.breaks], [0.35, 0.04]);
 });

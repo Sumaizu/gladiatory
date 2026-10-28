@@ -68,10 +68,11 @@ export const shieldUp = (g) => Boolean(g.shield) && !twoHanded(g);
 export const netUp = (g) => g.nets > 0 && !g.shield && !twoHanded(g);
 // вторая рука: щит или сеть. Занята или в руках двуручник — ни щит, ни сеть из гачи не выпадают
 export const offhandFree = (g) => !g.shield && !(g.nets > 0) && !twoHanded(g);
-export const SHIELD = { block: 0.25, breaks: 0.08 };
+export const SHIELD = { block: 0.35, breaks: 0.04 };
 // сеть многоразовая: после броска reload секунд на то, чтобы её подобрать, и шанс tear, что она порвётся
 export const NET = { stun: 3, range: [50, 170], chance: 1.2, speed: 320, focus: 6, max: 1, reload: 5, tear: 0.15 };
-export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, pickup: 14 };
+// cool — сколько секунд после подбора копьё нельзя метнуть снова
+export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, pickup: 14, cool: 5 };
 
 export function damageOf(g) {
   return (DAMAGE_BASE + DAMAGE_PER_STR * g.str + (g.weapon ? g.weapon.power : 0)) * typeOf(g).dmg * (g.might || 1);
