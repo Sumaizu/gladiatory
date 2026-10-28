@@ -451,34 +451,23 @@ export function drawLabel(ctx, g, scene, highlight) {
     ctx.fillRect(bx, by, bw * part, 3);
     return;
   }
+  // уровень над головой не пишем — он есть в списке гладиаторов; ник цветом из твича
   ctx.font = '700 12px ' + FONT;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  const lvl = String(g.level);
-  const nameW = ctx.measureText(g.name).width;
-  ctx.font = '900 10px ' + FONT;
-  const lvlW = ctx.measureText(lvl).width + 8;
-  const w = nameW + lvlW + 4, x0 = g.x - w / 2;
+  const nameW = ctx.measureText(g.name).width, x0 = g.x - nameW / 2;
   ctx.fillStyle = highlight ? 'rgba(255,205,56,.92)' : 'rgba(20,16,30,.72)';
-  roundRect(ctx, x0 - 3, top - 12, w + 6, 16, 6);
+  roundRect(ctx, x0 - 5, top - 12, nameW + 10, 16, 6);
   ctx.fill();
-  ctx.fillStyle = g.color;
-  roundRect(ctx, x0, top - 10, lvlW, 12, 4);
-  ctx.fill();
-  ctx.fillStyle = '#10131a';
-  ctx.fillText(lvl, x0 + lvlW / 2, top);
-  ctx.font = '700 12px ' + FONT;
-  const nameX = x0 + lvlW + 2;
   const star = fate === 'dead' || g.lion ? null : starOf(g.login);
-  ctx.fillStyle = star ? starPaint(ctx, star, nameX, nameW)
-    : highlight ? '#2a1a02' : fate === 'dead' ? '#c9c2b8' : '#fff';
-  if (star && highlight) {
+  ctx.fillStyle = star ? starPaint(ctx, star, x0, nameW) : fate === 'dead' ? '#c9c2b8' : g.color || '#fff';
+  if (highlight && fate !== 'dead') {
     // на жёлтой подложке выбранного светлые ники теряются — даём им тёмный контур
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(20,16,30,.85)';
-    ctx.strokeText(g.name, nameX + nameW / 2, top + 1);
+    ctx.strokeText(g.name, g.x, top + 1);
   }
-  ctx.fillText(g.name, nameX + nameW / 2, top + 1);
+  ctx.fillText(g.name, g.x, top + 1);
   if (fate === 'dead') return;
   const hpMax = maxHp(g), part = Math.max(0, Math.min(1, g.hp / hpMax));
   const bw = 34, bx = g.x - bw / 2, by = top + 6;

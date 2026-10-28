@@ -66,12 +66,17 @@ function hashColor(login) {
   return PALETTE[h % PALETTE.length];
 }
 
-// тёмные цвета чата плохо видно на песке — осветляем
+// ник того же цвета, что в твиче; слишком тёмный осветляем, не меняя оттенка (как в Чатобороне)
 export function readableColor(color, login) {
   if (!COLOR_RE.test(color || '')) return hashColor(login);
-  const n = parseInt(color.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
-  if (0.299 * r + 0.587 * g + 0.114 * b >= 70) return color.toLowerCase();
-  return hashColor(login);
+  const n = parseInt(color.slice(1), 16);
+  let rgb = [n >> 16, (n >> 8) & 255, n & 255];
+  const light = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
+  if (light < 0.45) {
+    const lift = (0.45 - light) / (1 - light);
+    rgb = rgb.map((c) => Math.round(c + (255 - c) * lift));
+  }
+  return '#' + rgb.map((c) => c.toString(16).padStart(2, '0')).join('');
 }
 
 export function newGladiator(login, name, color, now) {
@@ -284,6 +289,8 @@ export class Game {
     }
     let g = this.members.get(login);
     if (!g) g = this._join(login, name || login, meta.color);
+    // сменил цвет в твиче — ник в игре меняется вместе с ним
+    else if (COLOR_RE.test(meta.color || '')) g.color = readableColor(meta.color, login);
     g.saidAt = this.clock;
     this._command(g, first, words[1] || '');
   }
@@ -299,6 +306,7 @@ export class Game {
     let g;
     if (saved) {
       g = Object.assign(newGladiator(login, saved.name, saved.color, saved.born), JSON.parse(JSON.stringify(saved)), { login });
+      if (COLOR_RE.test(color || '')) g.color = readableColor(color, login);
       // вернулся в игру — раны прошлых боёв успели зажить
       g.hp = maxHp(g);
       this._line(g.name + ' возвращается в лудус', 'join');

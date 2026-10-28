@@ -989,3 +989,13 @@ test('ники стримеров узнаются по логину без уч
   eq(starOf('brutus'), null);
   eq(starOf(undefined), null);
 });
+
+test('ник того же цвета, что в твиче: тёмный осветляется, но оттенок сохраняется', () => {
+  eq(readableColor('#1E90FF', 'abc'), '#1e90ff');
+  const dark = readableColor('#0000FF', 'abc'), n = parseInt(dark.slice(1), 16);
+  ok((n & 255) === 255 && (n >> 16) > 0 && (n >> 16) < 200);
+  const g = game();
+  g.feed('Vasya', 'привет', { login: 'vasya', color: '#FF8800' });
+  g.feed('Vasya', 'трен', { login: 'vasya', color: '#00FF7F' });
+  eq(g.members.get('vasya').color, '#00ff7f');
+});

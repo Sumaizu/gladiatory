@@ -531,7 +531,6 @@ export class View {
       node.replaceChildren(...list.map((g) => {
         const li = el('li', g.fate === 'dead' && battle ? 'gone' : '');
         const lvl = el('span', 'lvl', String(g.level));
-        lvl.style.background = g.color;
         const where = battle && g.fate ? g.fate : g.place;
         const part = Math.max(0, Math.min(1, g.hp / maxHp(g)));
         const bar = el('span', 'hp'), fill = el('i', part > 0.5 ? '' : part > 0.25 ? 'mid' : 'low');
@@ -541,7 +540,9 @@ export class View {
         // свободные очки характеристик — перед монетой, только если есть
         if (g.points > 0) gold.append(el('em', 'points', '+' + g.points));
         gold.append(el('i'), String(g.coins));
-        li.append(lvl, nick('name', g.name, g.login), gold,
+        const name = nick('name', g.name, g.login);
+        if (!starOf(g.login)) name.style.color = g.color;
+        li.append(lvl, name, gold,
           el('span', 'where ' + where, battle && !g.fate ? (bets && bets.has(g.login) ? 'ставка ' + bets.get(g.login) : 'ждёт')
             : WHERE[where] || ''), bar);
         return li;
@@ -721,7 +722,9 @@ export class View {
     if (!now) return;
     if (this.reelId !== now.id) this._reel(game);
     const g = game.members.get(now.login);
-    $('fortune-who').replaceChildren(nick('', g ? g.name : now.login, now.login), now.done ? '' : ' крутит гачу…');
+    const who = nick('', g ? g.name : now.login, now.login);
+    if (g && !starOf(g.login)) who.style.color = g.color;
+    $('fortune-who').replaceChildren(who, now.done ? '' : ' крутит гачу…');
     const prize = $('fortune-prize');
     const key = now.id + ':' + now.done;
     if (prize.dataset.key !== key) {
