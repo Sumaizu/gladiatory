@@ -183,17 +183,17 @@ function iconImg(src, className = 'ico') {
 }
 
 // ник стримера получает свой класс: радуга, белый, тимьян, сердце или снег
+// список и карточки пересоздаются по нескольку раз в секунду: фазу переливания ставим сразу при создании, от общих
+// часов (как у подписей на холсте), — иначе новый ник на кадр начинал анимацию сначала и дёргался
 function nick(className, name, login, tag = 'span') {
   const star = starOf(login);
-  return el(tag, [className, star && 'star ' + star].filter(Boolean).join(' '), name);
+  const node = el(tag, [className, star && 'star ' + star].filter(Boolean).join(' '), name);
+  const cycle = STAR_CYCLES[star];
+  if (cycle) node.style.setProperty('--phase', -(Date.now() % cycle) + 'ms');
+  return node;
 }
 
-// узлы списка пересоздаются — без этого радуга каждый раз начиналась бы заново и ники мигали бы вразнобой
-const CYCLES = new Map([['rainbow', RAINBOW_CYCLE], ['snow-glint', SNOW_CYCLE]]);
-function keepInStep(event) {
-  const cycle = CYCLES.get(event.animationName);
-  if (cycle) event.target.style.setProperty('--phase', -(Date.now() % cycle) + 'ms');
-}
+const STAR_CYCLES = { rainbow: RAINBOW_CYCLE, snow: SNOW_CYCLE };
 
 const ICONS = {
   weapon: '<svg viewBox="0 0 16 16"><path d="M13 1h2v2L7.5 10.5 5.5 8.5z" fill="currentColor"/><path d="M3.5 9l3.5 3.5-1.2 1.2-1.2-1.2-1.6 1.6-1.2-1.2 1.6-1.6-1.2-1.2z" fill="currentColor"/></svg>',
@@ -257,7 +257,6 @@ export class View {
     this.time = 0;
     this.settings = null;
     this.quiet = false;
-    document.addEventListener('animationstart', keepInStep);
     window.addEventListener('resize', () => {
       this._fit();
       this.rosterFit = null;
