@@ -1066,3 +1066,14 @@ test('на арену некому — все сидят на отдыхе, бо
   g.next();
   eq(g.state, 'ludus');
 });
+
+test('лев в полтора раза сильнее гладиатора 5 уровня с теми же статами: здоровье и урон', () => {
+  const g = game({ mode: 'pit' });
+  join(g, 'A', 'B');
+  g.next();
+  const lion = g.fighters.find((f) => f.lion);
+  const twin = Object.assign({}, lion, { might: undefined });
+  ok(Math.abs(maxHp(lion) - 1.5 * maxHp(twin)) < 1e-9);
+  ok(Math.abs(damageOf(lion) - 1.5 * damageOf(twin)) < 1e-9);
+  eq(lion.hp, maxHp(lion));
+});

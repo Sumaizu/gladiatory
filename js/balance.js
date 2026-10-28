@@ -46,8 +46,9 @@ export const REWARD = {
 
 export const xpNeed = (level) => Math.round(40 * Math.pow(level, 1.4));
 
+// might — множитель силы (здоровье и урон) для львов; у гладиаторов его нет
 export function maxHp(g) {
-  return HP_BASE + HP_PER_LEVEL * (g.level - 1) + HP_PER_VIT * g.vit;
+  return (HP_BASE + HP_PER_LEVEL * (g.level - 1) + HP_PER_VIT * g.vit) * (g.might || 1);
 }
 
 // виды оружия из гачи. rate — во сколько раз реже удар, dmg — множитель урона, reach — дальность,
@@ -73,7 +74,7 @@ export const NET = { stun: 3, range: [50, 170], chance: 1.2, speed: 320, focus: 
 export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, pickup: 14 };
 
 export function damageOf(g) {
-  return (DAMAGE_BASE + DAMAGE_PER_STR * g.str + (g.weapon ? g.weapon.power : 0)) * typeOf(g).dmg;
+  return (DAMAGE_BASE + DAMAGE_PER_STR * g.str + (g.weapon ? g.weapon.power : 0)) * typeOf(g).dmg * (g.might || 1);
 }
 
 export const attackEvery = (g) => ATTACK_EVERY * typeOf(g).rate / (1 + HASTE_PER_AGI * g.agi);
@@ -112,7 +113,7 @@ export const AFK_ROUNDS = 3;
 // Львов столько, сколько на арене гладиаторов veteran уровня и выше, но хотя бы один
 export const PIT = {
   chance: 0.1, veteran: 5, deathMult: 3,
-  lion: { level: 5, str: 4, agi: 3, vit: 4 },
+  lion: { level: 5, str: 4, agi: 3, vit: 4, might: 1.5 },
   reward: { standing: { xp: 100, coins: 80 }, beaten: { xp: 70, coins: 55 }, perKo: { xp: 20, coins: 15 } },
 };
 
