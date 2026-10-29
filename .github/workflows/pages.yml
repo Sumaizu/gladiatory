@@ -1,3 +1,4 @@
+# публикует папку site/ на GitHub Pages — gamesonstream.ru/gladiatory/
 name: Pages
 
 on:
