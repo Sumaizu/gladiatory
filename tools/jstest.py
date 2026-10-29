@@ -7,12 +7,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from browser import NO_NETWORK, ROOT, Browser, serve
 
-PAGE = "/_dev/tests/js/tests.html"
+PAGE = "/tests/js/tests.html"
 FINISHED = "window.__results ? JSON.stringify(window.__results) : (window.__fatal || '')"
 
 
 def run(only="", timeout=180.0):
-    server = serve(ROOT.parent)
+    server = serve(ROOT)
     url = f"http://127.0.0.1:{server.server_address[1]}{PAGE}" + (f"?only={quote(only)}" if only else "")
     try:
         with Browser() as browser:

@@ -1,11 +1,11 @@
 import { eq, no, ok, test } from './harness.js';
-import { clean, fromQuery, toQuery } from '../../../js/config.js';
+import { clean, fromQuery, toQuery } from '../../site/js/config.js';
 import { AGI_CAP, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
-  xpNeed } from '../../../js/balance.js';
-import { starOf } from '../../../js/stars.js';
-import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../../js/engine.js';
-import { inArena } from '../../../js/places.js';
-import { DIVINE, OUTCOMES, PRICE, RARITIES, rarityOf, SHOW_TIME, SPIN_TIME, spin } from '../../../js/gacha.js';
+  xpNeed } from '../../site/js/balance.js';
+import { starOf } from '../../site/js/stars.js';
+import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../site/js/engine.js';
+import { inArena } from '../../site/js/places.js';
+import { DIVINE, OUTCOMES, PRICE, RARITIES, rarityOf, SHOW_TIME, SPIN_TIME, spin } from '../../site/js/gacha.js';
 
 const SETTINGS = clean({ ludus: 60, battle: 90, death: 0 });
 
@@ -1671,7 +1671,7 @@ test('сдаться командой нельзя: «сдаюсь» — про�
 test('все модули оверлея и страницы загружаются без синтаксических ошибок', async () => {
   for (const name of ['draw', 'view', 'art', 'rules', 'stars', 'sound', 'demo', 'chat', 'config', 'overlay', 'page']) {
     try {
-      await import('../../../js/' + name + '.js');
+      await import('../../site/js/' + name + '.js');
     } catch (error) {
       if (error instanceof SyntaxError) throw new Error(name + '.js: ' + error.message);
     }

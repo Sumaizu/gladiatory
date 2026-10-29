@@ -109,8 +109,10 @@ Twitch и нажми «Начать». Пока игра не начата, на
 
 ## Для разработки
 
-Игра — статичные файлы в папке `gladiatory/` репозитория сайта, без сборки; всё для разработки лежит в `gladiatory/_dev/`. `_dev/site.bat` (или `python _dev/tools/serve.py`) открывает игру локально.
-Тесты: `node _dev/tools/test.mjs` или `python _dev/tools/jstest.py` (нужны Edge или Chrome и `pip install websocket-client`).
+Игра — статичные файлы в папке `site/`, без сборки; GitHub Pages публикует её как
+[gamesonstream.ru/gladiatory](https://gamesonstream.ru/gladiatory/). `site.bat` (или `python tools/serve.py`) открывает
+игру локально.
+Тесты: `node tools/test.mjs` или `python tools/jstest.py` (нужны Edge или Chrome и `pip install websocket-client`).
 
 ## Лицензия
 
