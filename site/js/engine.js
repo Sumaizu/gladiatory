@@ -472,17 +472,17 @@ export class Game {
       result.equipped = !g.shield && !(g.nets > 0);
       if (result.equipped) {
         g.shield = true;
-        this._line(g.name + ' берёт щит', 'level');
+        this._line(g.name + ' берёт щит', 'shield');
       }
     } else if (result.kind === 'amulet') {
       result.equipped = !g.amulet;
       g.amulet = true;
-      this._line(g.name + ' надевает божественный амулет', 'champion');
+      this._line(g.name + ' надевает божественный амулет', 'divine');
     } else if (result.kind === 'net') {
       result.equipped = !g.shield && !(g.nets > 0);
       if (result.equipped) {
         g.nets = 1;
-        this._line(g.name + ' берёт сеть', 'level');
+        this._line(g.name + ' берёт сеть', 'net');
       }
     } else if (result.item) {
       const item = result.item;
@@ -495,7 +495,7 @@ export class Game {
         if (item.kind === 'armor') g.gear[item.slot] = item;
         else g.weapon = item;
         result.equipped = true;
-        if (item.rarity === 'legendary') this._line(g.name + ' надевает «' + itemName(item).toLowerCase() + '»', 'champion');
+        if (item.rarity === 'legendary') this._line(g.name + ' надевает «' + itemName(item).toLowerCase() + '»', 'legendary');
       }
     }
     this._emit('prize', { login: g.login, result });
@@ -645,7 +645,7 @@ export class Game {
   _planNext() {
     if (this.state !== 'ludus') return;
     const boss = this.forceMode ? null : this._paragonNext();
-    if (boss && boss !== this.nextBoss) this._line(boss.name + ' дорос до парагона — дальше один против всех', 'champion');
+    if (boss && boss !== this.nextBoss) this._line(boss.name + ' дорос до парагона — дальше один против всех', 'paragon');
     this.nextBoss = boss;
     this.nextMode = boss ? 'paragon' : this.rolledMode;
   }
@@ -774,14 +774,14 @@ export class Game {
     }
     this.projectiles = [];
     if (this.duel) {
-      this._line('Дуэль: ' + this.duel.left.name + ' против ' + this.duel.right.name, 'battle');
+      this._line('Дуэль: ' + this.duel.left.name + ' против ' + this.duel.right.name, 'duel');
     } else if (this.mode === 'teams') {
       const red = ready.filter((g) => g.team === 'red').length;
-      this._line('Стенка на стенку: ' + red + ' на ' + (n - red), 'battle');
+      this._line('Стенка на стенку: ' + red + ' на ' + (n - red), 'teams');
     } else if (this.boss) {
-      this._line('Испытание парагона: ' + this.boss.name + ' против ' + (n - 1), 'champion');
+      this._line('Испытание парагона: ' + this.boss.name + ' против ' + (n - 1), 'paragon');
     } else if (this.mode === 'pit') {
-      this._line('Яма со львами: ' + lions.length + ' ' + plural(lions.length, 'лев', 'льва', 'львов') + ' против ' + n, 'battle');
+      this._line('Яма со львами: ' + lions.length + ' ' + plural(lions.length, 'лев', 'льва', 'львов') + ' против ' + n, 'pit');
     } else {
       this._line('Все против всех: ' + n + ' ' + plural(n, 'гладиатор', 'гладиатора', 'гладиаторов'), 'battle');
     }
@@ -837,7 +837,7 @@ export class Game {
     const a = this.betsOn(1), b = this.betsOn(2);
     d.left.target = d.right;
     d.right.target = d.left;
-    this._line('Ставки: ' + a + ' за ' + d.left.name + ', ' + b + ' за ' + d.right.name, 'battle');
+    this._line('Ставки: ' + a + ' за ' + d.left.name + ', ' + b + ' за ' + d.right.name, 'duel');
     this._emit('phase', { state: 'battle', mode: 'duel', fight: true });
   }
 
@@ -1287,10 +1287,10 @@ export class Game {
     if (dead) a.killsNow++;
     if (dead && !d.lion && !a.lion) this._bless(a);
     a.target = null;
-    if (d.lion) this._line(a.name + ' сражает льва', 'champion');
+    if (d.lion) this._line(a.name + ' сражает льва', 'pit');
     else if (a.lion) this._line((dead ? 'Лев растерзал ' : 'Лев повалил ') + d.name, dead ? 'death' : 'down');
     else if (dead) this._line(a.name + ' убивает ' + d.name, 'death');
-    else if (saved) this._line('Амулет спас ' + d.name + ' от смерти', 'champion');
+    else if (saved) this._line('Амулет спас ' + d.name + ' от смерти', 'divine');
     else this._line(a.name + ' валит ' + d.name, 'down');
     this._emit('down', { login: d.login, fate: d.fate, x: d.x, y: d.y, by: a.login, lion: Boolean(d.lion), saved });
     this._checkEnd();
@@ -1309,7 +1309,7 @@ export class Game {
     const item = Object.assign({}, was, { rarity: DIVINE.id, power: Math.round(was.power * DIVINE.mult) });
     if (slot === 'weapon') g.weapon = item;
     else g.gear[slot] = item;
-    this._line(g.name + (slot === 'weapon' ? ' — божественное оружие' : ' — божественный доспех'), 'champion');
+    this._line(g.name + (slot === 'weapon' ? ' — божественное оружие' : ' — божественный доспех'), 'divine');
     this._emit('divine', { login: g.login, x: g.x, y: g.y, slot });
   }
 
@@ -1472,16 +1472,16 @@ export class Game {
     this.boss = null;
     this.timer = RESULTS_TIME;
     if (duel) {
-      this._line('Дуэль выиграл ' + winner.name + ', угадали ' + bettors.length, 'champion');
+      this._line('Дуэль выиграл ' + winner.name + ', угадали ' + bettors.length, 'duel');
     } else if (pit) {
       const won = this.results.lionsDown === lions.length;
       this._line(won ? 'Львы повержены!' : !standing.length ? 'Львы победили' : 'Время вышло — львы ушли',
-        won ? 'champion' : 'battle');
+        'pit');
     } else if (teams) {
-      this._line(winTeam ? 'Стенку взяли ' + TEAMS.names[winTeam] + '!' : 'Стенка на стенку — ничья', 'champion');
+      this._line(winTeam ? 'Стенку взяли ' + TEAMS.names[winTeam] + '!' : 'Стенка на стенку — ничья', 'teams');
     } else if (ascended) {
       this._line((ascended.stood ? ascended.name + ' выстоял' : 'Гладиаторы одолели ' + ascended.name) + ' — парагон '
-        + ascended.paragon, 'champion');
+        + ascended.paragon, 'paragon');
     } else if (champion) this._line(champion.name + ' — чемпион арены!', 'champion');
     else this._line('Время вышло — чемпиона нет', 'battle');
     this._emit('phase', { state: 'results' });

@@ -164,19 +164,32 @@ body {
 
 .feed { flex: none; height: 186px; padding-top: 8px; padding-bottom: 8px; }
 .feed ol { flex: 1; }
-/* сообщение не обрезается, а переносится; полоска слева — на всю высоту сообщения, чтобы перенос не путался с новым */
+/* сообщение не обрезается, а переносится; полоска слева — на всю высоту сообщения, чтобы перенос не путался с новым.
+   Новое въезжает сверху, старые плавно съезжают вниз, а не влезшее целиком гаснет */
 .feed li {
   margin-bottom: 4px; padding-left: 7px; font-size: 13px; line-height: 16px; color: var(--ink);
   border-left: 2px solid rgba(255, 255, 255, .3); border-left-color: color-mix(in srgb, currentColor 60%, transparent);
-  overflow-wrap: anywhere; animation: line-in .35s ease-out;
+  overflow-wrap: anywhere; transition: transform .4s ease-out, opacity .3s;
 }
-.feed li.death { color: #ff9b93; font-weight: 700; }
-.feed li.down { color: #e6dccb; }
-.feed li.level, .feed li.champion { color: #ffd98f; font-weight: 700; }
-.feed li.join { color: #9af0b8; }
-.feed li.battle { color: #ffb3ab; font-weight: 700; }
+.feed li.new { animation: line-in .4s ease-out; }
+.feed li.out { opacity: 0; }
+@keyframes line-in { from { transform: translateX(16px); opacity: 0; } }
+/* цвет — по виду сообщения */
 .feed li.info { color: var(--muted); }
-@keyframes line-in { from { transform: translateX(14px); opacity: 0; } }
+.feed li.join { color: #86efac; }
+.feed li.level { color: #67e8f9; font-weight: 700; }
+.feed li.down { color: #e6dccb; }
+.feed li.death { color: #ff6b6b; font-weight: 700; }
+.feed li.battle { color: #ffa197; font-weight: 700; }
+.feed li.teams { color: #c4b5fd; font-weight: 700; }
+.feed li.duel { color: #93c5fd; font-weight: 700; }
+.feed li.pit { color: #fdba74; font-weight: 700; }
+.feed li.paragon { color: #fcd34d; font-weight: 700; }
+.feed li.champion { color: #fff1b8; font-weight: 700; }
+.feed li.legendary { color: #f97316; font-weight: 700; }
+.feed li.divine { color: #ff4d57; font-weight: 700; }
+.feed li.shield { color: #d9a441; }
+.feed li.net { color: #a8c4b0; }
 
 .banner {
   position: absolute; left: 50%; top: 42%; z-index: 5; display: flex; flex-direction: column; align-items: center;

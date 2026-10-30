@@ -317,6 +317,8 @@ export class View {
       this.scene = null;
       if (this.cardNodes) for (const box of this.cardNodes.values()) box.remove();
       this.cardNodes = new Map();
+      this.feedNodes = new Map();
+      $('feed').replaceChildren();
     }
     if (!game) return;
     const scene = game.state === 'battle' ? 'arena' : 'ludus';
@@ -854,17 +856,42 @@ export class View {
     }
   }
 
-  // новые сверху; длинное сообщение переносится, а старое, что не влезло целиком, не показываем
+  // новые сверху. Строки не пересоздаём: новая въезжает, а старые плавно съезжают вниз (запоминаем, где строка была,
+  // ставим на новое место и сдвигаем обратно — оттуда она и едет). Длинное сообщение переносится, а старое, что
+  // не влезло целиком, гаснет
   _feed(game) {
     const lines = game.lines;
     const key = lines.map((l) => l.id).join(',') + '|' + this.settings?.webcam;
     this._set('feed', key, (node) => {
-      node.replaceChildren(...lines.slice().reverse().map((line) => el('li', line.kind, line.text)));
+      const nodes = this.feedNodes, was = new Map(), first = nodes.size === 0;
+      for (const [id, li] of nodes) was.set(id, li.offsetTop);
+      const ids = new Set(lines.map((l) => l.id));
+      for (const [id, li] of nodes) {
+        if (ids.has(id)) continue;
+        li.remove();
+        nodes.delete(id);
+      }
+      for (const line of lines) {
+        if (nodes.has(line.id)) continue;
+        const li = el('li', line.kind + (first ? '' : ' new'), line.text);
+        li.addEventListener('animationend', () => li.classList.remove('new'), { once: true });
+        nodes.set(line.id, li);
+        node.prepend(li);
+      }
       const room = node.clientHeight;
       let full = false;
       for (const li of node.children) {
         full = full || li.offsetTop - node.offsetTop + li.offsetHeight > room;
-        li.hidden = full;
+        li.classList.toggle('out', full);
+      }
+      for (const [id, li] of nodes) {
+        const shift = was.has(id) ? was.get(id) - li.offsetTop : 0;
+        if (!shift) continue;
+        li.style.transition = 'none';
+        li.style.transform = 'translateY(' + shift + 'px)';
+        void li.offsetWidth;
+        li.style.transition = '';
+        li.style.transform = '';
       }
     });
   }
