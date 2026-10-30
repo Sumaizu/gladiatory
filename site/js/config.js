@@ -6,11 +6,11 @@ export const DEFAULTS = {
   chat_commands: true,
   sound: true,
   volume: 70,
-  webcam: true,
-  bg: true,
+  webcam: 'cam',
 };
 
 const LOGIN_RE = /^[a-z0-9_]{1,25}$/;
+const CAMERAS = ['none', 'cam', 'vtuber'];
 
 function int(value, fallback, min, max) {
   const n = typeof value === 'boolean' || value === null || value === '' ? NaN : Number(value);
@@ -21,6 +21,13 @@ function flag(value, fallback) {
   if (value === undefined) return fallback;
   if (typeof value === 'string') return !['', '0', 'false', 'no', 'off'].includes(value.trim().toLowerCase());
   return Boolean(value);
+}
+
+function camera(value, fallback) {
+  if (value === undefined) return fallback;
+  const name = String(value).trim().toLowerCase();
+  if (CAMERAS.includes(name)) return name;
+  return flag(value, true) ? 'cam' : 'none';
 }
 
 function channel(value) {
@@ -40,8 +47,7 @@ export function clean(raw) {
   s.chat_commands = flag(raw.chat_commands, d.chat_commands);
   s.sound = flag(raw.sound, d.sound);
   s.volume = int(raw.volume, d.volume, 0, 100);
-  s.webcam = flag(raw.webcam, d.webcam);
-  s.bg = flag(raw.bg, d.bg);
+  s.webcam = camera(raw.webcam, d.webcam);
   return s;
 }
 

@@ -267,8 +267,8 @@ export class View {
 
   use(settings) {
     this.settings = settings;
-    document.body.classList.toggle('nocam', !settings.webcam);
-    document.body.classList.toggle('nobg', !settings.bg);
+    document.body.classList.toggle('nocam', settings.webcam === 'none');
+    document.body.classList.toggle('vtuber', settings.webcam === 'vtuber');
     setSound(settings.sound, settings.volume);
     this.rosterFit = null;
   }

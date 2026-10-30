@@ -85,14 +85,10 @@
 
       <fieldset>
         <legend>Вид</legend>
-        <div class="split">
-          <div class="group">
-            <div class="switch" role="group" aria-label="Окошко под вебку">
-              <button type="button" data-webcam="1">С вебкой</button><button type="button" data-webcam="0">Без вебки</button>
-            </div>
-          </div>
-          <div class="group">
-            <label class="check"><input type="checkbox" id="hide-bg"><span>Прозрачный фон</span></label>
+        <div class="field">
+          <span class="label" id="webcam-label">Окошко под вебку</span>
+          <div class="switch" role="group" aria-labelledby="webcam-label">
+            <button type="button" data-webcam="none">Без вебки</button><button type="button" data-webcam="cam">С вебкой</button><button type="button" data-webcam="vtuber">Витубер</button>
           </div>
         </div>
       </fieldset>
@@ -101,7 +97,7 @@
     </form>
   </div>
   <footer class="foot">
-    <p class="tagline" id="status">Бои гладиаторов всем чатом: лудус, арена, прокачка — и смерть навсегда</p>
+    <p class="tagline" id="status"></p>
     <p class="author">Создано <a href="https://www.twitch.tv/sumaizu" target="_blank" rel="noopener">Sumaizu</a></p>
   </footer>
 </main>

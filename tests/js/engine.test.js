@@ -1701,3 +1701,12 @@ test('парагон: «Дальше» меняется, когда претен
   g.next();
   eq([g.mode, g.boss && g.boss.login], ['paragon', 'hero'], 'и бой — тот, что написан сверху');
 });
+
+test('настройки: окошко под вебку — без вебки, с вебкой, витубер; старые ссылки читаются', () => {
+  eq(['none', 'cam', 'vtuber', '0', '1', 'false', ''].map((webcam) => clean({ webcam }).webcam),
+    ['none', 'cam', 'vtuber', 'none', 'cam', 'none', 'none']);
+  eq([clean({ webcam: true }).webcam, clean({ webcam: false }).webcam, clean({}).webcam], ['cam', 'none', 'cam']);
+  eq([toQuery({ webcam: 'vtuber' }), toQuery({ webcam: 'cam' }), toQuery({ bg: false })], ['webcam=vtuber', '', '']);
+  eq(fromQuery('?webcam=0&bg=0').webcam, 'none');
+  no('bg' in clean({ bg: false }));
+});

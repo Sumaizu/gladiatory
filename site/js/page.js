@@ -4,7 +4,6 @@ import { RULES_TITLE, renderRules } from './rules.js';
 const STORAGE_KEY = 'gladiatory.settings';
 const NUMBERS = ['ludus', 'battle', 'death', 'volume'];
 const FLAGS = ['chat_commands', 'sound'];
-const HIDDEN_PARTS = { bg: 'hide-bg' };
 const CONFIRMED = { reset: 'Сброс' };
 const SYNC_MS = 500;
 const CONFIRM_MS = 4000;
@@ -59,7 +58,6 @@ function fillForm() {
   channelField.value = settings.channel;
   for (const key of NUMBERS) $('s-' + key).value = settings[key];
   for (const key of FLAGS) $('s-' + key).checked = settings[key];
-  for (const key of Object.keys(HIDDEN_PARTS)) $(HIDDEN_PARTS[key]).checked = !settings[key];
   showDependentFields(settings);
 }
 
@@ -67,14 +65,13 @@ function readForm() {
   const raw = { channel: settings.channel, webcam: settings.webcam };
   for (const key of NUMBERS) raw[key] = $('s-' + key).value === '' ? null : Number($('s-' + key).value);
   for (const key of FLAGS) raw[key] = $('s-' + key).checked;
-  for (const key of Object.keys(HIDDEN_PARTS)) raw[key] = !$(HIDDEN_PARTS[key]).checked;
   return clean(raw);
 }
 
 function showDependentFields(shown) {
   $('volume-text').textContent = shown.volume + '%';
   for (const button of document.querySelectorAll('[data-webcam]')) {
-    button.classList.toggle('on', (button.dataset.webcam === '1') === shown.webcam);
+    button.classList.toggle('on', button.dataset.webcam === shown.webcam);
   }
 }
 
@@ -204,7 +201,7 @@ form.addEventListener('change', () => adopt(readForm(), true));
 form.addEventListener('submit', (event) => event.preventDefault());
 for (const button of document.querySelectorAll('[data-webcam]')) {
   button.addEventListener('click', () => {
-    adopt(clean(Object.assign(readForm(), { webcam: button.dataset.webcam === '1' })), true);
+    adopt(clean(Object.assign(readForm(), { webcam: button.dataset.webcam })), true);
   });
 }
 $('defaults').addEventListener('click', () => adopt(clean({ channel: settings.channel }), true));
