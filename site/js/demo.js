@@ -22,7 +22,6 @@ export function demoGame(settings) {
     g.hp = g.hp * (0.5 + Math.random() * 0.5);
     g.coins = 40 + Math.floor(Math.random() * 200);
   }
-  game.lines = [];
   game.feed(NAMES[0], 'проф', { login: 'demo0' });
   let wait = 2;
   const step = game.step.bind(game);
