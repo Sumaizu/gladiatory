@@ -211,10 +211,10 @@ const ICONS = {
   void: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/></svg>',
 };
 // ширина окна барабана = ширина .fortune (312) минус отступы (20)
-const ROLL = { speed: 18, wait: 2.5 };
+const ROLL = { speed: 18, wait: 3, fade: 0.8 };
 const MODE_NAMES = { ffa: 'Все против всех', pit: 'Яма со львами', duel: 'Дуэль', paragon: 'Испытание парагона',
   teams: 'Стенка на стенку' };
-const MODE_HINTS = { ffa: '— каждый сам за себя', pit: '— все вместе против львов', duel: '— двое случайных, остальные ставят',
+const MODE_HINTS = { ffa: '— каждый сам за себя', pit: '— все вместе против львов', duel: '— один на один, остальные ставят',
   paragon: '— один против всех', teams: '— красные против синих' };
 const REEL = { cells: 30, stop: 25, size: 44, width: 292 };
 
@@ -775,83 +775,97 @@ export class View {
     });
   }
 
+  // в списке — только активные: кто на скамье (отдых и афк), не показан, но в числе гладиаторов учтён.
+  // На дуэли оба бойца закреплены сверху, под чертой; прокручивается только остальной список
   _roster(game) {
     const battle = game.state === 'battle';
-    const list = Array.from(game.members.values());
+    const all = Array.from(game.members.values());
+    const pinned = battle && game.duel ? [game.duel.left, game.duel.right] : [];
+    const list = all.filter((g) => !pinned.includes(g) && (g.fate || g.place !== 'rest'));
     const fateOrder = { fight: 0, down: 1, dead: 2 };
     list.sort((a, b) => (battle ? (fateOrder[a.fate] ?? 3) - (fateOrder[b.fate] ?? 3) : 0)
       || b.level - a.level || b.xp - a.xp || a.name.localeCompare(b.name));
     const bets = game.duel ? game.duel.bets : null;
-    const key = (bets ? Array.from(bets).join(',') : '') + list.map((g) => [g.login, g.color, g.team, g.paragon, g.level, g.points, g.coins, Math.round(g.hp / maxHp(g) * 20), battle ? g.fate : g.place,
-      g.walking && !battle].join(':')).join('|');
+    const sign = (g) => [g.login, g.color, g.team, g.paragon, g.level, g.points, g.coins, Math.round(g.hp / maxHp(g) * 20),
+      battle ? g.fate : g.place, g.walking && !battle].join(':');
+    const key = all.length + '#' + (bets ? Array.from(bets).join(',') : '') + pinned.map(sign).join('|') + '#'
+      + list.map(sign).join('|');
+    const row = (g) => {
+      const li = el('li', g.fate === 'dead' && battle ? 'gone' : '');
+      const lvl = el('span', 'lvl', String(g.level));
+      const where = battle && g.fate ? g.fate : g.place;
+      const part = Math.max(0, Math.min(1, g.hp / maxHp(g)));
+      const bar = el('span', 'hp'), fill = el('i', part > 0.5 ? '' : part > 0.25 ? 'mid' : 'low');
+      fill.style.width = (part * 100).toFixed(0) + '%';
+      bar.append(fill);
+      const gold = el('span', 'gold');
+      // свободные очки характеристик — перед монетой, только если есть
+      if (g.points > 0) gold.append(el('em', 'points', '+' + g.points));
+      gold.append(el('i', 'coin'), String(g.coins));
+      // в стенке на стенку во время боя ник — цвета команды
+      const team = battle && g.team ? TEAMS.colors[g.team] : null;
+      const name = team ? el('span', 'name', g.name) : nick('name', g.name, g.login);
+      if (team) name.style.color = team;
+      else if (!starOf(g.login)) name.style.color = g.color;
+      const who = el('span', 'who');
+      who.append(name);
+      if (g.paragon) who.append(paragonTag(g.paragon));
+      li.append(lvl, who, gold,
+        el('span', 'where ' + where, battle && !g.fate ? (bets && bets.has(g.login) ? 'ставка ' + bets.get(g.login) : 'ждёт')
+          : WHERE[where] || ''), bar);
+      return li;
+    };
     this._set('roster', key, (node) => {
-      node.replaceChildren(...list.map((g) => {
-        const li = el('li', g.fate === 'dead' && battle ? 'gone' : '');
-        const lvl = el('span', 'lvl', String(g.level));
-        const where = battle && g.fate ? g.fate : g.place;
-        const part = Math.max(0, Math.min(1, g.hp / maxHp(g)));
-        const bar = el('span', 'hp'), fill = el('i', part > 0.5 ? '' : part > 0.25 ? 'mid' : 'low');
-        fill.style.width = (part * 100).toFixed(0) + '%';
-        bar.append(fill);
-        const gold = el('span', 'gold');
-        // свободные очки характеристик — перед монетой, только если есть
-        if (g.points > 0) gold.append(el('em', 'points', '+' + g.points));
-        gold.append(el('i'), String(g.coins));
-        // в стенке на стенку во время боя ник — цвета команды
-        const team = battle && g.team ? TEAMS.colors[g.team] : null;
-        const name = team ? el('span', 'name', g.name) : nick('name', g.name, g.login);
-        if (team) name.style.color = team;
-        else if (!starOf(g.login)) name.style.color = g.color;
-        const who = el('span', 'who');
-        who.append(name);
-        if (g.paragon) who.append(paragonTag(g.paragon));
-        li.append(lvl, who, gold,
-          el('span', 'where ' + where, battle && !g.fate ? (bets && bets.has(g.login) ? 'ставка ' + bets.get(g.login)
-            : g.place === 'rest' ? 'смотрит' : 'ждёт')
-            : WHERE[where] || ''), bar);
-        return li;
-      }));
-      $('count').textContent = list.length ? String(list.length) : '';
-      $('empty').hidden = list.length > 0;
+      const top = $('roster-top');
+      top.replaceChildren(...pinned.map(row));
+      top.hidden = !pinned.length;
+      node.replaceChildren(...list.map(row));
+      $('count').textContent = all.length ? String(all.length) : '';
+      $('empty').hidden = all.length > 0;
       this.rosterFit = null;
     });
   }
 
-  // не влезли — список плавно едет вниз, стоит, едет обратно вверх
+  // не влезли — список стоит наверху, плавно едет вниз, стоит внизу, гаснет и снова появляется сверху; и так по кругу
   _scrollRoster(dt) {
     const box = $('roster-box'), list = $('roster');
     if (!this.rosterFit) this.rosterFit = { over: Math.max(0, list.scrollHeight - box.clientHeight) };
-    const over = this.rosterFit.over, s = this.rollState || (this.rollState = { y: 0, dir: 1, wait: ROLL.wait });
+    const over = this.rosterFit.over, s = this.rollState || (this.rollState = { y: 0, step: 'top', wait: ROLL.wait });
+    let alpha = 1;
     if (over <= 0) {
-      s.y = 0;
-      s.dir = 1;
-      s.wait = ROLL.wait;
-    } else if (s.wait > 0) {
+      Object.assign(s, { y: 0, step: 'top', wait: ROLL.wait });
+    } else if (s.step === 'down') {
+      s.y = Math.min(over, s.y + ROLL.speed * dt);
+      if (s.y >= over) Object.assign(s, { step: 'bottom', wait: ROLL.wait });
+    } else if (s.step === 'jump') {
+      // половину времени гаснет внизу, половину проявляется наверху
       s.wait -= dt;
-    } else {
-      s.y += s.dir * ROLL.speed * dt;
-      if (s.y >= over || s.y <= 0) {
-        s.y = Math.max(0, Math.min(over, s.y));
-        s.dir = -s.dir;
-        s.wait = ROLL.wait;
-      }
+      if (s.wait <= ROLL.fade / 2) s.y = 0;
+      alpha = Math.abs(s.wait / (ROLL.fade / 2) - 1);
+      if (s.wait <= 0) Object.assign(s, { step: 'top', wait: ROLL.wait });
+    } else if ((s.wait -= dt) <= 0) {
+      Object.assign(s, s.step === 'top' ? { step: 'down' } : { step: 'jump', wait: ROLL.fade });
     }
-    const y = Math.round(Math.min(s.y, over));
-    if (y !== this.rollShown) {
-      this.rollShown = y;
+    const y = Math.round(Math.min(s.y, over)), shown = y + ':' + alpha.toFixed(2);
+    if (shown !== this.rollShown) {
+      this.rollShown = shown;
       list.style.transform = 'translateY(' + -y + 'px)';
+      list.style.opacity = alpha < 1 ? alpha.toFixed(2) : '';
     }
   }
 
+  // новые сверху; длинное сообщение переносится, а старое, что не влезло целиком, не показываем
   _feed(game) {
-    const lines = game.lines.slice(-7);
-    const key = lines.map((l) => l.id).join(',');
+    const lines = game.lines;
+    const key = lines.map((l) => l.id).join(',') + '|' + this.settings?.webcam;
     this._set('feed', key, (node) => {
-      node.replaceChildren(...lines.slice().reverse().map((line) => {
-        const li = el('li', line.kind, line.text);
-        li.title = line.text;
-        return li;
-      }));
+      node.replaceChildren(...lines.slice().reverse().map((line) => el('li', line.kind, line.text)));
+      const room = node.clientHeight;
+      let full = false;
+      for (const li of node.children) {
+        full = full || li.offsetTop - node.offsetTop + li.offsetHeight > room;
+        li.hidden = full;
+      }
     });
   }
 
@@ -867,7 +881,7 @@ export class View {
     }
     for (const g of cards) {
       let box = this.cardNodes.get(g.login);
-      const key = [g.level, Math.floor(g.xp), Math.round(g.hp), g.coins, g.str, g.agi, g.vit, g.points,
+      const key = [g.paragon, g.level, Math.floor(g.xp), Math.round(g.hp), g.coins, g.str, g.agi, g.vit, g.points,
         JSON.stringify(g.weapon), JSON.stringify(g.gear), g.shield, g.nets, g.fights].join(':');
       if (!box) {
         box = el('div', 'profile');
@@ -887,7 +901,7 @@ export class View {
   // чтобы не закрывали бегающих бойцов; держатся до конца боя
   _duelCards(game) {
     const d = game.state === 'battle' && game.duel && !game.duel.betting ? game.duel : null, box = $('duel-cards');
-    const sign = (g) => [g.login, g.color, g.level, g.paragon, g.str, g.agi, g.vit, g.fights, g.shield, g.nets, g.amulet,
+    const sign = (g) => [g.login, g.color, g.level, g.paragon, g.coins, g.points, g.str, g.agi, g.vit, g.fights, g.shield, g.nets, g.amulet,
       JSON.stringify(g.weapon), JSON.stringify(g.gear)].join(':');
     const key = d ? sign(d.left) + '|' + sign(d.right) : '';
     if (box.dataset.key === key) return;
@@ -934,15 +948,18 @@ export class View {
       const item = g.gear && g.gear[id];
       slot(id, ARMOR_SLOTS[id].label, id === 'body' ? 'armor' : id, item && rarityOf(item.rarity).color);
     }
-    // характеристики столбиком; справа здоровье, урон, а мелко — крит, броня и бои (монеты — в списке гладиаторов)
+    // характеристики столбиком, под ними свободные очки; справа здоровье, урон, монеты, а мелко — крит, броня и бои
+    // (очки и монеты — те же значки, что в списке гладиаторов)
     const stats = el('div', 'col stats');
     stats.append(...STATS.map((stat) => chip(iconImg(statIcon(stat.id), 'ico small'), String(g[stat.id]), stat.name, ' small')));
+    if (g.points > 0) stats.append(el('em', 'points', '+' + g.points));
     const info = el('div', 'col info');
     const notes = el('div', 'small-line');
     notes.append('крит ' + Math.round(critOf(g) * 100) + '%', el('br'), 'броня ' + Math.round(armorOf(g) * 100) + '%', el('br'),
       'боёв: ' + g.fights);
     info.append(chip(iconImg('images/heart.png'), String(Math.round(hpMax)), 'Максимум здоровья'),
-      chip(iconImg('images/might.png'), String(Math.round(damageOf(g))), 'Урон'), notes);
+      chip(iconImg('images/might.png'), String(Math.round(damageOf(g))), 'Урон'),
+      chip(el('i', 'coin'), String(g.coins), 'Монеты', ' gold'), notes);
     const body = el('div', 'body');
     body.append(doll, stats, info);
     return [top, body];

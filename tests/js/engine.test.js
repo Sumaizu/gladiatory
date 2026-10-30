@@ -1,6 +1,6 @@
 import { eq, no, ok, test } from './harness.js';
 import { clean, fromQuery, toQuery } from '../../site/js/config.js';
-import { AGI_CAP, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { AGI_CAP, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../site/js/balance.js';
 import { starOf } from '../../site/js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../site/js/engine.js';
@@ -453,7 +453,6 @@ test('гача: без денег нельзя, «гача все» — на с�
   a.coins = 29;
   g.feed('A', 'гача', { login: 'a' });
   eq(g.spins.length, 0);
-  ok(g.lines.some((l) => l.text.includes('30 монет')));
   b.coins = PRICE * 3 + 5;
   g.feed('B', 'гача все', { login: 'b' });
   eq(g.spins.length, 3);
@@ -477,6 +476,22 @@ test('гача: вещь надевается, только если лучше;
   eq(armorOf(a), 0.08);
   g._prize(a, { kind: 'handful', coins: 12 });
   eq(a.coins, START_COINS + 12);
+});
+test('хроника: из гачи — только надетое легендарное, амулет и взятые щит или сеть', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  g.lines = [];
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'epic', power: 11, type: 'sword' } });
+  eq(g.lines.length, 0, 'эпическое — молча');
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'legendary', power: 14, type: 'spear' } });
+  eq(g.lines.map((l) => l.text), ['A надевает «легендарное копьё»']);
+  a.weapon = { kind: 'weapon', rarity: DIVINE.id, power: 30, type: 'sword' };
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'legendary', power: 14, type: 'sword' } });
+  eq(g.lines.length, 1, 'не надето — молча');
+  g._prize(b, { kind: 'shield' });
+  g._prize(b, { kind: 'net' });
+  g._prize(a, { kind: 'amulet' });
+  eq(g.lines.slice(1).map((l) => l.text), ['B берёт щит', 'A надевает божественный амулет']);
 });
 
 test('гача: не крутится в последние 5 секунд лудуса и в бою, очередь ждёт итогов', () => {
@@ -934,6 +949,26 @@ test('вступил в игру — здоровье полное; уже в и
   eq(m.hp, before, 'новое сообщение того, кто уже в игре, не лечит');
 });
 
+test('Дуэль: первый случайный, противник — ближайший по мощи', () => {
+  const g = game({ mode: 'duel' });
+  const [a, b, c, d, e] = join(g, 'A', 'B', 'C', 'D', 'E');
+  for (const m of [a, b]) Object.assign(m, { str: 9, vit: 8, weapon: weapon('sword') });
+  a.weapon.power = 20;
+  b.weapon.power = 18;
+  ok(ratingOf(a) > ratingOf(b) && ratingOf(b) > ratingOf(c), 'мощь растёт со статами и оружием');
+  eq(ratingOf(c), ratingOf(d));
+  const seen = new Map();
+  for (let i = 0; i < 300; i++) {
+    const [first, second] = g._duelPair([a, b, c, d, e]);
+    if (!seen.has(first.name)) seen.set(first.name, new Set());
+    seen.get(first.name).add(second.name);
+  }
+  eq(seen.size, 5, 'первым бывает любой');
+  eq([...seen.get('A')], ['B']);
+  eq([...seen.get('B')], ['A']);
+  eq(seen.get('D'), new Set(['C', 'E']), 'из равных — случайный');
+});
+
 test('Дуэль: двое — слева и справа, 30 секунд ставок, остальные ждут в лудусе', () => {
   const g = game({ mode: 'duel' });
   const all = join(g, 'A', 'B', 'C', 'D', 'E');
@@ -984,7 +1019,7 @@ test('Дуэль: никто не гибнет, обоим опыт, побед�
   for (const m of others.filter((x) => !lucky.includes(x))) eq(m.coins, coins.get(m.login));
 });
 
-test('режимы боя: примерно 10% яма, 20% дуэль, остальное — поровну все против всех и стенка', () => {
+test('режимы боя: примерно 11% яма, 23% дуэль, остальное — поровну все против всех и стенка', () => {
   const counts = { pit: 0, duel: 0, ffa: 0, teams: 0 };
   const random = rng(31);
   for (let i = 0; i < 1000; i++) {
@@ -994,8 +1029,8 @@ test('режимы боя: примерно 10% яма, 20% дуэль, оста
     g.next();
     counts[g.mode]++;
   }
-  ok(counts.pit > 60 && counts.pit < 140, JSON.stringify(counts));
-  ok(counts.duel > 150 && counts.duel < 250, JSON.stringify(counts));
+  ok(counts.pit > 70 && counts.pit < 150, JSON.stringify(counts));
+  ok(counts.duel > 180 && counts.duel < 280, JSON.stringify(counts));
   ok(counts.ffa > 280 && counts.teams > 280, JSON.stringify(counts));
 });
 

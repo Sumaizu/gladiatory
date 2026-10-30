@@ -1,8 +1,8 @@
-import { AFK_ROUNDS, CRIT_KILL, TEAMS, BLEED, HIT_REWARD, PARAGON, pitStrength, powerOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
+import { AFK_ROUNDS, CRIT_KILL, TEAMS, BLEED, HIT_REWARD, PARAGON, pitStrength, powerOf, ratingOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, runOf, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SPREAD } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
-import { DIVINE, PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemText, rankOf, spin } from './gacha.js';
+import { DIVINE, PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemName, rankOf, spin } from './gacha.js';
 
 export const COMMANDS = new Map([
   ['!гладиаторы-пауза', 'pause'],
@@ -21,7 +21,7 @@ export const RESULTS_TIME = 12;
 export const END_DELAY = 2.5;
 export const CARD_TIME = 8;
 export const CARDS_MAX = 3;
-export const FEED_MAX = 8;
+export const FEED_MAX = 12;
 export const FALLEN_MAX = 30;
 export const TICK = 0.05;
 export const NAME_MAX = 16;
@@ -278,7 +278,7 @@ export class Game {
     this.cards = [];
     this.results = null;
     this.lines = [];
-    this._line('Все гладиаторы стёрты. Пиши в чат — и начинай заново', 'info');
+    this._line('Все гладиаторы стёрты', 'info');
     if (this.state !== 'stopped') this.open();
   }
 
@@ -319,7 +319,6 @@ export class Game {
     // афк со скамьи написал хоть что-то — снова в деле: раненый в лазарет, здоровый на тренировку
     if (g.afk && !g.fate && g.place === 'rest') {
       const hurt = g.hp < maxHp(g);
-      this._line(g.name + ' вернулся и ' + (hurt ? 'идёт в лазарет' : 'идёт тренироваться'), 'info');
       this._arrive(g, hurt ? 'heal' : 'train', true);
     }
     this._command(g, first, words[1] || '');
@@ -339,13 +338,12 @@ export class Game {
       if (COLOR_RE.test(color || '')) g.color = readableColor(color, login);
       // вернулся в игру — раны прошлых боёв успели зажить
       g.hp = maxHp(g);
-      this._line(g.name + ' возвращается в лудус', 'join');
     } else {
       g = newGladiator(login, name.slice(0, NAME_MAX), readableColor(color, login), this.now(),
         this.roster.paragons.get(login) || 0);
       g.hp = maxHp(g);
       const fell = this.roster.fallen.find((f) => f.name.toLowerCase() === login);
-      this._line(fell ? g.name + ' начинает заново новым бойцом' : 'Новый гладиатор: ' + g.name, 'join');
+      this._line(fell ? g.name + ' начинает заново' : 'Новый гладиатор: ' + g.name, 'join');
       this.roster.put(g);
       this.roster.save();
     }
@@ -385,17 +383,8 @@ export class Game {
 
   _goTo(g, place) {
     if (g.place === place) return;
-    if (place === 'heal') {
-      if (g.hp >= maxHp(g)) {
-        this._line(g.name + ' здоров — в лазарете делать нечего', 'info');
-        return;
-      }
-      this._line(g.name + ' ложится в лазарет', 'heal');
-    } else if (place === 'train') {
-      this._line(g.name + ' идёт тренироваться', 'info');
-    } else if (place === 'rest') {
-      this._line(g.name + ' садится отдохнуть', 'info');
-    }
+    // здоровому в лазарете делать нечего
+    if (place === 'heal' && g.hp >= maxHp(g)) return;
     this._emit('go', { login: g.login, place });
     this._arrive(g, place, true);
   }
@@ -408,16 +397,9 @@ export class Game {
     const afford = Math.floor(g.coins / PRICE) - queued;
     const wanted = arg === 'все' || arg === 'всё' ? afford : Math.max(1, Math.trunc(Number(arg)) || 1);
     const n = Math.min(wanted, afford, QUEUE_CAP - queued);
-    if (n <= 0) {
-      this._line(afford > 0 ? g.name + ': очередь полна, подожди'
-        : g.name + ': гача стоит ' + PRICE + ' монет, у тебя ' + g.coins + (queued ? ' (и ' + queued + ' в очереди)' : ''),
-      'warn');
-      return;
-    }
+    if (n <= 0) return;
     for (let i = 0; i < n; i++) this.spins.push({ login: g.login });
-    const open = this._gachaOpen(SPIN_TIME), later = open ? '' : ' — закрутится после боя';
-    if (open) this._toTemple(g);
-    this._line(g.name + ' встаёт в очередь гачи' + (n > 1 ? ' ×' + n : '') + later, 'buy');
+    if (this._gachaOpen(SPIN_TIME)) this._toTemple(g);
   }
 
   // гача крутится в лудусе, пока до боя больше GACHA_CLOSE секунд (и приз успеет выпасть), и на итогах
@@ -433,7 +415,6 @@ export class Game {
       while (this.spins.length) {
         const head = this.members.get(this.spins[0].login);
         if (head && head.coins >= PRICE) break;
-        if (head) this._line(head.name + ': на гачу не хватило монет', 'warn');
         this.spins.shift();
       }
       if (!this.spins.length) return;
@@ -483,65 +464,52 @@ export class Game {
     }
   }
 
+  // что выпало, видно в окне гачи; в хронику — только надетое легендарное, амулет и взятые щит или сеть
   _prize(g, result) {
     if (result.coins) {
       g.coins += result.coins;
-      this._line(g.name + ': +' + result.coins + ' монет из гачи', 'buy');
     } else if (result.kind === 'shield') {
-      result.equipped = !g.shield;
       result.equipped = !g.shield && !(g.nets > 0);
       if (result.equipped) {
         g.shield = true;
         this._line(g.name + ' берёт щит', 'level');
-      } else {
-        this._line(g.name + ': вторая рука занята — щит выброшен', 'info');
       }
     } else if (result.kind === 'amulet') {
       result.equipped = !g.amulet;
       g.amulet = true;
-      this._line(g.name + ' надевает божественный амулет — он спасёт от смерти', 'champion');
+      this._line(g.name + ' надевает божественный амулет', 'champion');
     } else if (result.kind === 'net') {
       result.equipped = !g.shield && !(g.nets > 0);
-      if (result.equipped) g.nets = 1;
-      this._line(g.name + (result.equipped ? ' берёт сеть' : ': вторая рука занята — сеть выброшена'),
-        result.equipped ? 'level' : 'info');
+      if (result.equipped) {
+        g.nets = 1;
+        this._line(g.name + ' берёт сеть', 'level');
+      }
     } else if (result.item) {
       const item = result.item;
       if (item.kind === 'armor' && !g.gear) g.gear = emptyGear();
       const current = item.kind === 'armor' ? g.gear[item.slot] : g.weapon;
       if (current && current.rarity === DIVINE.id) {
         result.locked = true;
-        this._line(g.name + ': божественную вещь гача не меняет — «' + itemText(item) + '» выброшено', 'info');
       // оружие той же редкости или выше заменяет старое, даже если урон меньше; доспех — только если крепче
       } else if (!current || (item.kind === 'weapon' ? rankOf(item) >= rankOf(current) : item.power > current.power)) {
         if (item.kind === 'armor') g.gear[item.slot] = item;
         else g.weapon = item;
         result.equipped = true;
-        this._line(g.name + ' надевает «' + itemText(item) + '»', 'level');
-      } else {
-        this._line(g.name + ': «' + itemText(item) + '» ' + (item.kind === 'weapon' ? 'реже своего' : 'не лучше своего')
-          + ' — выброшено', 'info');
+        if (item.rarity === 'legendary') this._line(g.name + ' надевает «' + itemName(item).toLowerCase() + '»', 'champion');
       }
-    } else {
-      this._line(g.name + ': в гаче пусто', 'info');
     }
     this._emit('prize', { login: g.login, result });
     this._keep(g);
   }
 
   _spend(g, stat, arg) {
-    if (g.points <= 0) {
-      this._line(g.name + ': свободных очков нет — их дают за уровни', 'warn');
-      return;
-    }
+    if (g.points <= 0) return;
     const wanted = arg === 'все' || arg === 'всё' ? g.points : Math.max(1, Math.trunc(Number(arg)) || 1);
     const n = Math.min(g.points, wanted);
     const was = maxHp(g);
     g.points -= n;
     g[stat] += n;
     if (stat === 'vit') g.hp += maxHp(g) - was;
-    const name = STATS.find((s) => s.id === stat).name;
-    this._line(g.name + ': ' + name.toLowerCase() + ' +' + n, 'stat');
     this._keep(g);
   }
 
@@ -601,7 +569,6 @@ export class Game {
       g.hp = Math.min(hpMax, g.hp + rate * hpMax * dt);
       if (g.place === 'heal' && g.hp >= hpMax) {
         const active = this.isActive(g);
-        this._line(g.name + ' вылечился и ' + (active ? 'идёт тренироваться' : 'садится отдохнуть'), 'heal');
         this._arrive(g, active ? 'train' : 'rest', true);
         g.afk = !active;
       }
@@ -666,8 +633,7 @@ export class Game {
     }
     if (ups) {
       const points = ups * POINTS_PER_LEVEL;
-      this._line(g.name + ' достигает ' + g.level + ' уровня (+' + points + ' ' + plural(points, 'очко', 'очка', 'очков')
-        + ')', 'level');
+      this._line(g.name + ' — ' + g.level + ' ур., +' + points + ' ' + plural(points, 'очко', 'очка', 'очков'), 'level');
       this._emit('level', { login: g.login, level: g.level });
       if (g.level >= PARAGON.level) this._planNext();
     }
@@ -679,7 +645,7 @@ export class Game {
   _planNext() {
     if (this.state !== 'ludus') return;
     const boss = this.forceMode ? null : this._paragonNext();
-    if (boss && boss !== this.nextBoss) this._line(boss.name + ' дорос до парагона — следующий бой он один против всех!', 'champion');
+    if (boss && boss !== this.nextBoss) this._line(boss.name + ' дорос до парагона — дальше один против всех', 'champion');
     this.nextBoss = boss;
     this.nextMode = boss ? 'paragon' : this.rolledMode;
   }
@@ -692,7 +658,6 @@ export class Game {
     if (ready.length < MIN_FIGHTERS) {
       this.timer = this.settings.ludus;
       this.notice = 'Нужно хотя бы ' + MIN_FIGHTERS + ' гладиатора не на отдыхе — бой откладывается';
-      this._line(this.notice, 'warn');
       return false;
     }
     this.notice = '';
@@ -714,9 +679,8 @@ export class Game {
     }
     this.duel = null;
     if (this.mode === 'duel') {
-      // двое случайных: первый встаёт слева (ставка «1»), второй справа (ставка «2»)
-      const pool = ready.slice(), pair = [];
-      for (let i = 0; i < 2; i++) pair.push(pool.splice(Math.floor(this.random() * pool.length), 1)[0]);
+      // первый случайный встаёт слева (ставка «1»), противник по мощи — справа (ставка «2»)
+      const pair = this._duelPair(ready);
       this.duel = { left: pair[0], right: pair[1], bets: new Map(), betting: true, winner: null };
       ready.length = 0;
       ready.push(...pair);
@@ -810,19 +774,16 @@ export class Game {
     }
     this.projectiles = [];
     if (this.duel) {
-      this._line('Дуэль! ' + this.duel.left.name + ' против ' + this.duel.right.name + '. Ставки: 1 — за '
-        + this.duel.left.name + ', 2 — за ' + this.duel.right.name, 'battle');
+      this._line('Дуэль: ' + this.duel.left.name + ' против ' + this.duel.right.name, 'battle');
     } else if (this.mode === 'teams') {
       const red = ready.filter((g) => g.team === 'red').length;
-      this._line('Стенка на стенку! Красные (' + red + ') против синих (' + (n - red) + ')', 'battle');
+      this._line('Стенка на стенку: ' + red + ' на ' + (n - red), 'battle');
     } else if (this.boss) {
-      this._line('Испытание парагона! ' + this.boss.name + ' (' + this.boss.level + ' ур.) против всех: ' + (n - 1) + ' '
-        + plural(n - 1, 'гладиатор', 'гладиатора', 'гладиаторов'), 'champion');
+      this._line('Испытание парагона: ' + this.boss.name + ' против ' + (n - 1), 'champion');
     } else if (this.mode === 'pit') {
-      this._line('Яма со львами! ' + lions.length + ' ' + plural(lions.length, 'лев', 'льва', 'львов') + ' против ' + n + ' '
-        + plural(n, 'гладиатора', 'гладиаторов', 'гладиаторов'), 'battle');
+      this._line('Яма со львами: ' + lions.length + ' ' + plural(lions.length, 'лев', 'льва', 'львов') + ' против ' + n, 'battle');
     } else {
-      this._line('Бой начинается! На арене ' + n + ' ' + plural(n, 'гладиатор', 'гладиатора', 'гладиаторов'), 'battle');
+      this._line('Все против всех: ' + n + ' ' + plural(n, 'гладиатор', 'гладиатора', 'гладиаторов'), 'battle');
     }
     this._emit('phase', { state: 'battle', mode: this.mode });
     return true;
@@ -857,10 +818,7 @@ export class Game {
   // ставка зрителя: последняя считается; бойцы не ставят
   _bet(g, side) {
     const d = this.duel;
-    if (g === d.left || g === d.right) {
-      this._line(g.name + ': участники дуэли не ставят', 'warn');
-      return;
-    }
+    if (g === d.left || g === d.right) return;
     const was = d.bets.get(g.login);
     d.bets.set(g.login, side);
     if (was !== side) this._emit('bet', { login: g.login, side });
@@ -879,7 +837,7 @@ export class Game {
     const a = this.betsOn(1), b = this.betsOn(2);
     d.left.target = d.right;
     d.right.target = d.left;
-    this._line('Ставки сделаны: за ' + d.left.name + ' — ' + a + ', за ' + d.right.name + ' — ' + b + '. Бой!', 'battle');
+    this._line('Ставки: ' + a + ' за ' + d.left.name + ', ' + b + ' за ' + d.right.name, 'battle');
     this._emit('phase', { state: 'battle', mode: 'duel', fight: true });
   }
 
@@ -895,6 +853,15 @@ export class Game {
     // одному не с кем драться
     const others = (pool || Array.from(this.members.values())).filter((g) => g !== best && g.place !== 'rest');
     return others.length ? best : null;
+  }
+
+  // первый — случайный; второй — ближайший к нему по мощи, а из почти равных — случайный
+  _duelPair(ready) {
+    const first = ready[Math.floor(this.random() * ready.length)], mine = ratingOf(first);
+    const others = ready.filter((g) => g !== first).map((g) => ({ g, gap: Math.abs(ratingOf(g) - mine) }));
+    const best = Math.min(...others.map((o) => o.gap));
+    const near = others.filter((o) => o.gap <= best + DUEL.near * mine);
+    return [first, near[Math.floor(this.random() * near.length)].g];
   }
 
   _rollMode() {
@@ -1172,7 +1139,6 @@ export class Game {
     this.projectiles.push({ kind, from: g, to: t, x: g.x, y: g.y - 30, speed: kind === 'spear' ? SPEAR.speed : NET.speed,
       angle: 0 });
     this._emit('throw', { login: g.login, kind, x: g.x, y: g.y });
-    if (kind === 'net') this._line(g.name + ' бросает сеть в ' + t.name, 'info');
   }
 
   // снаряд летит за целью; долетел — удар копьём или сеть
@@ -1197,7 +1163,6 @@ export class Game {
         if (this.random() < NET.tear && a.nets > 0) {
           a.nets = 0;
           this._emit('nettear', { login: a.login, x: t.x, y: t.y });
-          this._line('У ' + a.name + ' порвалась сеть', 'warn');
         }
       }
     }
@@ -1224,7 +1189,6 @@ export class Game {
       a.retarget = NET.focus;
     }
     this._emit('stun', { login: t.login, x: t.x, y: t.y, from: a.login });
-    this._line(a.name + ' опутал сетью ' + t.name, 'down');
   }
 
   // щит: шанс отбить любой удар, при отбитии иногда ломается
@@ -1234,7 +1198,6 @@ export class Game {
     if (this.random() < SHIELD.breaks * (crit ? SHIELD.critBreaks : 1)) {
       d.shield = false;
       this._emit('shieldbreak', { login: d.login, x: d.x, y: d.y });
-      this._line('У ' + d.name + ' раскололся щит', 'warn');
     }
     return true;
   }
@@ -1324,11 +1287,11 @@ export class Game {
     if (dead) a.killsNow++;
     if (dead && !d.lion && !a.lion) this._bless(a);
     a.target = null;
-    if (d.lion) this._line(a.name + ' сражает льва!', 'champion');
-    else if (a.lion) this._line(dead ? 'Лев растерзал ' + d.name : 'Лев повалил ' + d.name + ' — тот жив', dead ? 'death' : 'down');
-    else if (dead) this._line(d.name + ' погибает от руки ' + a.name, 'death');
-    else if (saved) this._line('Божественный амулет спасает ' + d.name + ' от смерти — и рассыпается', 'champion');
-    else this._line(a.name + ' валит ' + d.name + ' — тот повержен, но жив', 'down');
+    if (d.lion) this._line(a.name + ' сражает льва', 'champion');
+    else if (a.lion) this._line((dead ? 'Лев растерзал ' : 'Лев повалил ') + d.name, dead ? 'death' : 'down');
+    else if (dead) this._line(a.name + ' убивает ' + d.name, 'death');
+    else if (saved) this._line('Амулет спас ' + d.name + ' от смерти', 'champion');
+    else this._line(a.name + ' валит ' + d.name, 'down');
     this._emit('down', { login: d.login, fate: d.fate, x: d.x, y: d.y, by: a.login, lion: Boolean(d.lion), saved });
     this._checkEnd();
   }
@@ -1346,8 +1309,7 @@ export class Game {
     const item = Object.assign({}, was, { rarity: DIVINE.id, power: Math.round(was.power * DIVINE.mult) });
     if (slot === 'weapon') g.weapon = item;
     else g.gear[slot] = item;
-    this._line(g.name + ': «' + itemText(was) + '» напивается крови и становится божественным — «' + itemText(item) + '»',
-      'champion');
+    this._line(g.name + (slot === 'weapon' ? ' — божественное оружие' : ' — божественный доспех'), 'champion');
     this._emit('divine', { login: g.login, x: g.x, y: g.y, slot });
   }
 
@@ -1509,24 +1471,19 @@ export class Game {
     this.duel = null;
     this.boss = null;
     this.timer = RESULTS_TIME;
-    const wounded = rows.filter((row) => row.fate !== 'dead' && this.members.get(row.login)?.place === 'heal').length;
-    if (wounded) this._line('Раненых уносят в лазарет: ' + wounded, 'heal');
-    const benched = rows.filter((row) => this.members.get(row.login)?.afk).length;
-    if (benched) this._line('Молчат уже ' + AFK_ROUNDS + ' раунда — на скамью: ' + benched, 'info');
     if (duel) {
-      this._line('Дуэль выиграл ' + winner.name + '! Угадали ставку: ' + bettors.length + ' — по ' + DUEL.prize + ' монет',
-        'champion');
+      this._line('Дуэль выиграл ' + winner.name + ', угадали ' + bettors.length, 'champion');
     } else if (pit) {
       const won = this.results.lionsDown === lions.length;
-      this._line(won ? 'Львы повержены! Выжившие получают щедрую награду' : !standing.length ? 'Львы победили'
-        : 'Время вышло — львы уходят в клетки', won ? 'champion' : 'battle');
+      this._line(won ? 'Львы повержены!' : !standing.length ? 'Львы победили' : 'Время вышло — львы ушли',
+        won ? 'champion' : 'battle');
     } else if (teams) {
       this._line(winTeam ? 'Стенку взяли ' + TEAMS.names[winTeam] + '!' : 'Стенка на стенку — ничья', 'champion');
     } else if (ascended) {
-      this._line((ascended.stood ? ascended.name + ' выстоял против всех' : 'Гладиаторы одолели ' + ascended.name) + ' — он получает '
-        + ascended.paragon + '-й парагон и начинает заново', 'champion');
+      this._line((ascended.stood ? ascended.name + ' выстоял' : 'Гладиаторы одолели ' + ascended.name) + ' — парагон '
+        + ascended.paragon, 'champion');
     } else if (champion) this._line(champion.name + ' — чемпион арены!', 'champion');
-    else this._line('Время вышло — бой окончен', 'battle');
+    else this._line('Время вышло — чемпиона нет', 'battle');
     this._emit('phase', { state: 'results' });
   }
 
