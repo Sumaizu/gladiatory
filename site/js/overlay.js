@@ -3,14 +3,16 @@ import { clean, fromQuery } from './config.js';
 import { demoGame } from './demo.js';
 import { Game, Roster } from './engine.js';
 import { playAll, unlock } from './sound.js';
+import { playNote, reportPlay } from './stats.js';
 import { View } from './view.js';
 
 const CODE_FILES = ['overlay.html', 'css/overlay.css', 'js/overlay.js', 'js/view.js', 'js/draw.js', 'js/engine.js',
   'js/balance.js', 'js/places.js', 'js/chat.js', 'js/config.js', 'js/demo.js', 'js/sound.js', 'js/art.js', 'js/gacha.js',
-  'js/stars.js'];
+  'js/stars.js', 'js/stats.js'];
 const LOCAL = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 const UPDATE_CHECK_SECONDS = LOCAL ? 5 : 300;
 const RELOAD_PAUSE_SECONDS = LOCAL ? 0 : 600;
+const STATS_EVERY_SECONDS = 600;
 const STEP_MS = 50;
 const RELOAD_CHECK_MS = 500;
 const FRAME_MAX = 0.1;
@@ -111,10 +113,16 @@ function run(view) {
     if (game.state === 'stopped') game.open();
     else if (pausedByHiding) game.setPaused(false);
     pausedByHiding = false;
+    notePlay();
   };
   const hide = () => {
     if (game.setPaused(true)) pausedByHiding = true;
   };
+
+  const notePlay = () => {
+    if (live && game.state !== 'stopped' && !pausedByHiding) reportPlay(playNote('gladiatory', settings, EMBEDDED));
+  };
+  setInterval(notePlay, STATS_EVERY_SECONDS * 1000);
 
   window.gladiatory = {
     game,
@@ -141,6 +149,7 @@ function run(view) {
       chat.start();
       game.stop();
       game.open();
+      notePlay();
     },
     stop() {
       live = false;

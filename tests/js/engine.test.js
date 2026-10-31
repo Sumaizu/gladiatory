@@ -1,4 +1,5 @@
 import { eq, no, ok, test } from './harness.js';
+import { playNote, reportPlay } from '../../site/js/stats.js';
 import { clean, fromQuery, toQuery } from '../../site/js/config.js';
 import { AGI_CAP, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../site/js/balance.js';
@@ -1744,4 +1745,13 @@ test('настройки: окошко под вебку — без вебки, 
   eq([toQuery({ webcam: 'vtuber' }), toQuery({ webcam: 'cam' }), toQuery({ bg: false })], ['webcam=vtuber', '', '']);
   eq(fromQuery('?webcam=0&bg=0').webcam, 'none');
   no('bg' in clean({ bg: false }));
+});
+
+test('статистика: отметка о запуске — только с каналом и только с сайта gamesonstream.ru', () => {
+  eq(playNote('gladiatory', { channel: '', webcam: 'cam' }, false), null);
+  eq(playNote('gladiatory', { channel: 'some_one', webcam: 'vtuber' }, true),
+    { game: 'gladiatory', channel: 'some_one', mode: 'vtuber', place: 'browser' });
+  eq(playNote('gladiatory', { channel: 'some_one', webcam: 'none' }, false).place, 'obs');
+  eq([reportPlay({ game: 'x' }, '127.0.0.1'), reportPlay({ game: 'x' }, 'sumaizu.github.io'), reportPlay(null, 'gamesonstream.ru')],
+    [false, false, false]);
 });
