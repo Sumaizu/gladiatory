@@ -8,11 +8,13 @@ export const RUSH = { queue: 6, spin: 0.5, show: 0.7 };
 export const QUEUE_CAP = 10;
 export const SPREAD = 0.15;
 
-// chance — прямо доля круток: щит и сеть по 15%, амулет 3%; остальное — оружие и доспехи по редкостям.
-// Щит и сеть — только при свободной второй руке; у кого в руке меч или копьё, а второй вещи нет, — вдвое чаще (offhand)
+// chance — прямо доля круток: щит, сеть и мешок с песком по 15%, амулет 3%; остальное — оружие и доспехи по редкостям.
+// Вещи для второй руки — только при свободной второй руке; у кого одноручное оружие, а второй вещи нет, — чаще
+// (offhand: втроём 60% круток, как раньше щит и сеть вдвоём)
 export const OUTCOMES = [
-  { id: 'shield', name: 'Щит', color: '#d9a441', chance: 0.15, offhand: 2 },
-  { id: 'net', name: 'Сеть', color: '#a8c4b0', chance: 0.15, offhand: 2 },
+  { id: 'shield', name: 'Щит', color: '#d9a441', chance: 0.15, offhand: 4 / 3 },
+  { id: 'net', name: 'Сеть', color: '#a8c4b0', chance: 0.15, offhand: 4 / 3 },
+  { id: 'sand', name: 'Мешок с песком', color: '#d6b46e', chance: 0.15, offhand: 4 / 3 },
   // спасает от смерти один раз и рассыпается; пока он есть, второй не выпадает
   { id: 'amulet', name: 'Божественный амулет', color: '#ff3b47', chance: 0.03 },
 ];
@@ -66,11 +68,11 @@ export function makeItem(random, kind, rarity, type = null) {
 // owner — кто крутит: щит и сеть выпадают, только если его вторая рука свободна
 export function spin(random, owner = null) {
   const outcomes = OUTCOMES.filter((o) => !owner || (o.id === 'amulet' ? !owner.amulet
-    : o.id !== 'shield' && o.id !== 'net' || offhandFree(owner)));
+    : !o.offhand || offhandFree(owner)));
   // у кого ещё нет оружия, тому первая же гача гарантированно даёт оружие
   if (owner && !owner.weapon) return { kind: 'item', item: makeItem(random, 'weapon', pick(RARITIES, random)) };
-  // меч или копьё и пустая вторая рука — щит и сеть вдвое чаще
-  const oneHand = owner && owner.weapon && (owner.weapon.type === 'sword' || owner.weapon.type === 'spear');
+  // одноручное оружие и пустая вторая рука — вещи для неё чаще
+  const oneHand = owner && owner.weapon && (WEAPON_TYPES[owner.weapon.type] || WEAPON_TYPES.sword).hands === 1;
   let roll = random();
   for (const o of outcomes) {
     roll -= o.chance * (oneHand && o.offhand ? o.offhand : 1);

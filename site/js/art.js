@@ -1,7 +1,7 @@
 // пиксельная графика как в Чатобороне: один пиксель рисунка — два пикселя поля, текстуры и спрайты с обводкой
 import { BAYS, BAY_W, COLUMNS, FIELD_H, FIELD_W, PLACES, WALL, bayX } from './places.js';
 import { tierOf } from './gacha.js';
-import { netUp, shieldUp } from './balance.js';
+import { netUp, sandUp, shieldUp } from './balance.js';
 
 export const P = 2;
 const W = FIELD_W / P;
@@ -513,8 +513,14 @@ export function lookOf(g, seed) {
     shield: !shieldUp(g) ? 'none' : SHIELD_SHAPES[(seed >>> 11) % SHIELD_SHAPES.length],
     design: (seed >>> 9) % 3,
     net: netUp(g) && !(g.netCool > 0),
+    sand: sandUp(g),
     amulet: Boolean(g.amulet),
   };
+}
+
+// щит, лежащий на песке, — того же вида, что у владельца
+export function shieldLookOf(g, seed) {
+  return { shape: SHIELD_SHAPES[(seed >>> 11) % SHIELD_SHAPES.length], design: (seed >>> 9) % 3, color: muted(g.color) };
 }
 
 const gearKey = (look) => [look.head, look.body, look.legs, look.feet].join('');
@@ -797,6 +803,46 @@ function weaponArt(type, tier) {
     p.rect(1, 20, 2, 1, '#8a7044');
     return { canvas: p.canvas(), px: 1.5, py: 18 };
   }
+  if (type === 'axe') {
+    // секира: длинное древко, широкое полукруглое лезвие справа, шип сзади
+    const p = new Pix(8, 22);
+    p.rect(3, 2, 1, 20, '#7a5636');
+    for (const y of [9, 15]) p.px(3, y, '#5a3e26');
+    p.px(3, 1, blade);
+    [1, 2, 3, 4, 4, 3, 2, 1].forEach((w, i) => {
+      p.rect(4, 1 + i, w, 1, blade);
+      p.px(3 + w, 1 + i, darker(blade, 1.25));
+    });
+    p.rect(4, 6, 2, 3, darker(blade, 0.72));
+    p.rect(1, 3, 2, 2, darker(blade, 0.8));
+    p.px(0, 4, darker(blade, 0.8));
+    return { canvas: p.canvas(), px: 3.5, py: 18 };
+  }
+  if (type === 'hammer') {
+    // молот: тяжёлый брусок на коротком древке
+    const p = new Pix(8, 22);
+    p.rect(3, 6, 2, 16, '#7a5636');
+    p.rect(3, 13, 2, 1, '#5a3e26');
+    p.rect(0, 0, 8, 6, blade);
+    p.rect(0, 0, 8, 1, darker(blade, 1.25));
+    p.rect(0, 5, 8, 1, darker(blade, 0.65));
+    p.rect(7, 1, 1, 4, darker(blade, 0.75));
+    p.rect(2, 2, 4, 2, darker(blade, 0.85));
+    return { canvas: p.canvas(), px: 4, py: 18 };
+  }
+  if (type === 'trident') {
+    // трезубец: три зубца на перекладине, длинное древко
+    const p = new Pix(7, 30);
+    p.rect(3, 0, 1, 7, blade);
+    p.rect(0, 2, 1, 5, blade);
+    p.rect(6, 2, 1, 5, blade);
+    p.px(0, 1, darker(blade, 1.2));
+    p.px(6, 1, darker(blade, 1.2));
+    p.rect(0, 7, 7, 1, darker(blade, 0.72));
+    p.rect(3, 8, 1, 22, '#7a5636');
+    for (const y of [16, 24]) p.px(3, y, '#5a3e26');
+    return { canvas: p.canvas(), px: 3, py: 20 };
+  }
   if (type === 'spear') {
     const p = new Pix(3, 30);
     p.px(1, 0, blade);
@@ -942,6 +988,23 @@ export const shieldSprite = (shape, design, color) => remember(['shield2', shape
 export const netOverSprite = () => remember('net-over2', netOverArt);
 export const netHandSprite = () => remember('net-hand2', netHandArt);
 export const netSprite = () => remember('net2', netArt);
+
+// мешок с песком: холщовый, перевязан у горла
+function sandArt() {
+  const p = new Pix(7, 8);
+  p.rect(2, 0, 3, 1, '#c9a46a');
+  p.rect(2, 1, 3, 1, '#6b4a2a');
+  for (let y = 2; y < 8; y++) {
+    const half = y < 4 ? 2 + (y - 2) : y > 6 ? 2 : 3;
+    for (let x = 3 - half; x <= 3 + half; x++) {
+      if (x < 0 || x > 6) continue;
+      p.px(x, y, x < 3 && y < 5 ? '#e2c690' : x > 4 || y > 6 ? '#a07c45' : '#c9a46a');
+    }
+  }
+  p.px(3, 4, '#a07c45');
+  return p.outline().canvas();
+}
+export const sandSprite = () => remember('sand1', sandArt);
 
 // лев в профиль, смотрит вправо: лапы на y = 23, центр x = 18. frame: stand, walk1, walk2, pounce, dead
 // лев в высоком разрешении: один пиксель рисунка — один пиксель поля (у людей — два).

@@ -1,8 +1,8 @@
-import { TEAMS, maxHp } from './balance.js';
+import { TEAMS, WEAPON_TYPES, maxHp } from './balance.js';
 import { ARENA, BAYS, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, bayX } from './places.js';
 import { tierOf } from './gacha.js';
 import { RAINBOW, RAINBOW_CYCLE, RAINBOW_W, SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
-import { LION, P, SPRITE, darker, drawDummyArt, lionSprite, sandTexel, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, paintLudusArt, shieldSprite, weaponSprite } from './art.js';
+import { LION, P, SPRITE, darker, drawDummyArt, lionSprite, sandTexel, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, paintLudusArt, sandSprite, shieldLookOf, shieldSprite, weaponSprite } from './art.js';
 
 const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
 const SKIN = ['#f0c79e', '#e2b48a', '#c98f62', '#a86e46', '#7d4f32'];
@@ -259,6 +259,9 @@ const GRIP = {
   sword: { idle: [8, 19], hit: [20, 14], turn: [0.5, 2.1] },
   spear: { idle: [12, 18], hit: [19, 17], turn: [1.35, 1.45] },
   greatsword: { idle: [16, 19], hit: [19, 16], turn: [0.3, 2.4] },
+  axe: { idle: [16, 19], hit: [19, 16], turn: [0.3, 2.4] },
+  hammer: { idle: [16, 19], hit: [19, 16], turn: [0.2, 2.3] },
+  trident: { idle: [12, 18], hit: [19, 17], turn: [1.35, 1.45] },
   none: { idle: [9, 19], hit: [9, 19], turn: [0, 0] },
 };
 
@@ -283,7 +286,7 @@ function drawArms(ctx, g, look, bob) {
   const swing = g.swing > 0 ? Math.sin((1 - g.swing / 0.3) * Math.PI) : 0;
   ctx.save();
   ctx.translate(-SPRITE.x, -SPRITE.foot - bob);
-  const type = g.spearOut ? 'none' : g.weapon ? g.weapon.type : 'fists';
+  const type = g.weapon ? g.weapon.type : 'fists';
   if (type === 'fists') {
     // кулаки: дальний чуть выше, ближний ниже; бьют по очереди
     const jab = (g.jab || 0) % 2;
@@ -306,8 +309,8 @@ function drawArms(ctx, g, look, bob) {
     ctx.drawImage(art.canvas, -art.px, -art.py);
     ctx.restore();
   };
-  if (type === 'greatsword') {
-    // двуручник — обеими руками перед собой
+  if ((WEAPON_TYPES[type] || {}).hands === 2) {
+    // двуручное — обеими руками перед собой
     limb(ctx, SHOULDER.far, [hand[0] - 1, hand[1]], skinD, guard);
     weaponAt();
     limb(ctx, SHOULDER.near, [hand[0], hand[1] + 1], skin);
@@ -328,6 +331,11 @@ function drawArms(ctx, g, look, bob) {
     const pos = [17, 16];
     limb(ctx, SHOULDER.near, pos, skin);
     ctx.drawImage(netHandSprite(), Math.round(pos[0]) - 4, Math.round(pos[1]) - 1);
+    fist(ctx, pos, skin);
+  } else if (look.sand) {
+    const pos = [17, 18];
+    limb(ctx, SHOULDER.near, pos, skin);
+    ctx.drawImage(sandSprite(), Math.round(pos[0]) - 4, Math.round(pos[1]) - 1);
     fist(ctx, pos, skin);
   } else {
     limb(ctx, SHOULDER.near, [17, 17], skin);
@@ -355,6 +363,7 @@ function drawLion(ctx, g, t) {
 export function drawGladiator(ctx, g, t, scene) {
   if (g.lion) {
     drawLion(ctx, g, t);
+    if (scene === 'arena') drawStatus(ctx, g, t);
     return;
   }
   const fate = scene === 'arena' ? g.fate : null;
@@ -388,7 +397,7 @@ export function drawGladiator(ctx, g, t, scene) {
   ctx.drawImage(sprite, -SPRITE.x, -SPRITE.foot - bob);
   if (frame === 'stand' || frame === 'walk1' || frame === 'walk2') drawArms(ctx, g, look, bob);
   ctx.restore();
-  if (scene === 'arena' && g.stunT > 0 && g.fate === 'fight') {
+  if (scene === 'arena' && g.stunT > 0 && g.fate === 'fight' && !g.dazed) {
     // накинутая сеть
     ctx.save();
     ctx.translate(x, y);
@@ -396,20 +405,77 @@ export function drawGladiator(ctx, g, t, scene) {
     ctx.drawImage(netOverSprite(), -13, -41);
     ctx.restore();
   }
+  if (scene === 'arena') drawStatus(ctx, g, t);
 }
 
-// копья и сети в полёте, брошенные копья на песке
-export function drawThrown(ctx, game) {
-  for (const g of game.fighters) {
-    if (!g.spearOut || g.spearOut.flying) continue;
-    const art = weaponSprite('spear', tierOf(g.weapon));
+// у головы: оглушённый молотом — звёздочки по кругу; ослеплённый песком — песчаная пелена на глазах
+// и песчинки, вьющиеся вокруг головы (к концу слепоты тают)
+const DUST = ['#f3e2b3', '#e2c690', '#c49a58'];
+function drawStatus(ctx, g, t) {
+  if (g.fate !== 'fight') return;
+  const face = g.face < 0 ? -1 : 1;
+  const x = Math.round(g.x / P) * P, y = Math.round(g.y / P) * P;
+  if (g.stunT > 0 && g.dazed) {
     ctx.save();
-    ctx.translate(Math.round(g.spearOut.x / P) * P, Math.round(g.spearOut.y / P) * P);
+    ctx.translate(x + (g.lion ? face * 30 : 0), y - (g.lion ? 50 : 70));
+    for (let i = 0; i < 3; i++) {
+      const a = t * 5 + i * 2.09, sx = Math.round(Math.cos(a) * 9), sy = Math.round(Math.sin(a) * 3);
+      ctx.fillStyle = '#ffe066';
+      ctx.fillRect(sx - 3, sy - 1, 6, 2);
+      ctx.fillRect(sx - 1, sy - 3, 2, 6);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(sx - 1, sy - 1, 2, 2);
+    }
+    ctx.restore();
+  }
+  if (g.blindT > 0) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, g.blindT * 1.5);
+    // глаза: у человека — на голове, у льва — на морде впереди
+    const hx = x + (g.lion ? face * 34 : face * 2), hy = y - (g.lion ? 40 : 58);
+    // песчаная повязка на глазах с тёмным краем — видна и на светлом песке
+    ctx.fillStyle = '#5a3a22';
+    ctx.fillRect(hx - 9, hy - 3, 18, 7);
+    ctx.fillStyle = '#f3e2b3';
+    ctx.fillRect(hx - 8, hy - 2, 16, 2);
+    ctx.fillStyle = '#d6b46e';
+    ctx.fillRect(hx - 8, hy, 16, 3);
+    // песчинки вьются вокруг головы
+    for (let i = 0; i < 6; i++) {
+      const a = t * 4.5 + i * 1.05, r = 12 + Math.sin(t * 3 + i) * 2, dark = i % 2 === 0;
+      ctx.fillStyle = dark ? '#6b4a2a' : '#fff3cf';
+      ctx.fillRect(Math.round(hx + Math.cos(a) * r) - 1, Math.round(hy - 2 + Math.sin(a) * r * 0.45) - 1, dark ? 3 : 2, dark ? 3 : 2);
+    }
+    ctx.restore();
+  }
+}
+
+// что лежит на песке: оружие плашмя, щиты, сети и мешки; что летит: копья, сети, мешки, выбитое оружие
+export function drawThrown(ctx, game) {
+  for (const it of game.ground || []) {
+    ctx.save();
+    ctx.translate(Math.round(it.x / P) * P, Math.round(it.y / P) * P);
     ctx.scale(P, P);
     ctx.fillStyle = 'rgba(30,15,8,.25)';
-    ctx.fillRect(-15, 0, 30, 2);
-    ctx.rotate(Math.PI / 2);
-    ctx.drawImage(art.canvas, -art.px, -15);
+    if (it.kind === 'weapon') {
+      const art = weaponSprite(it.item.type, tierOf(it.item));
+      const h = art.canvas.height;
+      ctx.fillRect(-Math.round(h / 2), 0, h, 2);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(art.canvas, -art.px, -Math.round(h / 2));
+    } else if (it.kind === 'shield') {
+      const owner = game.members.get(it.owner) || { login: it.owner, color: '#8a7a66' };
+      const look = shieldLookOf(owner, hashOf(owner.login)), art = shieldSprite(look.shape, look.design, look.color);
+      ctx.fillRect(-Math.round(art.width / 2), 1, art.width, 2);
+      ctx.scale(1, 0.6);
+      ctx.drawImage(art, -Math.round(art.width / 2), -art.height + 2);
+    } else if (it.kind === 'net') {
+      ctx.scale(1, 0.55);
+      ctx.drawImage(netSprite(), -10, -16);
+    } else {
+      ctx.fillRect(-4, 0, 8, 2);
+      ctx.drawImage(sandSprite(), -4, -7);
+    }
     ctx.restore();
   }
   for (const p of game.projectiles || []) {
@@ -417,9 +483,17 @@ export function drawThrown(ctx, game) {
     ctx.translate(p.x, p.y);
     ctx.scale(P, P);
     if (p.kind === 'spear') {
-      const art = weaponSprite('spear', tierOf(p.from.weapon));
+      const art = weaponSprite(p.item ? p.item.type : 'spear', tierOf(p.item));
       ctx.rotate(p.angle + Math.PI / 2);
       ctx.drawImage(art.canvas, -art.px, -15);
+    } else if (p.kind === 'fling') {
+      // выбитое оружие кувыркается в полёте
+      const art = weaponSprite(p.item.type, tierOf(p.item));
+      ctx.rotate(p.x * 0.08);
+      ctx.drawImage(art.canvas, -art.px, -Math.round(art.canvas.height / 2));
+    } else if (p.kind === 'sand') {
+      ctx.rotate(p.x * 0.06);
+      ctx.drawImage(sandSprite(), -4, -4);
     } else {
       ctx.rotate(p.x * 0.05);
       ctx.drawImage(netSprite(), -8, -8);

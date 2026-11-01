@@ -1,4 +1,4 @@
-import { ARMOR_SLOTS, SLOT_IDS, STATS, TEAMS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
+import { ARMOR_SLOTS, SAND, SLOT_IDS, STATS, TEAMS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
 import { RARITIES, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
 import { FIELD_H, FIELD_W, DUMMIES, PLACES } from './places.js';
 import { FONT, drawCrowd, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
@@ -15,6 +15,7 @@ const FLOAT_TIME = 1.1;
 // мир рисуется в низком разрешении и растягивается крупными пикселями — как в Domina
 const PIXEL = 1;
 const BLOOD = ['#8f1414', '#a8191b', '#6e0d0f', '#c22a22'];
+const SAND_COLORS = ['#fff6d8', '#f3e2b3', '#d6b46e', '#a8804a', '#7a5a30'];
 const shadeBlood = (hex, k) => '#' + [1, 3, 5].map((i) => Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16)
   * k))).toString(16).padStart(2, '0')).join('');
 const WHERE = {
@@ -24,7 +25,7 @@ const WHERE = {
 
 const COMMANDS = {
   ludus: [['трен', 'тренироваться: опыт'], ['лазарет', 'лечиться бесплатно'], ['отдых', 'сесть на скамью и не идти в бой'],
-    ['гача', '30 монет: оружие, доспех, щит, сеть, амулет'], ['сил · лов · вын', 'вложить очко'],
+    ['гача', '30 монет: оружие, доспех, щит, сеть, песок, амулет'], ['сил · лов · вын', 'вложить очко'],
     ['проф', 'твоя карточка']],
   battle: [['проф', 'твоя карточка'],
     ['трен', 'встать со скамьи: в бой пойдёшь следующим']],
@@ -201,6 +202,10 @@ const ICONS = {
   coins: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="currentColor"/><circle cx="8" cy="8" r="3.5" fill="none" stroke="#1e140e" stroke-width="1.5"/></svg>',
   greatsword: '<svg viewBox="0 0 16 16"><path d="M14 0.5h1.5V2L6.5 11 5 9.5z" fill="currentColor"/><path d="M2.5 8.5l5 5-1.2 1.2-1.4-1.4-2 2-1.2-1.2 2-2-1.4-1.4z" fill="currentColor"/></svg>',
   spear: '<svg viewBox="0 0 16 16"><path d="M15.5 0.5l-1 4.2-1.6-1.6z" fill="currentColor"/><path d="M13.2 3.6l.9.9L1.7 16.9.8 16z" fill="currentColor"/></svg>',
+  axe: '<svg viewBox="0 0 16 16"><path d="M10.6 2.2l1.2-1.2 3.2 3.2-1.2 1.2z" fill="currentColor"/><path d="M11.4 3l1.6 1.6L2 15.6.4 14z" fill="currentColor"/><path d="M8.5 1.5c3 0 6 3 6 6l-3-1-2-2z" fill="currentColor"/></svg>',
+  hammer: '<svg viewBox="0 0 16 16"><path d="M8.2 1.2l6.6 6.6-2.4 2.4-6.6-6.6z" fill="currentColor"/><path d="M8.2 7.4l1.2 1.2-7 7-1.2-1.2z" fill="currentColor"/></svg>',
+  trident: '<svg viewBox="0 0 16 16"><path d="M9.7 5.2l1.1 1.1-9.6 9.6-1.1-1.1z" fill="currentColor"/><path d="M15.6.4l-.6 4.4-1.5-1.5-1.9 1.9 1 1-1.2 1.2-3.3-3.3 1.2-1.2 1 1 1.9-1.9-1.5-1.5zM8.7 2.3l1.4 1.4-1.6.3zM13.7 7.3l-1.4-1.4-.3 1.6z" fill="currentColor"/></svg>',
+  sand: '<svg viewBox="0 0 16 16"><path d="M6 1.5h4l-1 2.2h-2z" fill="currentColor"/><path d="M5.6 4.6h4.8c2.2 1.5 3.6 4 3.6 6.3 0 2.6-2.6 3.6-6 3.6s-6-1-6-3.6c0-2.3 1.4-4.8 3.6-6.3z" fill="currentColor"/><path d="M5.6 4.6h4.8" stroke="#1e140e" stroke-width="1.1"/></svg>',
   fists: '<svg viewBox="0 0 16 16"><path d="M4 6h8a2 2 0 0 1 2 2v3a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7zM4 3.5a1.5 1.5 0 0 1 3 0V6H4zM7.2 3a1.5 1.5 0 0 1 3 0V6h-3zM10.4 3.6a1.4 1.4 0 0 1 2.8 0V6h-2.8z" fill="currentColor"/></svg>',
   head: '<svg viewBox="0 0 16 16"><path d="M3 9a5 5 0 0 1 10 0v4h-3v-3H6v3H3z" fill="currentColor"/><path d="M7 1h2v3H7z" fill="currentColor"/></svg>',
   legs: '<svg viewBox="0 0 16 16"><path d="M4 1h8v4l-1 10H9L8 7l-1 8H5L4 5z" fill="currentColor"/></svg>',
@@ -250,6 +255,7 @@ export class View {
     this.game = null;
     this.seen = 0;
     this.floats = [];
+    this.bursts = [];
     this.dummyHits = DUMMIES.map(() => 0);
     this.domIn = 0;
     this.keys = {};
@@ -421,6 +427,16 @@ export class View {
       sound('net');
     } else if (e.type === 'throw') {
       sound('whoosh');
+    } else if (e.type === 'disarm') {
+      this.floats.push({ x: e.x, y: e.y - 70, text: 'обезоружен!', life: 1.8, kind: 'flee' });
+      sound('crack');
+    } else if (e.type === 'daze') {
+      this.floats.push({ x: e.x, y: e.y - 70, text: 'оглушён!', life: 1.6, kind: 'level' });
+      sound('thwack');
+    } else if (e.type === 'sand') {
+      this._burst(e.x, e.y);
+    } else if (e.type === 'blind') {
+      this.floats.push({ x: e.x, y: e.y - 76, text: 'ослеп!', life: 1.5, kind: 'sand' });
     } else if (e.type === 'flee') {
       this.floats.push({ x: e.x, y: e.y - 70, text: 'бежит!', life: 1.6, kind: 'flee' });
       this.roar = Math.min(1, this.roar + 0.3);
@@ -609,6 +625,7 @@ export class View {
     const cards = new Set(game.cards.map((c) => c.login));
     for (const g of figures) drawLabel(ctx, g, scene, cards.has(g.login));
     if (scene === 'arena' && game.duel) this._duelMarks(ctx, game);
+    this._bursts(ctx, dt);
     this._floats(ctx, dt);
     if (this.fade > 0) {
       const k = this.fade / FADE;
@@ -642,6 +659,118 @@ export class View {
       ctx.fillStyle = '#ffd98f';
       ctx.fillText(text, x, y - 32);
     });
+  }
+
+  // мешок с песком лопается: вспышка, волна по кругу, клубы пыли неровным облаком, песчинки и клочья мешковины
+  _burst(x, y) {
+    const pick = (list) => list[Math.floor(Math.random() * list.length)];
+    const grains = [], puffs = [], scraps = [];
+    for (let i = 0; i < 80; i++) {
+      const a = Math.random() * Math.PI * 2, v = 50 + Math.random() * 200;
+      grains.push({ x, y: y - 26, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.55 - 30 - Math.random() * 70,
+        life: 0.45 + Math.random() * 0.65, size: Math.random() < 0.3 ? 3 : 2, color: pick(SAND_COLORS) });
+    }
+    for (let i = 0; i < 14; i++) {
+      const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * SAND.radius * 0.6;
+      puffs.push({ x: x + Math.cos(a) * d, y: y - 20 + Math.sin(a) * d * 0.5, r: 8 + Math.random() * 12,
+        grow: 22 + Math.random() * 30, life: 0.8 + Math.random() * 0.7, rise: 4 + Math.random() * 14,
+        delay: Math.random() * 0.12, color: pick(['250,236,200', '240,220,168', '232,206,150']) });
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, v = 90 + Math.random() * 110;
+      scraps.push({ x, y: y - 26, vx: Math.cos(a) * v, vy: Math.sin(a) * v, spin: (Math.random() - 0.5) * 18,
+        turn: Math.random() * 6, life: 0.7 + Math.random() * 0.4 });
+    }
+    this.bursts.push({ x, y, t: 0, grains, puffs, scraps });
+  }
+
+  _bursts(ctx, dt) {
+    for (const b of this.bursts) {
+      b.t += dt;
+      const t = b.t;
+      // вспышка в миг удара: яркое ядро и короткие лучи
+      if (t < 0.22) {
+        const k = t / 0.22, r = 20 + 46 * k, glow = ctx.createRadialGradient(b.x, b.y - 26, 0, b.x, b.y - 26, r);
+        glow.addColorStop(0, 'rgba(255,255,245,' + (1 - k).toFixed(3) + ')');
+        glow.addColorStop(0.45, 'rgba(255,226,150,' + (0.85 * (1 - k)).toFixed(3) + ')');
+        glow.addColorStop(1, 'rgba(255,190,100,0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y - 26, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,246,216,' + (0.9 * (1 - k)).toFixed(3) + ')';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const a = i / 10 * Math.PI * 2 + 0.3, from = 14 + 40 * k, to = from + 22 + 14 * (i % 2);
+          ctx.moveTo(b.x + Math.cos(a) * from, b.y - 26 + Math.sin(a) * from * 0.7);
+          ctx.lineTo(b.x + Math.cos(a) * to, b.y - 26 + Math.sin(a) * to * 0.7);
+        }
+        ctx.stroke();
+      }
+      // волна по песку — до края облака
+      if (t < 0.4) {
+        const k = t / 0.4;
+        ctx.strokeStyle = 'rgba(240,220,168,' + (0.55 * (1 - k)).toFixed(3) + ')';
+        ctx.lineWidth = 4 * (1 - k) + 1;
+        ctx.beginPath();
+        ctx.ellipse(b.x, b.y, SAND.radius * (0.3 + 0.7 * k), SAND.radius * 0.45 * (0.3 + 0.7 * k), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // клубы пыли: каждый растёт, поднимается и тает сам по себе — облако выходит неровным
+      for (const p of b.puffs) {
+        const age = t - p.delay;
+        if (age <= 0 || age >= p.life) continue;
+        const k = age / p.life, r = p.r + p.grow * (1 - Math.pow(1 - k, 3)), cy = p.y - p.rise * k;
+        const alpha = Math.min(1, age / 0.08) * 0.85 * Math.pow(1 - k, 1.2);
+        // тень клуба снизу — чтобы облако читалось на светлом песке
+        const shade = ctx.createRadialGradient(p.x, cy + r * 0.25, r * 0.1, p.x, cy + r * 0.25, r);
+        shade.addColorStop(0, 'rgba(120,84,44,' + (alpha * 0.45).toFixed(3) + ')');
+        shade.addColorStop(1, 'rgba(120,84,44,0)');
+        ctx.fillStyle = shade;
+        ctx.beginPath();
+        ctx.arc(p.x, cy + r * 0.25, r, 0, Math.PI * 2);
+        ctx.fill();
+        const fill = ctx.createRadialGradient(p.x, cy, r * 0.1, p.x, cy, r);
+        fill.addColorStop(0, 'rgba(' + p.color + ',' + alpha.toFixed(3) + ')');
+        fill.addColorStop(0.6, 'rgba(' + p.color + ',' + (alpha * 0.6).toFixed(3) + ')');
+        fill.addColorStop(1, 'rgba(' + p.color + ',0)');
+        ctx.fillStyle = fill;
+        ctx.beginPath();
+        ctx.arc(p.x, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // песчинки разлетаются и падают — квадратиками, как пиксели
+      for (const s of b.grains) {
+        if (t >= s.life) continue;
+        s.vy += 320 * dt;
+        s.vx *= 1 - 1.5 * dt;
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        ctx.globalAlpha = Math.min(1, (s.life - t) * 4);
+        ctx.fillStyle = s.color;
+        ctx.fillRect(Math.round(s.x / 2) * 2, Math.round(s.y / 2) * 2, s.size, s.size);
+      }
+      // клочья мешковины
+      for (const s of b.scraps) {
+        if (t >= s.life) continue;
+        s.vy += 360 * dt;
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        s.turn += s.spin * dt;
+        ctx.globalAlpha = Math.min(1, (s.life - t) * 4);
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        ctx.rotate(s.turn);
+        ctx.fillStyle = '#a07c45';
+        ctx.fillRect(-3, -2, 6, 4);
+        ctx.fillStyle = '#6b4a2a';
+        ctx.fillRect(-3, 1, 6, 1);
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    }
+    this.bursts = this.bursts.filter((b) => b.t < 1.7);
   }
 
   _floats(ctx, dt) {
@@ -683,6 +812,9 @@ export class View {
       } else if (f.kind === 'bleed') {
         size = 14;
         color = '#ff4b4b';
+      } else if (f.kind === 'sand') {
+        size = 14;
+        color = '#f0dca8';
       } else if (f.kind === 'saved') {
         size = 20;
         color = '#ff5a64';
@@ -909,7 +1041,7 @@ export class View {
     for (const g of cards) {
       let box = this.cardNodes.get(g.login);
       const key = [g.paragon, g.level, Math.floor(g.xp), Math.round(g.hp), g.coins, g.str, g.agi, g.vit, g.points,
-        JSON.stringify(g.weapon), JSON.stringify(g.gear), g.shield, g.nets, g.fights].join(':');
+        JSON.stringify(g.weapon), JSON.stringify(g.gear), g.shield, g.nets, g.sand, g.fights].join(':');
       if (!box) {
         box = el('div', 'profile');
         box.dataset.key = '';
@@ -928,7 +1060,7 @@ export class View {
   // чтобы не закрывали бегающих бойцов; держатся до конца боя
   _duelCards(game) {
     const d = game.state === 'battle' && game.duel && !game.duel.betting ? game.duel : null, box = $('duel-cards');
-    const sign = (g) => [g.login, g.color, g.level, g.paragon, g.coins, g.points, g.str, g.agi, g.vit, g.fights, g.shield, g.nets, g.amulet,
+    const sign = (g) => [g.login, g.color, g.level, g.paragon, g.coins, g.points, g.str, g.agi, g.vit, g.fights, g.shield, g.nets, g.sand, g.amulet,
       JSON.stringify(g.weapon), JSON.stringify(g.gear)].join(':');
     const key = d ? sign(d.left) + '|' + sign(d.right) : '';
     if (box.dataset.key === key) return;
@@ -970,7 +1102,10 @@ export class View {
     slot('amulet', 'Божественный амулет: спасёт от смерти', 'amulet', g.amulet ? outcomeOf('amulet').color : '');
     slot('right', 'Правая рука', wName, wColor);
     if (twoHanded(g)) slot('left', 'Левая рука: двуручное оружие', wName, wColor, ' twin');
-    else slot('left', 'Левая рука', g.nets > 0 && !g.shield ? 'net' : 'shield', g.shield || g.nets > 0 ? '#d9a441' : '');
+    else {
+      const left = g.shield ? 'shield' : g.nets > 0 ? 'net' : g.sand > 0 ? 'sand' : null;
+      slot('left', 'Левая рука', left || 'shield', left ? outcomeOf(left).color : '');
+    }
     for (const id of SLOT_IDS) {
       const item = g.gear && g.gear[id];
       slot(id, ARMOR_SLOTS[id].label, id === 'body' ? 'armor' : id, item && rarityOf(item.rarity).color);
@@ -1001,7 +1136,7 @@ export class View {
       color = rarityOf(result.item.rarity).color;
       icon = result.item.kind === 'weapon' ? (result.item.type === 'sword' ? 'weapon' : result.item.type)
         : result.item.slot === 'body' ? 'armor' : result.item.slot;
-    } else if (result.kind === 'shield' || result.kind === 'net' || result.kind === 'amulet') {
+    } else if (result.kind === 'shield' || result.kind === 'net' || result.kind === 'sand' || result.kind === 'amulet') {
       color = outcomeOf(result.kind).color;
       icon = result.kind;
     } else {
@@ -1049,14 +1184,15 @@ export class View {
       const r = now.result;
       if (now.done && r.item) {
         prize.style.color = rarityOf(r.item.rarity).color;
-        prize.append(itemText(r.item), el('small', '', r.equipped ? 'надевает' : r.locked ? 'божественная вещь не меняется'
+        prize.append(itemText(r.item), el('small', '', r.equipped ? (r.offhandLost ? 'надевает — вещь из левой руки пропадает' : 'надевает')
+          : r.locked ? 'божественная вещь не меняется'
           : r.item.kind === 'weapon' ? 'редкость ниже своей — выброшено' : 'не лучше своего — выброшено'));
       } else if (now.done && r.kind === 'amulet') {
         prize.style.color = outcomeOf(r.kind).color;
         prize.append(outcomeOf(r.kind).name, el('small', '', 'один раз спасёт от смерти'));
-      } else if (now.done && (r.kind === 'shield' || r.kind === 'net')) {
+      } else if (now.done && (r.kind === 'shield' || r.kind === 'net' || r.kind === 'sand')) {
         prize.style.color = outcomeOf(r.kind).color;
-        prize.append(outcomeOf(r.kind).name, el('small', '', r.equipped ? 'берёт' : 'лишний — выброшен'));
+        prize.append(outcomeOf(r.kind).name, el('small', '', r.equipped ? 'берёт' : 'вторая рука занята — выброшено'));
       } else if (now.done && r.coins) {
         prize.style.color = outcomeOf(r.kind).color;
         prize.append('+' + r.coins + ' монет', el('small', '', outcomeOf(r.kind).name));

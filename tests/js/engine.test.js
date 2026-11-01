@@ -1,7 +1,7 @@
 import { eq, no, ok, test } from './harness.js';
 import { playNote, reportPlay } from '../../site/js/stats.js';
 import { clean, fromQuery, toQuery } from '../../site/js/config.js';
-import { AGI_CAP, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { AGI_CAP, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SAND, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../site/js/balance.js';
 import { starOf } from '../../site/js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../site/js/engine.js';
@@ -682,11 +682,12 @@ test('копьё: в израненного беглеца метают, пот�
   a.target = b;
   a.cool = 0;
   a.retarget = 10;
+  const spear = a.weapon;
   g.step(0.05);
-  ok(a.spearOut, 'копьё брошено');
+  eq(a.weapon, null, 'копьё брошено');
   ok(g.projectiles.some((p) => p.kind === 'spear' && p.from === a));
-  for (let i = 0; i < 20 * 10 && a.spearOut && a.fate === 'fight'; i++) g.step(0.05);
-  if (a.fate === 'fight') eq(a.spearOut, null, 'подобрал');
+  for (let i = 0; i < 20 * 10 && !a.weapon && a.fate === 'fight'; i++) g.step(0.05);
+  if (a.fate === 'fight') eq(a.weapon, spear, 'подобрал');
   ok(g.events.some((e) => e.type === 'hit' && e.from === 'a' && e.ranged) || g.events.some((e) => e.type === 'miss'));
 });
 
@@ -753,7 +754,7 @@ test('гача: щит и сеть без редкости, занимают в�
     if (r.item && r.item.kind === 'weapon') types.add(r.item.type);
   }
   ok(kinds.has('shield') && kinds.has('net'), 'свободной руке выпадают');
-  eq(types, new Set(['sword', 'greatsword', 'spear']));
+  eq(types, new Set(['sword', 'greatsword', 'spear', 'axe', 'hammer', 'trident']));
   for (const owner of [a, b, c]) {
     for (let i = 0; i < 3000; i++) {
       const r = spin(random, owner);
@@ -810,7 +811,8 @@ test('гача: пока нет оружия, первая прокрутка г
   const random = rng(21);
   for (let i = 0; i < 500; i++) {
     const r = spin(random, { weapon: null, shield: false, nets: 0 });
-    ok(r.item && r.item.kind === 'weapon' && ['sword', 'greatsword', 'spear'].includes(r.item.type), JSON.stringify(r));
+    ok(r.item && r.item.kind === 'weapon' && ['sword', 'greatsword', 'spear', 'axe', 'hammer', 'trident'].includes(r.item.type),
+      JSON.stringify(r));
   }
   const g = game();
   const [a] = join(g, 'A');
@@ -1137,9 +1139,13 @@ test('копьё после подбора метают снова не рань
   b.hp = 1;
   b.fleeT = 2;
   ok(g._canThrowSpear(a, b));
-  a.spearOut = { x: a.x, y: a.y };
+  // копьё лежит у ног — подбирает
+  const spear = a.weapon;
+  a.lost = { item: spear, rating: g._ratingWith(a, spear) };
+  a.weapon = null;
+  g._lay({ kind: 'weapon', item: spear, owner: 'a' }, a.x, a.y, 0);
   for (let i = 0; i < 3; i++) g.step(0.05);
-  eq(a.spearOut, null);
+  eq(a.weapon, spear);
   ok(a.spearCool > SPEAR.cool - 0.5);
   b.fleeT = 2;
   no(g._canThrowSpear(a, b));
@@ -1565,22 +1571,268 @@ test('оружие из гачи той же редкости или выше з
   eq(a.gear.body.power, 19, 'доспех — по-прежнему только если крепче');
 });
 
-test('гача: с мечом или копьём и пустой второй рукой щит и сеть выпадают вдвое чаще (по 30%)', () => {
+test('гача: с одноручным оружием и пустой второй рукой щит, сеть и мешок с песком выпадают по 20%', () => {
   const share = (owner) => {
     const random = rng(9), counts = {};
     for (let i = 0; i < 30000; i++) {
       const r = spin(random, owner);
       counts[r.kind] = (counts[r.kind] || 0) + 1;
     }
-    return [(counts.shield || 0) / 30000, (counts.net || 0) / 30000, (counts.amulet || 0) / 30000];
+    return ['shield', 'net', 'sand', 'amulet'].map((kind) => (counts[kind] || 0) / 30000);
   };
-  const free = { shield: false, nets: 0, amulet: false };
-  for (const type of ['sword', 'spear']) {
-    const [sh, net, am] = share(Object.assign({ weapon: { type } }, free));
-    ok(Math.abs(sh - 0.3) < 0.02 && Math.abs(net - 0.3) < 0.02 && Math.abs(am - 0.03) < 0.01, type + ': ' + [sh, net, am]);
+  const free = { shield: false, nets: 0, sand: 0, amulet: false };
+  for (const type of ['sword', 'spear', 'trident']) {
+    const [sh, net, sand, am] = share(Object.assign({ weapon: { type } }, free));
+    ok([sh, net, sand].every((x) => Math.abs(x - 0.2) < 0.02) && Math.abs(am - 0.03) < 0.01, type + ': ' + [sh, net, sand, am]);
   }
-  eq(share(Object.assign({ weapon: { type: 'greatsword' } }, free)).slice(0, 2), [0, 0], 'с двуручником — никогда');
-  eq(share(Object.assign({ weapon: { type: 'sword' } }, free, { shield: true })).slice(0, 2), [0, 0], 'рука занята — никогда');
+  for (const type of ['greatsword', 'axe', 'hammer']) {
+    eq(share(Object.assign({ weapon: { type } }, free)).slice(0, 3), [0, 0, 0], type + ' — никогда');
+  }
+  eq(share(Object.assign({ weapon: { type: 'sword' } }, free, { shield: true })).slice(0, 3), [0, 0, 0], 'рука занята — никогда');
+  eq(share(Object.assign({ weapon: { type: 'sword' } }, free, { sand: 1 })).slice(0, 3), [0, 0, 0], 'мешок в руке — тоже');
+});
+
+test('гача: двуручное выпадает и с занятой второй рукой, а надетое — вещь из неё пропадает', () => {
+  const random = rng(5), types = new Set();
+  for (let i = 0; i < 4000; i++) {
+    const r = spin(random, { weapon: { type: 'sword', rarity: 'common' }, shield: true, nets: 0, sand: 0 });
+    if (r.item && r.item.kind === 'weapon') types.add(r.item.type);
+  }
+  ok(types.has('greatsword') && types.has('axe') && types.has('hammer'), [...types].join());
+  const g = game();
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  for (const [m, hand] of [[a, { shield: true }], [b, { nets: 1 }], [c, { sand: 1 }]]) {
+    Object.assign(m, { weapon: weapon('sword') }, hand);
+    const result = { kind: 'item', item: { kind: 'weapon', type: 'axe', rarity: 'legendary', power: 16 } };
+    g._prize(m, result);
+    eq([m.weapon.type, m.shield, m.nets, m.sand, result.offhandLost], ['axe', false, 0, 0, true], m.name);
+  }
+  // двуручное не надето (редкость ниже) — щит остаётся
+  Object.assign(a, { weapon: weapon('sword'), shield: true });
+  a.weapon.rarity = 'legendary';
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'hammer', rarity: 'common', power: 2 } });
+  eq([a.weapon.type, a.shield], ['sword', true]);
+});
+
+test('гача: мешок с песком — во вторую руку, только если она свободна', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  const r1 = { kind: 'sand' };
+  g._prize(a, r1);
+  eq([a.sand, r1.equipped], [1, true]);
+  ok(g.lines.some((l) => l.text === 'A берёт мешок с песком' && l.kind === 'sand'));
+  b.shield = true;
+  const r2 = { kind: 'sand' };
+  g._prize(b, r2);
+  eq([b.sand, r2.equipped], [0, false]);
+  g._prize(a, { kind: 'net' });
+  eq(a.nets, 0, 'рука занята мешком — сеть не берётся');
+});
+
+test('секира раскалывает щит куда чаще меча', () => {
+  for (const [type, broken] of [['axe', true], ['sword', false]]) {
+    const g = game();
+    const [a, b] = join(g, 'A', 'B');
+    g.next();
+    a.weapon = weapon(type);
+    b.shield = true;
+    b.agi = 0;
+    // уклонение, крит, блок, поломка (0.5: меч — нет, секира — да)
+    g.random = queue(0.99, 0.99, 0.01, 0.5);
+    g._attack(a, b);
+    eq(b.shield, !broken, type);
+  }
+});
+
+test('молот бьёт реже и мажет чаще, зато оглушает: звёздочки, не бьёт и не уворачивается', () => {
+  ok(attackEvery({ str: 0, agi: 0, weapon: weapon('hammer') }) > attackEvery({ str: 0, agi: 0, weapon: weapon('sword') }));
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  g.next();
+  a.weapon = weapon('hammer');
+  b.agi = 0;
+  // промах: уворот 5% + молот 12% — 0.15 мимо
+  g.random = queue(0.15);
+  const hp = b.hp;
+  g._attack(a, b);
+  eq(b.hp, hp, 'молот промахнулся');
+  // уклонение, крит, разброс, оглушение
+  g.random = queue(0.99, 0.99, 0.5, 0.01);
+  g._attack(a, b);
+  ok(b.stunT > 1 && b.dazed, 'оглушён');
+  ok(g.events.some((e) => e.type === 'daze' && e.login === 'b'));
+});
+
+test('трезубец выбивает оружие: оно летит на песок, а безоружный бежит за ним', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  g.next();
+  a.weapon = weapon('trident');
+  const sword = b.weapon = weapon('sword', 6);
+  b.agi = 0;
+  // уклонение, крит, разброс, выбить
+  g.random = queue(0.99, 0.99, 0.5, 0.01);
+  g._attack(a, b);
+  eq(b.weapon, null, 'выбили');
+  ok(g.projectiles.some((p) => p.kind === 'fling' && p.item === sword));
+  g.random = rng(3);
+  for (let i = 0; i < 20 * 3 && !g.ground.length; i++) g._stepProjectiles(0.05);
+  const lying = g.ground.find((it) => it.item === sword);
+  ok(lying && Math.hypot(lying.x - b.x, lying.y - b.y) > 60, 'улетело далеко');
+  a.x = 50; a.y = 50;
+  for (let i = 0; i < 20 * 8 && b.weapon !== sword && b.fate === 'fight'; i++) g._stepBattle(0.05);
+  eq(b.weapon, sword, 'подобрал своё');
+});
+
+test('оружие на песке: берут лучшее, если до него вдвое ближе, чем до врага', () => {
+  const setup = (power, far) => {
+    const g = game();
+    const [a, b] = join(g, 'A', 'B');
+    g.next();
+    a.weapon = weapon('sword', 2);
+    b.weapon = weapon('sword', 2);
+    a.x = 300; a.y = 300; b.x = 300 + 300; b.y = 300;
+    const item = weapon('sword', power);
+    g._lay({ kind: 'weapon', item, owner: 'x' }, a.x - far, a.y, 0);
+    // dt побольше — шанс решиться сработает наверняка, и за этот шаг он дойдёт и поднимет
+    g._seekGround(a, g._standing(), 10);
+    return a.weapon === item;
+  };
+  ok(setup(16, 60), 'лучше и рядом — берёт');
+  no(setup(2, 60), 'не лучше — не берёт');
+  no(setup(16, 200), 'дальше половины пути до врага — не берёт');
+});
+
+test('без оружия: бежит к ближайшему, что не хуже прежнего вдвое, иначе — за своим', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  g.next();
+  const mine = weapon('sword', 16);
+  a.weapon = mine;
+  const rating = g._ratingWith(a, mine);
+  a.weapon = null;
+  a.lost = { item: mine, rating };
+  a.x = 300; a.y = 300;
+  b.stunT = 100;
+  b.x = 700;
+  g._lay({ kind: 'weapon', item: mine, owner: 'a' }, 450, 300, 0);
+  const weak = { kind: 'weapon', type: 'sword', rarity: 'common', power: 1 };
+  g._lay({ kind: 'weapon', item: weak, owner: 'x' }, 330, 300, 0);
+  ok(g._ratingWith(a, weak) < rating * 0.5);
+  g._seekGround(a, g._standing(), 0.05);
+  eq(a.goFor.item, mine, 'слабое рядом — бежит за своим');
+  a.goFor = null;
+  const fair = weapon('spear', 12);
+  g._lay({ kind: 'weapon', item: fair, owner: 'x' }, 360, 300, 0);
+  g._seekGround(a, g._standing(), 0.05);
+  eq(a.goFor.item, fair, 'не хуже вдвое — ближайшее');
+});
+
+test('упавший роняет оружие и вещи; после боя всё возвращается владельцам, кроме сломанного и брошенного', () => {
+  const g = game();
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  const swordA = a.weapon = weapon('sword', 5);
+  const axeB = b.weapon = weapon('axe', 9);
+  c.weapon = weapon('sword', 3);
+  a.shield = true;
+  c.sand = 1;
+  g.next();
+  g._knockOut(b, c);
+  ok(g.ground.some((it) => it.item === axeB), 'секира на песке');
+  // A подбирает чужую секиру, теряет щит (раскололся), C бросает мешок
+  const it = g.ground.find((x) => x.item === axeB);
+  g._pick(a, it);
+  eq([a.weapon, a.weaponOf], [axeB, 'b']);
+  ok(g.ground.some((x) => x.item === swordA), 'свой меч — на песке');
+  g.random = queue(0.99, 0.99, 0.01, 0.01);
+  a.weapon = swordA;
+  g._attack(c, a);
+  a.weapon = axeB;
+  eq(a.shield, false, 'щит раскололся');
+  g._throw(c, a, 'sand');
+  eq(c.sand, 0);
+  // в бою в хранилище — своё
+  g.roster.put(a);
+  eq(g.roster.data.get('a').weapon.type, 'sword');
+  g.random = rng(4);
+  g._endBattle();
+  eq([a.weapon, a.shield, b.weapon, c.sand], [swordA, false, axeB, 0]);
+  eq(g.ground.length, 0);
+});
+
+test('сеть после боя снова в руке, даже если её не успели подобрать', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  a.nets = 1;
+  g.next();
+  a.netCool = 4;
+  g._endBattle();
+  eq([a.nets, a.netCool], [1, 0]);
+});
+
+test('убил чужим легендарным — качается не оружие, а доспех', () => {
+  const g = game();
+  const [a] = join(g, 'A', 'B');
+  g.next();
+  const blade = { kind: 'weapon', type: 'sword', rarity: 'legendary', power: 16 };
+  a.weapon = blade;
+  a.weaponOf = 'b';
+  a.gear.body = { kind: 'armor', slot: 'body', rarity: 'legendary', power: 26 };
+  g._bless(a);
+  eq([a.weapon, a.gear.body.rarity], [blade, 'divine']);
+  // своё легендарное — качается оружие, и после боя оно тоже божественное
+  const own = { kind: 'weapon', type: 'axe', rarity: 'legendary', power: 16 };
+  a.weapon = own;
+  a.home.weapon = own;
+  a.weaponOf = 'a';
+  g._bless(a);
+  eq([a.weapon.rarity, a.home.weapon.rarity], ['divine', 'divine']);
+});
+
+test('добил своим брошенным легендарным копьём — божественным становится копьё', () => {
+  const g = game({ settings: { death: 100 } });
+  const [a, b] = join(g, 'A', 'B', 'C');
+  g.next();
+  const spear = { kind: 'weapon', type: 'spear', rarity: 'legendary', power: 16 };
+  a.weapon = spear;
+  a.home.weapon = spear;
+  a.gear.body = { kind: 'armor', slot: 'body', rarity: 'legendary', power: 26 };
+  b.x = a.x + 150;
+  b.y = a.y;
+  b.hp = 1;
+  b.fleeT = 2;
+  b.agi = 0;
+  g._throw(a, b, 'spear');
+  eq(a.weapon, null);
+  g.random = () => 0.5;
+  for (let i = 0; i < 20 && g.projectiles.length; i++) g._stepProjectiles(0.05);
+  eq(b.fate, 'dead');
+  eq([spear.rarity, a.gear.body.rarity], ['divine', 'legendary'], 'качается копьё, а не доспех');
+  ok(g.ground.some((it) => it.item === spear), 'божественное копьё лежит на песке');
+  g._endBattle();
+  eq(a.weapon.rarity, 'divine', 'и после боя оно у владельца божественное');
+});
+
+test('мешок с песком слепит врагов вокруг цели (своих в стенке — нет), слепой мажет чаще', () => {
+  const g = game({ mode: 'teams' });
+  const all = join(g, 'A', 'B', 'C', 'D');
+  g.next();
+  const [a] = all;
+  const mates = all.filter((m) => m.team === a.team), foes = all.filter((m) => m.team !== a.team);
+  for (const m of all) {
+    m.x = 400;
+    m.y = 300;
+  }
+  a.x = 200;
+  g._sand(a, 400, 300);
+  ok(foes.every((m) => m.blindT === SAND.time), 'враги ослепли');
+  ok(mates.every((m) => !(m.blindT > 0)), 'свои — нет');
+  const blind = foes[0], target = mates[mates.length - 1];
+  target.agi = 0;
+  g.random = queue(0.3);
+  const hp = target.hp;
+  g._attack(blind, target);
+  eq(target.hp, hp, 'слепой промахнулся');
 });
 
 test('копейщик может метнуть копьё и в далёкую цель, а в ближнюю — нет', () => {
@@ -1622,6 +1874,11 @@ test('испытание парагона: от критов не убегает
   for (let i = 0; i < 5; i++) g._attack(b, a);
   ok(!(a.fleeT > 0), 'не убегает от крита');
   ok(!(a.bleedT > 0), 'кровь не течёт');
+  // и от тяжёлых ран не бежит
+  a.hp = maxHp(a) * 0.1;
+  a.fleeCool = 0;
+  for (let i = 0; i < 20; i++) g._stepBattle(0.05);
+  ok(!(a.fleeT > 0), 'израненный не убегает');
   c.hp = -5;
   g._knockOut(c, a);
   eq(c.fate, 'dead', 'убитый парагоном погибает как обычно');

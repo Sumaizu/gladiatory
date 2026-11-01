@@ -1,6 +1,7 @@
 import { AFK_ROUNDS, CRIT_KILL, TEAMS, BLEED, HIT_REWARD, PARAGON, pitStrength, powerOf, ratingOf, BEATEN_HP, HEAL_RATE, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
-  START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, NET, SHIELD, SPEAR, armorOf, netUp, reachOf, shieldUp, typeOf, attackEvery, critOf, crowdBonus, runOf, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
-  CRIT_HIT, SPREAD } from './balance.js';
+  START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, GROUND, NET, SAND, SHIELD, SPEAR, armorOf, netUp, offhandFree,
+  reachOf, sandUp, shieldUp, twoHanded, typeOf, attackEvery, critOf, crowdBonus, runOf, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
+  CRIT_HIT, SPREAD, WEAPON_TYPES } from './balance.js';
 import { ARENA, DUMMIES, ENTRANCE, PLACES, clampToArena, pointIn } from './places.js';
 import { DIVINE, PRICE, QUEUE_CAP, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, itemName, rankOf, spin } from './gacha.js';
 
@@ -53,9 +54,9 @@ const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const INVISIBLE = /[​‌‍⁠﻿­͏⠀\u{E0000}]/gu;
 const IGNORED = new Set(BOTS);
 const SAVED = ['name', 'color', 'level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'weapon', 'gear', 'shield',
-  'nets', 'amulet', 'hp',
+  'nets', 'sand', 'amulet', 'hp',
   'fights', 'wins', 'kos', 'kills', 'paragon', 'born'];
-const COUNTS = ['level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'nets', 'fights', 'wins', 'kos',
+const COUNTS = ['level', 'xp', 'coins', 'str', 'agi', 'vit', 'points', 'nets', 'sand', 'fights', 'wins', 'kos',
   'kills', 'paragon'];
 
 const PLACE_BY_WORD = new Map();
@@ -84,7 +85,7 @@ export function readableColor(color, login) {
 
 export function newGladiator(login, name, color, now, paragon = 0) {
   return { login, name, color, level: 1, xp: 0, coins: START_COINS + PARAGON.coins * paragon, str: 0, agi: 0, vit: 0,
-    points: START_POINTS + PARAGON.points * paragon, weapon: null, gear: emptyGear(), shield: false, nets: 0, amulet: false,
+    points: START_POINTS + PARAGON.points * paragon, weapon: null, gear: emptyGear(), shield: false, nets: 0, sand: 0, amulet: false,
     paragon, hp: 1, fights: 0, wins: 0, kos: 0, kills: 0, born: now };
 }
 
@@ -116,6 +117,7 @@ export class Roster {
         g.shield = entry.shield === true;
         g.amulet = entry.amulet === true;
         g.nets = Math.min(NET.max, g.nets);
+        g.sand = Math.min(1, g.sand);
         g.hp = Number.isFinite(Number(entry.hp)) ? Math.max(0.01, Math.min(1, Number(entry.hp))) : 1;
         this.data.set(login, g);
       }
@@ -141,10 +143,11 @@ export class Roster {
     return this.data.get(login) || null;
   }
 
-  // в хранилище здоровье лежит долей от максимума, чтобы не зависеть от формул
+  // в хранилище здоровье лежит долей от максимума, чтобы не зависеть от формул.
+  // Во время боя в руках может быть чужое или подобранное — сохраняем своё (home)
   put(g) {
-    const entry = {};
-    for (const field of SAVED) entry[field] = g[field] && typeof g[field] === 'object' ? JSON.parse(JSON.stringify(g[field])) : g[field];
+    const entry = {}, own = g.home ? Object.assign({}, g, g.home) : g;
+    for (const field of SAVED) entry[field] = own[field] && typeof own[field] === 'object' ? JSON.parse(JSON.stringify(own[field])) : own[field];
     entry.hp = Math.max(0.01, Math.min(1, g.hp / maxHp(g)));
     entry.hp = Math.round(entry.hp * 1000) / 1000;
     this.data.set(g.login, entry);
@@ -201,6 +204,7 @@ export class Game {
     this.spins = [];
     this.spinNow = null;
     this.projectiles = [];
+    this.ground = [];
     this.duel = null;
     this.roundStarts = [];
     this._saveIn = SAVE_EVERY;
@@ -469,7 +473,7 @@ export class Game {
     if (result.coins) {
       g.coins += result.coins;
     } else if (result.kind === 'shield') {
-      result.equipped = !g.shield && !(g.nets > 0);
+      result.equipped = offhandFree(g);
       if (result.equipped) {
         g.shield = true;
         this._line(g.name + ' берёт щит', 'shield');
@@ -479,10 +483,16 @@ export class Game {
       g.amulet = true;
       this._line(g.name + ' надевает божественный амулет', 'divine');
     } else if (result.kind === 'net') {
-      result.equipped = !g.shield && !(g.nets > 0);
+      result.equipped = offhandFree(g);
       if (result.equipped) {
         g.nets = 1;
         this._line(g.name + ' берёт сеть', 'net');
+      }
+    } else if (result.kind === 'sand') {
+      result.equipped = offhandFree(g);
+      if (result.equipped) {
+        g.sand = 1;
+        this._line(g.name + ' берёт мешок с песком', 'sand');
       }
     } else if (result.item) {
       const item = result.item;
@@ -495,6 +505,13 @@ export class Game {
         if (item.kind === 'armor') g.gear[item.slot] = item;
         else g.weapon = item;
         result.equipped = true;
+        // двуручное занимает обе руки — щит, сеть или мешок пропадают
+        if (twoHanded(g) && (g.shield || g.nets > 0 || g.sand > 0)) {
+          result.offhandLost = true;
+          g.shield = false;
+          g.nets = 0;
+          g.sand = 0;
+        }
         if (item.rarity === 'legendary') this._line(g.name + ' надевает «' + itemName(item).toLowerCase() + '»', 'legendary');
       }
     }
@@ -731,8 +748,14 @@ export class Game {
       g.circle = 0;
       g.stunT = 0;
       g.netCool = 0;
-      g.spearOut = null;
       g.spearCool = 0;
+      // своё снаряжение — запоминаем: после боя всё вернётся владельцам (сломанное, порванное и брошенное — нет)
+      g.home = g.lion ? null : { weapon: g.weapon, shield: Boolean(g.shield), nets: g.nets || 0, sand: g.sand || 0 };
+      g.weaponOf = g.shieldOf = g.netOf = g.sandOf = g.login;
+      g.lost = null;
+      g.goFor = null;
+      g.dazed = false;
+      g.blindT = 0;
       g.savedNow = false;
       g.bleedT = 0;
       g.bledBy = null;
@@ -773,6 +796,7 @@ export class Game {
       b.y = ARENA.cy;
     }
     this.projectiles = [];
+    this.ground = [];
     if (this.duel) {
       this._line('Дуэль: ' + this.duel.left.name + ' против ' + this.duel.right.name, 'duel');
     } else if (this.mode === 'teams') {
@@ -935,8 +959,8 @@ export class Game {
   }
 
   _flee(g, time, why) {
-    // в сети не убежать, пока она не спадёт
-    if (g.fleeT > 0 || g.stunT > 0 || g.fate !== 'fight') return;
+    // в сети не убежать, пока она не спадёт; парагон в своём испытании не бежит вовсе — ни от крита, ни от ран
+    if (g.fleeT > 0 || g.stunT > 0 || g.fate !== 'fight' || g === this.boss) return;
     g.fleeT = time;
     g.fleeCool = time + FLEE.rest;
     g.target = null;
@@ -990,6 +1014,7 @@ export class Game {
       g.fleeCool = Math.max(0, (g.fleeCool || 0) - dt);
       g.netCool = Math.max(0, (g.netCool || 0) - dt);
       g.spearCool = Math.max(0, (g.spearCool || 0) - dt);
+      g.blindT = Math.max(0, (g.blindT || 0) - dt);
       if (g.bleedT > 0) {
         // кровотечение: теряет здоровье, только если за прошлый такт и правда сдвинулся с места
         g.bleedT = Math.max(0, g.bleedT - dt);
@@ -1024,19 +1049,8 @@ export class Game {
         this._runAway(g, standing, dt);
         continue;
       }
-      if (g.spearOut) {
-        // бросил копьё — ждёт, пока долетит, потом бежит подбирать
-        if (g.spearOut.flying) {
-          g.walking = false;
-          continue;
-        }
-        if (this._walkTo(g, g.spearOut.x, g.spearOut.y, dt) < SPEAR.pickup) {
-          g.spearOut = null;
-          g.spearCool = SPEAR.cool;
-          this._emit('pickup', { login: g.login, x: g.x, y: g.y });
-        }
-        continue;
-      }
+      // оружие на песке: решил подобрать — бежит за ним; остался без оружия — ищет, чем драться
+      if (!g.lion && this._seekGround(g, standing, dt)) continue;
       const fighting = standing.filter((s) => s.fate === 'fight');
       const t0 = g.target;
       const prey = t0 && this._canThrowSpear(g, t0);
@@ -1065,6 +1079,14 @@ export class Game {
         g.netCool = NET.reload;
         this._throw(g, t, 'net');
         continue;
+      }
+      // мешок с песком — в цель, вокруг которой толпятся враги (в одиночку — реже)
+      if (sandUp(g) && d >= SAND.range[0] && d <= SAND.range[1]) {
+        const crowd = fighting.filter((o) => this._enemy(g, o) && Math.hypot(o.x - t.x, o.y - t.y) <= SAND.radius).length;
+        if (this.random() < dt * (crowd >= 2 ? SAND.crowd : SAND.alone)) {
+          this._throw(g, t, 'sand');
+          continue;
+        }
       }
       const reach = reachOf(g);
       if (d > reach) {
@@ -1121,30 +1143,42 @@ export class Game {
   // копьё метают в убегающего и израненного, если он не слишком далеко
   // далёкую цель копейщик тоже может достать броском, не дожидаясь, пока подбежит
   _canThrowFar(g, t, d, dt) {
-    if (!g.weapon || g.weapon.type !== 'spear' || g.spearOut || g.spearCool > 0 || t.fate !== 'fight') return false;
+    if (!g.weapon || g.weapon.type !== 'spear' || g.spearCool > 0 || t.fate !== 'fight') return false;
     return d >= SPEAR.far && d <= SPEAR.range[1] && this.random() < dt * SPEAR.farChance;
   }
 
   _canThrowSpear(g, t) {
-    if (!g.weapon || g.weapon.type !== 'spear' || g.spearOut || g.spearCool > 0 || t.fate !== 'fight' || !(t.fleeT > 0)) {
+    if (!g.weapon || g.weapon.type !== 'spear' || g.spearCool > 0 || t.fate !== 'fight' || !(t.fleeT > 0)) {
       return false;
     }
     const d = Math.hypot(t.x - g.x, t.y - g.y);
     return t.hp < maxHp(t) * SPEAR.low && d >= SPEAR.range[0] && d <= SPEAR.range[1];
   }
 
+  // копьё улетает из рук (потом лежит на песке), мешок с песком — одноразовый, сеть остаётся у бросившего
   _throw(g, t, kind) {
     g.swing = 0.3;
-    if (kind === 'spear') g.spearOut = { x: g.x, y: g.y, flying: true };
-    this.projectiles.push({ kind, from: g, to: t, x: g.x, y: g.y - 30, speed: kind === 'spear' ? SPEAR.speed : NET.speed,
-      angle: 0 });
+    const p = { kind, from: g, to: t, x: g.x, y: g.y - 30, angle: 0,
+      speed: kind === 'spear' ? SPEAR.speed : kind === 'sand' ? SAND.speed : NET.speed };
+    if (kind === 'spear') {
+      Object.assign(p, { item: g.weapon, owner: g.weaponOf || g.login });
+      g.lost = { item: g.weapon, rating: this._ratingWith(g, g.weapon) };
+      g.weapon = null;
+    }
+    if (kind === 'sand') {
+      g.sand = 0;
+      const home = this._homeOf(g.sandOf);
+      if (home) home.sand = 0;
+    }
+    this.projectiles.push(p);
     this._emit('throw', { login: g.login, kind, x: g.x, y: g.y });
   }
 
-  // снаряд летит за целью; долетел — удар копьём или сеть
+  // снаряд летит за целью (выбитое оружие — в точку); долетел — удар копьём, сеть, песок или оружие падает на песок
   _stepProjectiles(dt) {
     for (const p of this.projectiles) {
-      const tx = p.to.x, ty = p.to.y - 30, dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
+      const tx = p.to ? p.to.x : p.tx, ty = (p.to ? p.to.y : p.ty) - 30, dx = tx - p.x, dy = ty - p.y;
+      const d = Math.hypot(dx, dy);
       p.angle = Math.atan2(dy, dx);
       const stepLen = p.speed * dt;
       if (d > Math.max(12, stepLen)) {
@@ -1153,15 +1187,23 @@ export class Game {
         continue;
       }
       p.done = true;
+      if (p.kind === 'fling') {
+        this._lay({ kind: 'weapon', item: p.item, owner: p.owner }, p.tx, p.ty, 0);
+        continue;
+      }
       const a = p.from, t = p.to, alive = t.fate === 'fight';
       if (p.kind === 'spear') {
-        if (alive && a.fate === 'fight') this._attack(a, t, { mult: typeOf(a).throw, ranged: true });
-        a.spearOut = { x: t.x + (this.random() - 0.5) * 30, y: t.y + 4 + this.random() * 10 };
-        clampToArena(a.spearOut, 30);
+        const mult = (WEAPON_TYPES[p.item.type] || WEAPON_TYPES.spear).throw || 1;
+        if (alive && a.fate === 'fight') this._attack(a, t, { mult, ranged: true, weapon: p.item, weaponOf: p.owner });
+        this._lay({ kind: 'weapon', item: p.item, owner: p.owner }, t.x, t.y + 8, 30);
+      } else if (p.kind === 'sand') {
+        this._sand(a, t.x, t.y);
       } else {
         if (alive) this._net(a, t);
         if (this.random() < NET.tear && a.nets > 0) {
           a.nets = 0;
+          const home = this._homeOf(a.netOf);
+          if (home) home.nets = 0;
           this._emit('nettear', { login: a.login, x: t.x, y: t.y });
         }
       }
@@ -1169,8 +1211,130 @@ export class Game {
     this.projectiles = this.projectiles.filter((p) => !p.done);
   }
 
+  // песок слепит всех врагов бросившего вокруг точки
+  _sand(a, x, y) {
+    this._emit('sand', { x, y, login: a.login });
+    for (const o of this._standing()) {
+      if (o.fate !== 'fight' || !this._enemy(a, o) || Math.hypot(o.x - x, o.y - y) > SAND.radius) continue;
+      o.blindT = SAND.time;
+      this._emit('blind', { login: o.login, x: o.x, y: o.y });
+    }
+  }
+
+  // вещь ложится на песок рядом с точкой (spread — разброс)
+  _lay(it, x, y, spread) {
+    it.x = x + (this.random() - 0.5) * spread;
+    it.y = y + (this.random() - 0.5) * spread * 0.4;
+    clampToArena(it, 30);
+    this.ground.push(it);
+  }
+
+  // упал или погиб — всё из рук падает рядом
+  _dropAll(g) {
+    if (g.lion) return;
+    if (g.weapon) this._lay({ kind: 'weapon', item: g.weapon, owner: g.weaponOf || g.login }, g.x, g.y + 8, 40);
+    if (g.shield) this._lay({ kind: 'shield', owner: g.shieldOf || g.login }, g.x, g.y + 8, 40);
+    if (g.nets > 0) this._lay({ kind: 'net', owner: g.netOf || g.login }, g.x, g.y + 8, 40);
+    if (g.sand > 0) this._lay({ kind: 'sand', owner: g.sandOf || g.login }, g.x, g.y + 8, 40);
+    g.weapon = null;
+    g.shield = false;
+    g.nets = 0;
+    g.sand = 0;
+  }
+
+  // трезубец выбивает оружие: оно летит прочь от ударившего и падает на песок
+  _fling(d, a) {
+    const away = Math.atan2(d.y - a.y, d.x - a.x) + (this.random() - 0.5) * 1.2;
+    const far = GROUND.fling[0] + this.random() * (GROUND.fling[1] - GROUND.fling[0]);
+    const spot = { x: d.x + Math.cos(away) * far, y: d.y + Math.sin(away) * far * 0.6 };
+    clampToArena(spot, 30);
+    d.lost = { item: d.weapon, rating: this._ratingWith(d, d.weapon) };
+    this.projectiles.push({ kind: 'fling', item: d.weapon, owner: d.weaponOf || d.login, x: d.x, y: d.y - 30, tx: spot.x,
+      ty: spot.y, speed: GROUND.flingSpeed, angle: 0 });
+    d.weapon = null;
+    d.goFor = null;
+    this._emit('disarm', { login: d.login, x: d.x, y: d.y, by: a.login });
+  }
+
+  // своё снаряжение владельца (во время боя); owner — логин
+  _homeOf(owner) {
+    const o = owner && this.members.get(owner);
+    return o ? o.home : null;
+  }
+
+  // сила бойца с этим оружием в руках: урон в секунду × живучесть (без корня, как в мощи, — чтобы «вдвое хуже»
+  // значило вдвое меньше урона)
+  _ratingWith(g, item) {
+    const p = powerOf(Object.assign({}, g, { weapon: item }));
+    return p.dps * p.ehp;
+  }
+
+  // за чем бежать: остался без оружия — к ближайшему, что не хуже прежнего хотя бы вдвое (своё — всегда);
+  // иначе иногда — к вещи получше своей, если до неё вдвое ближе, чем до ближайшего врага
+  _seekGround(g, standing, dt) {
+    if (g.goFor && !this.ground.includes(g.goFor)) g.goFor = null;
+    if (!g.goFor && !g.weapon && g.lost) {
+      let best = null, bestD = Infinity;
+      for (const it of this.ground) {
+        if (it.kind !== 'weapon') continue;
+        if (it.item !== g.lost.item && this._ratingWith(g, it.item) < g.lost.rating * GROUND.half) continue;
+        const d = Math.hypot(it.x - g.x, it.y - g.y);
+        if (d < bestD) {
+          best = it;
+          bestD = d;
+        }
+      }
+      g.goFor = best;
+    }
+    if (!g.goFor && this.ground.length && this.random() < dt * GROUND.chance) {
+      let enemy = Infinity;
+      for (const o of standing) {
+        if (o.fate === 'fight' && this._enemy(g, o)) enemy = Math.min(enemy, Math.hypot(o.x - g.x, o.y - g.y));
+      }
+      const mine = this._ratingWith(g, g.weapon);
+      let best = null, bestD = Infinity;
+      for (const it of this.ground) {
+        const d = Math.hypot(it.x - g.x, it.y - g.y);
+        if (d * GROUND.closer > enemy || d >= bestD) continue;
+        if (it.kind === 'weapon' ? this._ratingWith(g, it.item) < mine * GROUND.better : !offhandFree(g)) continue;
+        best = it;
+        bestD = d;
+      }
+      g.goFor = best;
+    }
+    const it = g.goFor;
+    if (!it) return false;
+    if (this._walkTo(g, it.x, it.y, dt) <= GROUND.reach) this._pick(g, it);
+    return true;
+  }
+
+  _pick(g, it) {
+    g.goFor = null;
+    if (it.kind !== 'weapon' && !offhandFree(g)) return;
+    this.ground.splice(this.ground.indexOf(it), 1);
+    if (it.kind === 'weapon') {
+      // то, что было в руках, — на песок, на его место
+      if (g.weapon) this._lay({ kind: 'weapon', item: g.weapon, owner: g.weaponOf || g.login }, g.x, g.y + 8, 10);
+      g.weapon = it.item;
+      g.weaponOf = it.owner;
+      g.lost = null;
+      if (it.item.type === 'spear') g.spearCool = SPEAR.cool;
+    } else if (it.kind === 'shield') {
+      g.shield = true;
+      g.shieldOf = it.owner;
+    } else if (it.kind === 'net') {
+      g.nets = 1;
+      g.netOf = it.owner;
+      g.netCool = 0;
+    } else {
+      g.sand = 1;
+      g.sandOf = it.owner;
+    }
+    this._emit('pickup', { login: g.login, x: g.x, y: g.y, kind: it.kind });
+  }
+
   _net(a, t) {
-    if (this.random() < dodgeOf(t)) {
+    if (this.random() < dodgeOf(t) + (a.blindT > 0 ? SAND.miss : 0)) {
       this._emit('miss', { x: t.x, y: t.y, login: t.login });
       return;
     }
@@ -1181,6 +1345,7 @@ export class Game {
     }
     if (this._blocked(t)) return;
     t.stunT = NET.stun;
+    t.dazed = false;
     t.fleeT = 0;
     t.target = null;
     t.flash = 0.18;
@@ -1191,12 +1356,15 @@ export class Game {
     this._emit('stun', { login: t.login, x: t.x, y: t.y, from: a.login });
   }
 
-  // щит: шанс отбить любой удар, при отбитии иногда ломается
-  _blocked(d, crit = false) {
+  // щит: шанс отбить любой удар, при отбитии иногда ломается (секира раскалывает его куда чаще)
+  _blocked(d, crit = false, a = null) {
     if (!shieldUp(d) || d.stunT > 0 || this.random() >= SHIELD.block) return false;
     this._emit('block', { login: d.login, x: d.x, y: d.y, crit });
-    if (this.random() < SHIELD.breaks * (crit ? SHIELD.critBreaks : 1)) {
+    const axe = a && typeOf(a).shieldBreak;
+    if (this.random() < (axe || SHIELD.breaks * (crit ? SHIELD.critBreaks : 1))) {
       d.shield = false;
+      const home = this._homeOf(d.shieldOf);
+      if (home) home.shield = false;
       this._emit('shieldbreak', { login: d.login, x: d.x, y: d.y });
     }
     return true;
@@ -1222,25 +1390,28 @@ export class Game {
     for (const v of victims) if (v.fate === 'fight') this._attack(a, v);
   }
 
-  _attack(a, d, { mult = 1, ranged = false } = {}) {
+  // weapon — чем бьют, если не тем, что в руках (брошенное копьё уже не в руках)
+  _attack(a, d, { mult = 1, ranged = false, weapon = null, weaponOf = null } = {}) {
     if (!ranged) {
       a.swing = 0.3;
       a.jab = (a.jab || 0) + 1;
     }
+    const w = weapon ? Object.assign({}, a, { weapon }) : a, type = typeOf(w);
     const stunned = d.stunT > 0;
-    // брошенное копьё промахивается чаще (и по запутанному в сети), зато чаще критует
-    const spear = ranged && typeOf(a).throw;
-    if (this.random() < (stunned ? 0 : dodgeOf(d)) + (spear ? SPEAR.miss : 0)) {
+    // брошенное копьё промахивается чаще (и по запутанному в сети), зато чаще критует; молот и ослеплённый — мажут чаще
+    const spear = ranged && type.throw;
+    if (this.random() < (stunned ? 0 : dodgeOf(d)) + (spear ? SPEAR.miss : 0) + (type.miss || 0)
+      + (a.blindT > 0 ? SAND.miss : 0)) {
       this._emit('miss', { x: d.x, y: d.y, login: d.login });
       return;
     }
     // крит решается до щита: отбитый крит бьёт по щиту сильнее
-    const crit = this.random() < critOf(a) * (spear ? SPEAR.critMult : 1);
-    if (this._blocked(d, crit)) return;
+    const crit = this.random() < critOf(w) * (spear ? SPEAR.critMult : 1);
+    if (this._blocked(d, crit, w)) return;
     // копьё пробивает часть брони, а брошенное — всю
-    const pierce = typeOf(a).pierce || 0;
+    const pierce = type.pierce || 0;
     const armor = pierce && ranged ? 0 : armorOf(d) * (1 - pierce);
-    let dmg = damageOf(a) * mult * (1 + SPREAD * (2 * this.random() - 1)) * (crit ? CRIT_HIT : 1) * (1 - armor);
+    let dmg = damageOf(w) * mult * (1 + SPREAD * (2 * this.random() - 1)) * (crit ? CRIT_HIT : 1) * (1 - armor);
     dmg = Math.max(1, Math.round(dmg));
     d.hp -= dmg;
     d.flash = 0.18;
@@ -1248,9 +1419,18 @@ export class Game {
     if (!a.lion) a.hitsNow = (a.hitsNow || 0) + 1;
     this._emit('hit', { x: d.x, y: d.y, amount: dmg, crit, login: d.login, from: a.login, ranged });
     if (d.hp <= 0) {
-      this._knockOut(d, a, crit);
+      this._knockOut(d, a, crit, weapon ? { item: weapon, owner: weaponOf } : null);
       return;
     }
+    // молот оглушает (парагона — нет), трезубец выбивает оружие из рук
+    if (type.stun && d !== this.boss && this.random() < type.stun.chance) {
+      d.stunT = Math.max(d.stunT || 0, type.stun.time);
+      d.dazed = true;
+      d.fleeT = 0;
+      d.target = null;
+      this._emit('daze', { login: d.login, x: d.x, y: d.y });
+    }
+    if (type.disarm && d.weapon && !d.lion && d !== this.boss && this.random() < type.disarm) this._fling(d, a);
     // парагона в испытании кровь не берёт
     if (crit && d !== this.boss && this.random() < BLEED.chance) {
       if (!(d.bleedT > 0)) this._emit('bleed', { login: d.login, x: d.x, y: d.y });
@@ -1265,7 +1445,8 @@ export class Game {
     }
   }
 
-  _knockOut(d, a, crit = false) {
+  // thrown — чем добили, если не тем, что в руках (брошенное копьё): оно и качается
+  _knockOut(d, a, crit = false, thrown = null) {
     const hpMax = maxHp(d);
     // лев погибает всегда; от лап льва гибнут втрое чаще
     const chance = d.lion ? 1 : this.duel || d === this.boss ? 0
@@ -1282,10 +1463,12 @@ export class Game {
     d.fate = dead ? 'dead' : 'down';
     d.by = a.name;
     d.bleedT = 0;
+    d.stunT = 0;
+    this._dropAll(d);
     d.hp = dead ? 0 : Math.max(1, Math.round(hpMax * BEATEN_HP));
     a.kosNow++;
     if (dead) a.killsNow++;
-    if (dead && !d.lion && !a.lion) this._bless(a);
+    if (dead && !d.lion && !a.lion) this._bless(a, thrown);
     a.target = null;
     if (d.lion) this._line(a.name + ' сражает льва', 'pit');
     else if (a.lion) this._line((dead ? 'Лев растерзал ' : 'Лев повалил ') + d.name, dead ? 'death' : 'down');
@@ -1296,19 +1479,21 @@ export class Game {
     this._checkEnd();
   }
 
-  // убил гладиатора насмерть — одна легендарная вещь становится божественной: сперва оружие, потом случайный доспех
-  _bless(g) {
+  // убил гладиатора насмерть — одна легендарная вещь становится божественной: сперва оружие, потом случайный доспех.
+  // Убил чужим оружием — оружие (ни чужое, ни своё) не качается, только доспех
+  // Добил своим брошенным копьём — качается оно, хоть уже и не в руках.
+  // Вещь меняется на месте: где бы она ни была (в руках, в полёте, на песке, в своём снаряжении), она уже божественная
+  _bless(g, thrown = null) {
+    const held = thrown ? thrown.item : g.weapon, owner = thrown ? thrown.owner : g.weaponOf || g.login;
     let slot = null;
-    if (g.weapon && g.weapon.rarity === 'legendary') slot = 'weapon';
+    if (held && held.rarity === 'legendary' && (owner || g.login) === g.login) slot = 'weapon';
     else {
       const armor = SLOT_IDS.filter((id) => g.gear && g.gear[id] && g.gear[id].rarity === 'legendary');
       if (armor.length) slot = armor[Math.floor(this.random() * armor.length)];
     }
     if (!slot) return;
-    const was = slot === 'weapon' ? g.weapon : g.gear[slot];
-    const item = Object.assign({}, was, { rarity: DIVINE.id, power: Math.round(was.power * DIVINE.mult) });
-    if (slot === 'weapon') g.weapon = item;
-    else g.gear[slot] = item;
+    const item = slot === 'weapon' ? held : g.gear[slot];
+    Object.assign(item, { rarity: DIVINE.id, power: Math.round(item.power * DIVINE.mult) });
     this._line(g.name + (slot === 'weapon' ? ' — божественное оружие' : ' — божественный доспех'), 'divine');
     this._emit('divine', { login: g.login, x: g.x, y: g.y, slot });
   }
@@ -1325,6 +1510,13 @@ export class Game {
   }
 
   _endBattle() {
+    // всё оружие и вещи возвращаются владельцам — кроме расколотых щитов, порванных сетей и брошенного песка
+    for (const g of this.fighters) {
+      if (!g.home) continue;
+      Object.assign(g, { weapon: g.home.weapon, shield: g.home.shield, nets: g.home.nets, sand: g.home.sand });
+      g.home = null;
+    }
+    this.ground = [];
     const pit = this.mode === 'pit', people = this.fighters.filter((g) => !g.lion);
     const lions = this.fighters.filter((g) => g.lion);
     const n = people.length, bonus = crowdBonus(n), standing = this._standing().filter((g) => !g.lion);
@@ -1456,8 +1648,15 @@ export class Game {
       mode: duel ? 'duel' : pit ? 'pit' : boss ? 'paragon' : teams ? 'teams' : 'ffa', winTeam, bettors, bets: duel ? [this.betsOn(1), this.betsOn(2)] : null,
       lions: lions.length, lionsDown: lions.filter((g) => g.fate !== 'fight').length };
     this.projectiles = [];
+    this.ground = [];
     for (const g of this.members.values()) {
-      g.spearOut = null;
+      // после боя сеть снова в руке, даже если её не успели подобрать
+      g.netCool = 0;
+      g.spearCool = 0;
+      g.blindT = 0;
+      g.dazed = false;
+      g.lost = null;
+      g.goFor = null;
       g.stunT = 0;
       g.team = null;
       g.bleedT = 0;
