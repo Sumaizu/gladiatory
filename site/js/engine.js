@@ -1408,9 +1408,9 @@ export class Game {
     // крит решается до щита: отбитый крит бьёт по щиту сильнее
     const crit = this.random() < critOf(w) * (spear ? SPEAR.critMult : 1);
     if (this._blocked(d, crit, w)) return;
-    // копьё пробивает часть брони, а брошенное — всю
-    const pierce = type.pierce || 0;
-    const armor = pierce && ranged ? 0 : armorOf(d) * (1 - pierce);
+    // копьё пробивает часть брони, а брошенное — бо́льшую часть
+    const pierce = (ranged ? type.throwPierce : type.pierce) || 0;
+    const armor = armorOf(d) * (1 - pierce);
     let dmg = damageOf(w) * mult * (1 + SPREAD * (2 * this.random() - 1)) * (crit ? CRIT_HIT : 1) * (1 - armor);
     dmg = Math.max(1, Math.round(dmg));
     d.hp -= dmg;

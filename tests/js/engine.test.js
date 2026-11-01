@@ -1,7 +1,7 @@
 import { eq, no, ok, test } from './harness.js';
 import { playNote, reportPlay } from '../../site/js/stats.js';
 import { clean, fromQuery, toQuery } from '../../site/js/config.js';
-import { AGI_CAP, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SAND, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { AGI_CAP, WEAPON_TYPES, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SAND, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../site/js/balance.js';
 import { starOf } from '../../site/js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../site/js/engine.js';
@@ -125,16 +125,17 @@ test('лазарет бесплатный и лечит быстрее отды�
   const g = game();
   const [a, b] = join(g, 'Brutus', 'Crixus');
   a.hp = b.hp = 30;
-  g.feed('Brutus', 'лазарет', { login: 'brutus' });
+  g._goTo(a, 'heal');
   eq([a.place, a.coins], ['heal', START_COINS]);
   for (let i = 0; i < 20 * 30; i++) g.step(0.05);
   eq(a.pose, 'lie');
   ok(a.hp > b.hp, 'в лазарете здоровья больше');
 });
 
-test('здоровому в лазарет не надо', () => {
+test('команды «лазарет» нет — раненых уносят туда сами после боя', () => {
   const g = game();
   const [a] = newcomers(g, 'Brutus');
+  a.hp = 30;
   g.feed('Brutus', 'лазарет', { login: 'brutus' });
   eq(a.place, 'train');
 });
@@ -143,7 +144,7 @@ test('вылечился в лазарете и писал в чат — идё�
   const g = game();
   const [a] = join(g, 'Brutus');
   a.hp = maxHp(a) - 1;
-  g.feed('Brutus', 'лазарет', { login: 'brutus' });
+  g._goTo(a, 'heal');
   for (let i = 0; i < 20 * 20; i++) g.step(0.05);
   eq(a.place, 'train');
   eq(a.hp, maxHp(a));
@@ -470,7 +471,7 @@ test('гача: вещь надевается, только если лучше;
   g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'epic', power: 11, type: 'sword' } });
   ok(damageOf(a) > base, 'сильнее кулаков');
   // сила оружия умножается вместе с базой на множитель меча
-  ok(Math.abs(damageOf(a) - (damageOf({ str: a.str, weapon: { type: 'sword', power: 0 } }) + 11 * 1.2)) < 1e-9);
+  ok(Math.abs(damageOf(a) - (damageOf({ str: a.str, weapon: { type: 'sword', power: 0 } }) + 11 * WEAPON_TYPES.sword.dmg)) < 1e-9);
   g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'common', power: 2, type: 'sword' } });
   eq(a.weapon.power, 11, 'хуже — выброшено');
   g._prize(a, { kind: 'item', item: { kind: 'armor', slot: 'body', rarity: 'rare', power: 8 } });
@@ -628,7 +629,7 @@ test('оружие: двуручник бьёт реже и сильнее, кр
   ok(attackEvery(gs) > attackEvery(s) * 1.4);
   ok(damageOf(gs) >= damageOf(s) * 1.5 - 1e-9);
   ok(critOf(gs) > critOf(s));
-  ok(reachOf(sp) > reachOf(s) * 1.5);
+  ok(reachOf(sp) >= reachOf(s) * 1.4);
   eq([attackEvery(s), damageOf(s)], [attackEvery({ agi: 0, weapon: weapon('sword', 0) }), damageOf({ str: 0, weapon: weapon('sword') })]);
 });
 
@@ -649,7 +650,7 @@ test('двуручник задевает всех перед собой, но �
   eq(back.hp, hp[2], 'задний цел');
 });
 
-test('копьё в ближнем бою пробивает три четверти брони, брошенное — всю', () => {
+test('копьё пробивает часть брони, брошенное — бо́льшую часть', () => {
   const g = game();
   const [a, b, c] = join(g, 'A', 'B', 'C');
   b.gear.body = { kind: 'armor', slot: 'body', rarity: 'legendary', power: 26 };
@@ -661,12 +662,14 @@ test('копьё в ближнем бою пробивает три четвер
   ok(hb - b.hp < hc - c.hp, 'в ближнем бою броня помогает');
   const sword = join(g, 'S')[0];
   sword.weapon = weapon('sword');
-  ok(Math.abs((hb - b.hp) / (hc - c.hp) - (1 - armorOf(b) * 0.25)) < 0.05, 'броня режет вчетверо меньше');
+  const { pierce, throwPierce } = WEAPON_TYPES.spear;
+  ok(throwPierce > pierce && pierce > 0);
+  ok(Math.abs((hb - b.hp) / (hc - c.hp) - (1 - armorOf(b) * (1 - pierce))) < 0.05, 'броня режет меньше');
   hb = b.hp;
   hc = c.hp;
   g._attack(a, b, { ranged: true });
   g._attack(a, c, { ranged: true });
-  eq(hb - b.hp, hc - c.hp, 'брошенное копьё — сквозь броню');
+  ok(Math.abs((hb - b.hp) / (hc - c.hp) - (1 - armorOf(b) * (1 - throwPierce))) < 0.05, 'брошенное — ещё меньше');
 });
 
 test('копьё: в израненного беглеца метают, потом бегут подбирать', () => {
@@ -1153,8 +1156,8 @@ test('копьё после подбора метают снова не рань
   ok(g._canThrowSpear(a, b));
 });
 
-test('щит блокирует 35% ударов, ломается в 10% блоков, отбитый крит — 20%', () => {
-  eq([SHIELD.block, SHIELD.breaks, SHIELD.breaks * SHIELD.critBreaks], [0.35, 0.1, 0.2]);
+test('щит блокирует 20% ударов, ломается в 10% блоков, отбитый крит — 20%', () => {
+  eq([SHIELD.block, SHIELD.breaks, SHIELD.breaks * SHIELD.critBreaks], [0.2, 0.1, 0.2]);
 });
 
 test('божественный амулет: 3% в гаче, второй не выпадает, пока есть первый', () => {
