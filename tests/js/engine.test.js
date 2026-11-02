@@ -1,7 +1,7 @@
 import { eq, no, ok, test } from './harness.js';
 import { playNote, reportPlay } from '../../site/js/stats.js';
 import { clean, fromQuery, toQuery } from '../../site/js/config.js';
-import { AGI_CAP, WEAPON_TYPES, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HIT_REWARD, WEAPON_MULT, forceOf, weaponMult, PIT, POINTS_PER_LEVEL, PARAGON, NET, SAND, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { AGI_CAP, WEAPON_TYPES, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HIT_REWARD, KILL_REWARD, WEAPON_MULT, forceOf, weaponMult, PIT, POINTS_PER_LEVEL, PARAGON, NET, SAND, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../site/js/balance.js';
 import { starOf } from '../../site/js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../site/js/engine.js';
@@ -1363,7 +1363,24 @@ test('за каждый удар по врагу — +' + HIT_REWARD.xp + ' оп
   fight(g);
   const ra = g.results.rows.find((r) => r.login === 'a');
   eq(ra.hits, 3);
-  ok(ra.coins >= HIT_REWARD.coins * 3 && ra.xp >= HIT_REWARD.xp * 3);
+  ok(ra.coins >= HIT_REWARD.coins * 3 && ra.xp >= Math.round(HIT_REWARD.xp * 3));
+});
+
+test('за гладиатора, убитого насмерть, — ещё ' + KILL_REWARD.xp + ' опыта и ' + KILL_REWARD.coins + ' монет', () => {
+  const g = game({ settings: { death: 100 } });
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  g.next();
+  b.hp = -5;
+  g._knockOut(b, a);
+  eq([b.fate, a.slainNow], ['dead', 1]);
+  c.fate = 'down';
+  g._checkEnd();
+  fight(g);
+  const ra = g.results.rows.find((r) => r.login === 'a');
+  eq(ra.slain, 1);
+  ok(ra.xp >= KILL_REWARD.xp && ra.coins >= KILL_REWARD.coins, JSON.stringify(ra));
+  const plain = (REWARD.standing.xp + REWARD.standing.xpPerKo * ra.kos) * REWARD.champion;
+  ok(ra.xp >= KILL_REWARD.xp + Math.round(plain * 0.99), 'бонус сверху обычной награды');
 });
 
 test('кровотечение: после крита течёт кровь, на бегу отнимает здоровье, павший с ним гибнет чаще', () => {

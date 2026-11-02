@@ -170,7 +170,9 @@ export const CRIT_KILL = 1.5;
 export const BLEED = { chance: 0.5, time: 5, share: 0.15, slow: 0.25, deathMult: 1.5 };
 
 // за каждый удар по врагу — к итогам боя
-export const HIT_REWARD = { xp: 3, coins: 2 };
+export const HIT_REWARD = { xp: 5, coins: 3 };
+// за каждого гладиатора, убитого насмерть (не льва), — сверху к итогам, если сам не погиб
+export const KILL_REWARD = { xp: 30, coins: 25 };
 
 
 // кто столько раундов (лудус + бой) подряд ничего не писал в чат — афк и садится на скамью

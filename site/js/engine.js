@@ -1,4 +1,4 @@
-import { AFK_ROUNDS, CRIT_KILL, TEAMS, BLEED, HIT_REWARD, PARAGON, pitStrength, powerOf, ratingOf, BEATEN_HP, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
+import { AFK_ROUNDS, CRIT_KILL, TEAMS, BLEED, HIT_REWARD, KILL_REWARD, PARAGON, pitStrength, powerOf, ratingOf, BEATEN_HP, LEVEL_MAX, MOVE_SPEED, POINTS_PER_LEVEL, REACH, BODY, REWARD, START_COINS,
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, GROUND, NET, SAND, SHIELD, SPEAR, armorOf, netUp, offhandFree,
   reachOf, sandUp, shieldUp, twoHanded, typeOf, attackEvery, critOf, crowdBonus, runOf, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SHARPEN, SPREAD, WEAPON_TYPES } from './balance.js';
@@ -21,7 +21,7 @@ export const GACHA_WORDS = new Set(['гача', 'крутить']);
 export const SHARPEN_WORDS = new Set(['улучшить', 'заточить', 'заточка', 'улучшение']);
 export const REFORGE_WORDS = new Set(['реролл', 'перековать', 'перековка', 'перековку']);
 export const MIN_FIGHTERS = 2;
-export const RESULTS_TIME = 15;
+export const RESULTS_TIME = 10;
 export const END_DELAY = 2.5;
 export const CARD_TIME = 8;
 export const CARDS_MAX = 3;
@@ -942,6 +942,7 @@ export class Game {
       g.walking = false;
       g.kosNow = 0;
       g.killsNow = 0;
+      g.slainNow = 0;
       g.dealt = 0;
       g.fleeT = 0;
       g.fleeCool = 0;
@@ -1694,6 +1695,7 @@ export class Game {
     d.hp = dead ? 0 : Math.max(1, Math.round(hpMax * BEATEN_HP));
     a.kosNow++;
     if (dead) a.killsNow++;
+    if (dead && !d.lion && !a.lion) a.slainNow = (a.slainNow || 0) + 1;
     if (dead && !d.lion && !a.lion) this._bless(a, thrown);
     a.target = null;
     if (d.lion) this._line(a.name + ' сражает льва', 'pit');
@@ -1806,12 +1808,13 @@ export class Game {
         coins = Math.round((r.coins + r.coinsPerKo * g.kosNow) * mult);
         if (fate === 'fight') g.wins++;
       }
-      // за каждый удар по врагу — сверху, если выжил (парагону ни к чему — он начинает заново)
+      // за каждый удар по врагу и за каждого убитого насмерть гладиатора — сверху, если выжил (парагону ни к чему — он
+      // начинает заново)
       if (fate !== 'dead' && g !== this.boss) {
-        xp += HIT_REWARD.xp * (g.hitsNow || 0);
-        coins += HIT_REWARD.coins * (g.hitsNow || 0);
+        xp += Math.round(HIT_REWARD.xp * (g.hitsNow || 0)) + KILL_REWARD.xp * (g.slainNow || 0);
+        coins += Math.round(HIT_REWARD.coins * (g.hitsNow || 0)) + KILL_REWARD.coins * (g.slainNow || 0);
       }
-      const row = { login: g.login, name: g.name, color: g.color, fate, xp, coins, kos: g.kosNow, kills: g.killsNow,
+      const row = { login: g.login, name: g.name, color: g.color, fate, xp, coins, kos: g.kosNow, kills: g.killsNow, slain: g.slainNow || 0,
         hits: g.hitsNow || 0, team: g.team || null,
         by: g.by, level: g.level, ups: 0, saved: Boolean(g.savedNow) };
       g.savedNow = false;

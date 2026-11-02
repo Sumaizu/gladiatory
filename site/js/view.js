@@ -1364,7 +1364,7 @@ export class View {
           return span;
         }
         const span = el('span', '', '+' + row.xp + ' опыта · +' + row.coins + ' монет'
-          + (row.kos ? ' · нокаутов ' + row.kos : '') + (row.saved ? ' · спас амулет' : ''));
+          + (row.kos ? ' · нокаутов ' + row.kos : '') + (row.slain ? ' · убийств ' + row.slain : '') + (row.saved ? ' · спас амулет' : ''));
         if (row.ups) span.append(' · ', el('span', 'up', row.level + ' ур.!'));
         return span;
       };

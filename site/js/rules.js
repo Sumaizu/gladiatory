@@ -1,5 +1,5 @@
 import { PRICE, REFORGE, SHARPEN } from './gacha.js';
-import { AFK_ROUNDS, AGI_CAP, DUEL, HIT_REWARD, PARAGON, HP_PER_VIT, POINTS_PER_LEVEL, START_COINS, START_POINTS } from './balance.js';
+import { AFK_ROUNDS, AGI_CAP, DUEL, HIT_REWARD, KILL_REWARD, PARAGON, HP_PER_VIT, POINTS_PER_LEVEL, START_COINS, START_POINTS } from './balance.js';
 
 export const RULES_TITLE = 'Как устроены Гладиаторы';
 
@@ -59,7 +59,8 @@ export const RULES = [
       [b('Кровотечение.'), ' Крит с шансом 50% пускает кровь на несколько секунд: пока раненый бежит, он теряет '
         + 'здоровье (за всё кровотечение — около 15%) и двигается на четверть медленнее. Упавший с кровотечением гибнет в полтора раза чаще.'],
       [b('Награды.'), ' Выстоявшие получают опыт и монеты, павшие, но живые — немного меньше. Сверху — по '
-        + HIT_REWARD.xp + ' опыта и ' + HIT_REWARD.coins + ' монеты за каждый удар по врагу.'
+        + HIT_REWARD.xp + ' опыта и ' + HIT_REWARD.coins + ' монеты за каждый удар по врагу, а за каждого гладиатора, убитого '
+        + 'насмерть, — ещё ' + KILL_REWARD.xp + ' опыта и ' + KILL_REWARD.coins + ' монет.'
         + ' Последний на ногах — '
         + 'чемпион и получает на четверть больше. Чем больше гладиаторов на арене, тем щедрее награда. Потом '
         + 'все возвращаются в лудус — раны после боя не остаются, здоровье снова полное.'],
