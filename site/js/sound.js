@@ -1,7 +1,7 @@
 // все звуки синтезируются на лету — файлов нет
 const GAP = { punch: 0.06, cleave: 0.08, chop: 0.08, smash: 0.12, stab: 0.06, pierce: 0.07, maul: 0.08, swoosh: 0.15,
   daze: 0.3, disarm: 0.3, shatter: 0.4, sandburst: 0.3, blind: 0.4, pickup: 0.2, hit: 0.07, crit: 0.1, miss: 0.12, down: 0.15, death: 0.4, horn: 1, level: 0.3, coin: 0.15, join: 0.2,
-  cheer: 1.5, champion: 2, reel: 0.5, jackpot: 1, boo: 0.8, roar: 1.5, growl: 0.6, block: 0.1, crack: 0.5, net: 0.4, whoosh: 0.2, thwack: 0.09, anvil: 0.3, grind: 0.6, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5 };
+  cheer: 1.5, champion: 2, reel: 0.5, jackpot: 1, boo: 0.8, roar: 1.5, growl: 0.6, block: 0.1, crack: 0.5, net: 0.4, whoosh: 0.2, thwack: 0.09, fanfare: 2, anvil: 0.3, grind: 0.6, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5 };
 
 let audio = null;
 let master = null;
@@ -171,6 +171,14 @@ const SOUNDS = {
   thwack(ac) {
     tone(ac, { freq: 180 + Math.random() * 40, to: 90, dur: 0.12, type: 'triangle', gain: 0.22 });
     hiss(ac, { dur: 0.06, gain: 0.18, freq: 1200, q: 1.5 });
+  },
+  // фанфары триумфа: труба вверх по аккорду, долгая финальная нота
+  fanfare(ac) {
+    [[392, 0], [392, 0.14], [392, 0.28], [523, 0.42], [659, 0.7], [784, 0.98]].forEach(([freq, at], i) => {
+      const long = i === 5;
+      tone(ac, { freq, dur: long ? 0.9 : 0.16, type: 'sawtooth', gain: 0.07, at });
+      tone(ac, { freq: freq * 2, dur: long ? 0.9 : 0.16, type: 'square', gain: 0.025, at });
+    });
   },
   // кузня: удары молота по наковальне — звонкий металл с гулом
   anvil(ac) {

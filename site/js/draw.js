@@ -1,4 +1,4 @@
-import { TEAMS, maxHp } from './balance.js';
+import { FLAME, TEAMS, maxHp } from './balance.js';
 import { COLUMNS, DUMMIES, FORGE } from './places.js';
 import { drawCrowd, paintArenaArt } from './arena.js';
 import { tierOf } from './gacha.js';
@@ -72,9 +72,14 @@ export function drawSigns(ctx, list) {
   for (const [x, y, text, size, tone] of list) plaque(ctx, x, y, text, size, tone);
 }
 
+// чучело i — рисуется вперемешку с гладиаторами по глубине (кто ниже на экране, тот ближе)
+export function drawDummy(ctx, i, hit) {
+  const d = DUMMIES[i];
+  drawDummyArt(ctx, d.kind, d.x, d.y, hit || 0);
+}
+
 // work — что сейчас делают в кузне (game.forgeNow): пока идёт работа, у наковальни или точила летят искры
-export function drawLudusLife(ctx, t, dummyHits, work = null) {
-  DUMMIES.forEach((d, i) => drawDummyArt(ctx, d.kind, d.x, d.y, dummyHits[i] || 0));
+export function drawLudusLife(ctx, t, work = null) {
   drawForgeFire(ctx, t);
   if (work && !work.done) drawSparks(ctx, t, work.kind === 'sharpen' ? FORGE.wheel : FORGE.anvil, work.kind === 'sharpen');
   // факелы на колоннах
@@ -318,6 +323,12 @@ export function drawGladiator(ctx, g, t, scene) {
   else if (g.walking && !lying) frame = Math.sin(t * 10 + seed) > 0 ? 'walk1' : 'walk2';
   // разминка на песке: бег на месте, прыжки, приседания, прыжки «звёздочкой»
   let lift = 0, hands = resting ? [[11, 25], [15, 25]] : null;
+  // триумф парагона: вскидывает руки и подпрыгивает
+  if (scene === 'arena' && g.triumph && g.fate === 'fight') {
+    const s = Math.sin(t * 7);
+    lift = s > 0 ? Math.round(s * 5) : 0;
+    hands = [[7, 3], [19, 3]];
+  }
   const drill = scene === 'ludus' && !g.walking && !lying && g.place === 'train' ? g.drill : null;
   if (drill) {
     const k = t + (seed % 97) / 13;
@@ -375,6 +386,7 @@ export function drawGladiator(ctx, g, t, scene) {
     ctx.restore();
   }
   if (scene === 'arena') drawStatus(ctx, g, t);
+  if (g.amulet && !g.lion && !(scene === 'arena' && g.fate && g.fate !== 'fight')) drawAmuletSparks(ctx, x, y, t, hashOf(g.login));
 }
 
 // у головы: оглушённый молотом — звёздочки по кругу; ослеплённый песком — песчаная пелена на глазах
@@ -429,6 +441,28 @@ function drawStatus(ctx, g, t) {
   }
 }
 
+// божественный амулет (второй шанс): время от времени от фигуры разлетаются красные лучи-искры
+function drawAmuletSparks(ctx, x, y, t, seed) {
+  const cycle = 1.6, k = ((t + (seed % 100) / 37) % cycle) / cycle;
+  if (k > 0.55) return;
+  const burst = Math.floor((t + (seed % 100) / 37) / cycle), a = k / 0.55;
+  ctx.save();
+  ctx.globalAlpha = 1 - a;
+  for (let i = 0; i < 6; i++) {
+    const ang = (i / 6) * Math.PI * 2 + burst * 1.3 + (seed % 7);
+    const r0 = 10 + a * 22, r1 = r0 + 6 + a * 8, cx = x, cy = y - 40;
+    ctx.strokeStyle = i % 2 ? '#ff3b47' : '#ff8a6a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0 * 1.3);
+    ctx.lineTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1 * 1.3);
+    ctx.stroke();
+    ctx.fillStyle = '#ffd0c0';
+    ctx.fillRect(Math.round(cx + Math.cos(ang) * r1) - 1, Math.round(cy + Math.sin(ang) * r1 * 1.3) - 1, 2, 2);
+  }
+  ctx.restore();
+}
+
 // что лежит на песке: оружие плашмя, щиты, сети и мешки; что летит: копья, сети, мешки, выбитое оружие
 export function drawThrown(ctx, game) {
   for (const it of game.ground || []) {
@@ -475,6 +509,15 @@ export function drawThrown(ctx, game) {
     } else if (p.kind === 'sand') {
       ctx.rotate(p.x * 0.06);
       ctx.drawImage(sandSprite(), -4, -4);
+    } else if (p.kind === 'rock') {
+      // камень с трибун: серый, с бликом и тенью, кувыркается
+      ctx.rotate(p.x * 0.07);
+      ctx.fillStyle = '#4a4540';
+      ctx.fillRect(-3, -2, 6, 5);
+      ctx.fillStyle = '#7a736a';
+      ctx.fillRect(-3, -3, 5, 4);
+      ctx.fillStyle = '#a8a094';
+      ctx.fillRect(-2, -3, 2, 1);
     } else {
       ctx.rotate(p.x * 0.05);
       ctx.drawImage(netSprite(), -8, -8);
@@ -528,9 +571,38 @@ export function drawLabel(ctx, g, scene, highlight, mark = null) {
     ctx.strokeText(g.name, cx, top + 1);
   }
   ctx.fillText(g.name, cx, top + 1);
+  // красный череп (убил насмерть) — слева от плашки, огонёк (серия без падений) — справа
+  if (!g.lion && g.skull > 0) drawSkull(ctx, left - 14, top - 11);
+  if (!g.lion && (g.streak || 0) >= FLAME.streak) drawFlame(ctx, left + nameW + 10 + badge + 4, top - 12, Date.now() / 1000);
   // здоровье — только в бою
   if (fate === 'dead' || scene !== 'arena') return;
   hpBar(ctx, g.x, top + 6, 28, g.hp / maxHp(g));
+}
+
+// красный череп 6×7 пикселей (по 2): лоб, глазницы, нос, зубы
+function drawSkull(ctx, x, y) {
+  const rows = ['.####.', '######', '#o##o#', '#o##o#', '###o##', '.####.', '.#.#.#'];
+  rows.forEach((row, j) => {
+    for (let i = 0; i < row.length; i++) {
+      if (row[i] === '.') continue;
+      ctx.fillStyle = row[i] === 'o' ? '#2a0a0a' : j < 2 ? '#ff6b5e' : '#e0352a';
+      ctx.fillRect(x + i * 2, y + j * 2, 2, 2);
+    }
+  });
+}
+
+// огонёк: язычок пламени, мерцает
+function drawFlame(ctx, x, y, t) {
+  const f = Math.sin(t * 9 + x) > 0 ? 1 : 0;
+  const rows = f ? ['..#...', '..##..', '.###..', '.####.', '##o##.', '#ooo##', '.###o.', '..##..']
+    : ['...#..', '..##..', '..###.', '.####.', '.##o##', '##ooo#', '.o###.', '..##..'];
+  rows.forEach((row, j) => {
+    for (let i = 0; i < row.length; i++) {
+      if (row[i] === '.') continue;
+      ctx.fillStyle = row[i] === 'o' ? '#ffe08a' : j < 3 ? '#ff9a3c' : '#ff5a1f';
+      ctx.fillRect(x + i * 2, y + j * 2, 2, 2);
+    }
+  });
 }
 
 // полоска здоровья: тонкая, с закруглёнными краями, на тёмной подложке

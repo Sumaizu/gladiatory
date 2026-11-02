@@ -1,7 +1,7 @@
 import { eq, no, ok, test } from './harness.js';
 import { playNote, reportPlay } from '../../site/js/stats.js';
 import { clean, fromQuery, toQuery } from '../../site/js/config.js';
-import { AGI_CAP, WEAPON_TYPES, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HIT_REWARD, KILL_REWARD, WEAPON_MULT, forceOf, weaponMult, PIT, POINTS_PER_LEVEL, PARAGON, NET, SAND, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { AGI_CAP, WEAPON_TYPES, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HIT_REWARD, KILL_REWARD, SKULL, FLAME, DEATHMATCH, EVENTS, WEAPON_MULT, forceOf, weaponMult, PIT, POINTS_PER_LEVEL, PARAGON, NET, SAND, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../site/js/balance.js';
 import { starOf } from '../../site/js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../site/js/engine.js';
@@ -1276,7 +1276,7 @@ test('парагон: дорос до ' + PARAGON.level + ' уровня в лу
 });
 
 test('парагон: после боя получает парагон и начинает с нуля, выжившие — много опыта', () => {
-  const g = game({ settings: { death: 100 }, mode: null });
+  const g = game({ settings: { death: 0 }, mode: null });
   const [a, b, c] = join(g, 'A', 'B', 'C');
   a.level = PARAGON.level;
   a.fights = PARAGON.fights;
@@ -1285,14 +1285,15 @@ test('парагон: после боя получает парагон и на�
   g.open();
   g.next();
   eq(g.mode, 'paragon');
-  a.hp = -1000;
-  g._knockOut(a, b);
-  eq(a.fate, 'down', 'парагон не погибает');
+  for (const m of [b, c]) {
+    m.hp = -1;
+    g._knockOut(m, a);
+  }
   fight(g);
   const fresh = g.members.get('a');
   ok(fresh !== a);
   eq([fresh.level, fresh.paragon, fresh.points, fresh.coins, fresh.amulet, fresh.weapon],
-    [1, 1, START_POINTS + PARAGON.points, START_COINS + PARAGON.coins, false, null]);
+    [1, 1, START_POINTS + PARAGON.points, START_COINS + PARAGON.coins, true, null], 'выстоял — с божественным амулетом');
   eq(fresh.fights, 0, 'бои для следующего парагона считаются заново');
   eq(g.results.mode, 'paragon');
   eq(g.results.ascended.paragon, 1);
@@ -2212,4 +2213,131 @@ test('статистика: отметка о запуске — только с
   eq(playNote('gladiatory', { channel: 'some_one', webcam: 'none' }, false).place, 'obs');
   eq([reportPlay({ game: 'x' }, '127.0.0.1'), reportPlay({ game: 'x' }, 'sumaizu.github.io'), reportPlay(null, 'gamesonstream.ru')],
     [false, false, false]);
+});
+
+test('красный череп: за убийство — до конца этого и следующего раунда, новое убийство обновляет срок; враги бьют его охотнее', () => {
+  const g = game({ settings: { death: 100 } });
+  const [a, b, c, d] = join(g, 'A', 'B', 'C', 'D');
+  g.next();
+  b.hp = -5;
+  g._knockOut(b, a);
+  eq(a.skull, SKULL.rounds);
+  c.fate = 'down';
+  d.fate = 'down';
+  g._checkEnd();
+  fight(g);
+  g.next();
+  eq([g.state, a.skull], ['ludus', 1], 'следующий раунд — ещё с черепом');
+  g.settings = Object.assign({}, g.settings, { death: 0 });
+  g.next();
+  fight(g);
+  g.next();
+  eq(a.skull, 0, 'через раунд — снят');
+  // цель: из двух одинаковых врагов на одном расстоянии череп выбирают заметно чаще
+  const h = game();
+  const [x, y, z] = join(h, 'X', 'Y', 'Z');
+  h.next();
+  Object.assign(x, { x: 400, y: 360 });
+  Object.assign(y, { x: 300, y: 360, skull: 2 });
+  Object.assign(z, { x: 500, y: 360, skull: 0 });
+  let skulled = 0;
+  for (let i = 0; i < 400; i++) if (h._pickTarget(x, [x, y, z]) === y) skulled++;
+  ok(skulled > 300, 'череп — в ' + skulled + ' из 400');
+});
+
+test('огонёк: ' + FLAME.streak + ' боя подряд без падений; кто его свалит — большая награда', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  a.streak = FLAME.streak;
+  g.next();
+  a.hp = -1;
+  g._knockOut(a, b);
+  eq(b.flameNow, 1);
+  fight(g);
+  const rb = g.results.rows.find((r) => r.login === 'b');
+  ok(rb.xp >= FLAME.reward.xp && rb.coins >= FLAME.reward.coins && rb.flames === 1, JSON.stringify(rb));
+  eq(a.streak, 0, 'упал — серия с нуля');
+  ok(b.streak >= 1, 'устоял — серия растёт');
+});
+
+test('парагон: пал в испытании — погибает (амулет не спасает), но парагон за ним; выстоял — триумф и божественный амулет', () => {
+  const g = game({ mode: null });
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  Object.assign(a, { level: PARAGON.level, fights: PARAGON.fights, amulet: true });
+  g.next();
+  eq(g.mode, 'paragon');
+  a.hp = -1000;
+  g._knockOut(a, b);
+  eq(a.fate, 'dead', 'амулет парагона в испытании не спасает');
+  fight(g);
+  no(g.members.has('a'), 'погиб');
+  eq(g.roster.paragons.get('a'), 1);
+  g.feed('A', 'привет', { login: 'a' });
+  eq(g.members.get('a').paragon, 1, 'напишет снова — начнёт с парагоном');
+  // выстоял: все остальные пали
+  const h = game({ mode: null });
+  const [x, y, z] = join(h, 'X', 'Y', 'Z');
+  Object.assign(x, { level: PARAGON.level, fights: PARAGON.fights });
+  h.next();
+  for (const m of [y, z]) {
+    m.hp = -1;
+    h._knockOut(m, x);
+  }
+  ok(x.triumph, 'триумф');
+  fight(h);
+  const fresh = h.members.get('x');
+  eq([fresh.paragon, fresh.level, fresh.amulet], [1, 1, true]);
+});
+
+test('бой насмерть по вызову: «вызов @ник», «да» — следующий бой; павший гибнет, победителю — награда за уровень', () => {
+  const g = game({ mode: null });
+  const [a, b] = join(g, 'A', 'B', 'C');
+  b.level = 5;
+  g.feed('A', 'вызов @b', { login: 'a' });
+  eq([g.challenge.from, g.challenge.to], ['a', 'b']);
+  g.feed('C', 'да', { login: 'c' });
+  ok(g.challenge, 'отвечает только вызванный');
+  g.feed('B', 'да', { login: 'b' });
+  eq([g.challenge, g.nextMode], [null, 'deathmatch']);
+  g.next();
+  eq([g.mode, g.duel.death, g.duel.left, g.duel.right], ['deathmatch', true, a, b]);
+  g.next();
+  b.hp = -1;
+  g._knockOut(b, a);
+  eq(b.fate, 'dead', 'павший гибнет всегда');
+  fight(g);
+  const ra = g.results.rows.find((r) => r.login === 'a');
+  ok(ra.xp >= DEATHMATCH.base.xp + DEATHMATCH.perLevel.xp * 5 && ra.coins >= DEATHMATCH.base.coins + DEATHMATCH.perLevel.coins * 5,
+    JSON.stringify(ra));
+  eq(g.results.mode, 'deathmatch');
+  // отказ и молчание
+  const h = game();
+  join(h, 'X', 'Y');
+  h.feed('X', 'вызов y', { login: 'x' });
+  h.feed('Y', 'нет', { login: 'y' });
+  eq([h.challenge, h.deathmatch], [null, null]);
+  h.feed('X', 'вызов @y', { login: 'x' });
+  for (let i = 0; i < 20 * (DEATHMATCH.answer + 1); i++) h.step(0.05);
+  eq([h.challenge, h.deathmatch], [null, null], 'не ответил — отказ');
+});
+
+test('события: лев выходит из ворот и бьёт всех, но конец боя не держит; камень с трибун оглушает', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B', 'C');
+  g.next();
+  g.happen.lionAt = 0;
+  g.happen.rock = false;
+  g._stepBattle(0.05);
+  const lion = g.fighters.find((f) => f.lion);
+  ok(lion, 'лев вышел');
+  ok(g._enemy(lion, a) && g._enemy(a, lion), 'враг всем');
+  for (const m of g.fighters) if (!m.lion && m !== a) m.fate = 'down';
+  g._checkEnd();
+  ok(g.endIn !== null, 'один гладиатор на ногах — бой кончается, лев не в счёт');
+  const h = game();
+  const [x, y] = join(h, 'X', 'Y');
+  h.next();
+  h.happen = { t: 0, lionAt: null, rock: true, rockIn: 0.01 };
+  for (let i = 0; i < 20 * 4 && !(x.stunT > 0 || y.stunT > 0); i++) h._stepBattle(0.05);
+  ok(x.stunT > 0 || y.stunT > 0, 'камень оглушил');
 });

@@ -1,7 +1,7 @@
 import { ARMOR_SLOTS, SAND, SLOT_IDS, STATS, TEAMS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
 import { PLAIN, RARITIES, REFORGE, SHARPEN, TYPES, itemName, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
 import { COLUMNS, FIELD_H, FIELD_W, DUMMIES, LUDUS_TOP, PLACES } from './places.js';
-import { FONT, drawCrowd, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, paintArena, paintLudus } from './draw.js';
+import { FONT, drawCrowd, drawDummy, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
 import { ambience, play, setSound } from './sound.js';
 import { P, Pix } from './art.js';
@@ -35,7 +35,8 @@ const WHERE = {
 const COMMANDS = {
   ludus: [['трен', 'тренироваться'], ['отдых', 'на скамью, без боя'],
     ['гача', '30 монет: вещи, редкость оружия'], ['улучшить', SHARPEN.price + ' монет: заточка'],
-    ['реролл', REFORGE.price + ' монет: другое оружие'], ['сил · лов · вын', 'вложить очко'], ['проф', 'карточка']],
+    ['реролл', REFORGE.price + ' монет: другое оружие'], ['вызов @ник', 'бой насмерть'], ['сил · лов · вын', 'вложить очко'],
+    ['проф', 'карточка']],
   battle: [['проф', 'твоя карточка'],
     ['трен', 'встать со скамьи: в бой пойдёшь следующим']],
 };
@@ -228,9 +229,9 @@ const ICONS = {
 // ширина окна барабана = ширина .fortune (312) минус отступы (20)
 const ROLL = { speed: 18, wait: 3, fade: 0.8 };
 const MODE_NAMES = { ffa: 'Все против всех', pit: 'Яма со львами', duel: 'Дуэль', paragon: 'Испытание парагона',
-  teams: 'Стенка на стенку' };
+  teams: 'Стенка на стенку', deathmatch: 'Бой насмерть' };
 const MODE_HINTS = { ffa: '— каждый сам за себя', pit: '— все вместе против львов', duel: '— один на один, остальные ставят',
-  paragon: '— один против всех', teams: '— красные против синих' };
+  paragon: '— один против всех', teams: '— красные против синих', deathmatch: '— по вызову, павший погибнет' };
 // барабан: ячейка 24 и промежуток 3 (как в overlay.css); остановка — на ячейке stop
 const REEL = { cells: 30, stop: 25, size: 27, cell: 24 };
 // окна гачи, кузни и точила стоят между колоннами своего пролёта: 2 — лудильня, 3 — заточка, 4 — перековка
@@ -460,6 +461,19 @@ export class View {
       sound('net');
     } else if (e.type === 'throw') {
       sound('whoosh');
+    } else if (e.type === 'rock') {
+      this.floats.push({ x: e.x, y: e.y - 70, text: 'камень!', life: 1.6, kind: 'level' });
+      sound('thwack');
+      sound('daze');
+    } else if (e.type === 'lion') {
+      this.floats.push({ x: e.x, y: e.y - 40, text: 'лев!', life: 2, kind: 'flee' });
+      this.roar = Math.min(1, this.roar + 0.6);
+      sound('roar');
+    } else if (e.type === 'triumph') {
+      this.roar = 1;
+      this._triumph(game, e);
+    } else if (e.type === 'challenge') {
+      sound(e.answer === 'yes' ? 'horn' : e.answer === 'no' ? 'boo' : 'crack');
     } else if (e.type === 'disarm') {
       this.floats.push({ x: e.x, y: e.y - 70, text: 'обезоружен!', life: 1.8, kind: 'flee' });
       sound('disarm');
@@ -507,7 +521,7 @@ export class View {
     const people = game.fighters.filter((g) => !g.lion).length, lions = game.fighters.length - people;
     const teams = state === 'battle' && game.mode === 'teams';
     const reds = teams ? game.fighters.filter((g) => g.team === 'red').length : 0;
-    $('banner-title').textContent = duel ? (duel.betting ? 'ДУЭЛЬ' : 'В БОЙ!') : pit ? 'ЯМА СО ЛЬВАМИ' : boss ? 'ИСПЫТАНИЕ ПАРАГОНА'
+    $('banner-title').textContent = duel ? (duel.betting ? (duel.death ? 'БОЙ НАСМЕРТЬ' : 'ДУЭЛЬ') : 'В БОЙ!') : pit ? 'ЯМА СО ЛЬВАМИ' : boss ? 'ИСПЫТАНИЕ ПАРАГОНА'
       : teams ? 'СТЕНКА НА СТЕНКУ'
       : state === 'battle' ? 'В БОЙ!' : 'ЛУДУС';
     $('banner-text').textContent = duel ? duel.left.name + ' против ' + duel.right.name
@@ -525,6 +539,60 @@ export class View {
     this._bannerOff = setTimeout(() => {
       box.hidden = true;
     }, 2400);
+  }
+
+  // триумф парагона: плашка, фанфары и конфетти, которое бросают с трибун со всех сторон
+  _triumph(game, e) {
+    const box = $('banner');
+    box.className = 'banner triumph';
+    $('banner-title').textContent = 'ТРИУМФ!';
+    const g = game.members.get(e.login);
+    $('banner-text').textContent = (g ? g.name : e.login) + ' выстоял против всех';
+    box.hidden = true;
+    void box.offsetWidth;
+    box.hidden = false;
+    clearTimeout(this._bannerOff);
+    this._bannerOff = setTimeout(() => {
+      box.hidden = true;
+    }, 3000);
+    if (!this.quiet) {
+      play('fanfare');
+      play('cheer');
+    }
+    const colors = ['#ff5a4f', '#ffd34d', '#5aa8ff', '#7ee08a', '#ff8fc8', '#ffffff', '#c58cff'];
+    for (const [x, y] of [[40, 200], [40, 420], [880, 200], [880, 420], [300, 620], [620, 620]]) {
+      this._confetti(x, y, 40, colors, e.x, e.y);
+    }
+  }
+
+  // конфетти: летит из точки (к цели, если задана), кувыркается и медленно оседает
+  _confetti(x, y, n, colors, tx = null, ty = null) {
+    this.confetti = this.confetti || [];
+    for (let i = 0; i < n; i++) {
+      const aim = tx !== null ? Math.atan2(ty - y, tx - x) : -Math.PI / 2;
+      const a = aim + (Math.random() - 0.5) * 1.4, v = 120 + Math.random() * 260;
+      this.confetti.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 120, life: 2.2 + Math.random() * 1.2,
+        spin: Math.random() * 6, color: colors[Math.floor(Math.random() * colors.length)] });
+    }
+  }
+
+  _drawConfetti(ctx, dt) {
+    if (!this.confetti || !this.confetti.length) return;
+    for (const c of this.confetti) {
+      c.life -= dt;
+      c.vy += 240 * dt;
+      c.vx *= 1 - 1.2 * dt;
+      c.vy *= 1 - 1.2 * dt;
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      c.spin += dt * 9;
+      ctx.globalAlpha = Math.max(0, Math.min(1, c.life));
+      ctx.fillStyle = c.color;
+      const w = 2 + Math.abs(Math.sin(c.spin)) * 4;
+      ctx.fillRect(c.x - w / 2, c.y - 2, w, 4);
+    }
+    ctx.globalAlpha = 1;
+    this.confetti = this.confetti.filter((c) => c.life > 0);
   }
 
   // брызги: z — высота над песком; спрей мелких капель и несколько крупных
@@ -645,12 +713,22 @@ export class View {
           this.dummyHits[i] = 0.4;
         });
       }
-      drawLudusLife(w, t, this.dummyHits, game.forgeNow);
+      drawLudusLife(w, t, game.forgeNow);
       drawSigns(ctx, this.signs || []);
     }
     const lying = (g) => scene === 'arena' && (g.fate === 'down' || g.fate === 'dead');
     figures.sort((a, b) => (lying(b) - lying(a)) || a.y - b.y);
-    for (const g of figures) drawGladiator(w, g, t, scene);
+    if (scene === 'ludus') {
+      // чучела и гладиаторы — по глубине: стоящий за чучелом закрыт им, стоящий перед — закрывает его
+      const layer = [...figures.map((g) => ({ y: g.y, g })), ...DUMMIES.map((d, i) => ({ y: d.y, i }))];
+      layer.sort((a, b) => a.y - b.y);
+      for (const it of layer) {
+        if (it.g) drawGladiator(w, it.g, t, scene);
+        else drawDummy(w, it.i, this.dummyHits[it.i]);
+      }
+    } else {
+      for (const g of figures) drawGladiator(w, g, t, scene);
+    }
     if (scene === 'arena') {
       drawThrown(w, game);
       // кровотечение: с бегущего капает, за ним остаётся дорожка
@@ -669,6 +747,7 @@ export class View {
     }
     if (duel && duel.betting) this._duelBets(ctx, game);
     this._bursts(ctx, dt);
+    this._drawConfetti(ctx, dt);
     this._floats(ctx, dt);
     if (this.fade > 0) {
       const k = this.fade / FADE;
@@ -899,6 +978,7 @@ export class View {
     this._duelCards(game);
     this._results(game);
     this._fortune(game);
+    this._challengeBox(game);
     this._set('pause', String(game.paused), (node) => {
       node.hidden = !game.paused;
       $('pause-text').textContent = 'Стример поставил игру на паузу';
@@ -1263,6 +1343,28 @@ export class View {
     $('fortune-queue').textContent = waiting ? 'ещё ' + waiting : '';
   }
 
+  // вызов на бой насмерть: кто кого вызвал, сколько секунд на ответ и как ответить
+  _challengeBox(game) {
+    const c = game.challenge, box = $('challenge');
+    box.hidden = !c;
+    if (!c) return;
+    const from = game.members.get(c.from), to = game.members.get(c.to);
+    const left = Math.max(0, Math.ceil(c.until - game.clock));
+    const key = c.from + ':' + c.to + ':' + left;
+    if (box.dataset.key === key) return;
+    box.dataset.key = key;
+    const who = (g, login) => {
+      const n = nick('', g ? g.name : login, login, 'b');
+      if (g && !starOf(g.login)) n.style.color = g.color;
+      return n;
+    };
+    const title = el('div', 'title');
+    title.append(who(from, c.from), ' вызывает ', who(to, c.to), ' на ', el('b', '', 'смертный бой'));
+    const ask = el('div', 'ask');
+    ask.append('Принять?', el('code', '', 'да'), el('code', 'no', 'нет'), el('span', '', left + ' с'));
+    box.replaceChildren(title, ask);
+  }
+
   // кузня: выковать первое оружие или перековать — барабан серых видов оружия; заточка — шанс и чем кончилось
   _forge(game) {
     const now = game.forgeNow, box = $('forge');
@@ -1315,12 +1417,12 @@ export class View {
       if (!r) return;
       const champ = r.rows.find((row) => row.login === r.champion);
       $('champion').replaceChildren();
-      const duelView = r.mode === 'duel';
+      const duelView = r.mode === 'duel' || r.mode === 'deathmatch';
       $('res-alive-title').textContent = duelView ? 'Победитель' : 'Выстояли';
-      $('res-beaten-title').textContent = duelView ? 'Проигравший' : 'Пали, но живы';
+      $('res-beaten-title').textContent = r.mode === 'deathmatch' ? 'Погиб' : duelView ? 'Проигравший' : 'Пали, но живы';
       $('res-dead-title').textContent = duelView ? 'Угадали ставку' : 'Погибли';
       if (duelView) {
-        $('champion').append('Дуэль выиграл ', champ ? nick('', champ.name, champ.login, 'b') : '', ' · ставки ' + r.bets[0] + ' : '
+        $('champion').append(r.mode === 'deathmatch' ? 'Бой насмерть выиграл ' : 'Дуэль выиграл ', champ ? nick('', champ.name, champ.login, 'b') : '', ' · ставки ' + r.bets[0] + ' : '
           + r.bets[1]);
       } else if (r.mode === 'pit') {
         $('champion').textContent = r.lionsDown === r.lions ? 'Львы повержены! Выжившие получают щедрую награду'
@@ -1335,9 +1437,10 @@ export class View {
         }
       } else if (r.mode === 'paragon' && r.ascended) {
         const up = r.ascended;
-        $('champion').append(up.stood ? '' : 'Гладиаторы одолели ', nick('', up.name, up.login, 'b'),
-          up.stood ? ' выстоял против всех и получает ' : ' — он получает ', paragonTag(up.paragon),
-          ' парагон ' + up.paragon + ' и начинает заново');
+        $('champion').append(up.stood ? '' : up.died ? 'Гладиаторы убили ' : 'Гладиаторы одолели ',
+          nick('', up.name, up.login, 'b'), up.stood ? ' выстоял против всех и получает ' : ' — он всё равно получает ',
+          paragonTag(up.paragon), ' парагон ' + up.paragon + (up.died ? '' : ' и начинает заново')
+          + (up.amulet ? ' с божественным амулетом' : ''));
       } else if (champ) {
         $('champion').append('Чемпион арены — ', nick('', champ.name, champ.login, 'b'));
       } else {
@@ -1364,12 +1467,14 @@ export class View {
           return span;
         }
         const span = el('span', '', '+' + row.xp + ' опыта · +' + row.coins + ' монет'
-          + (row.kos ? ' · нокаутов ' + row.kos : '') + (row.slain ? ' · убийств ' + row.slain : '') + (row.saved ? ' · спас амулет' : ''));
+          + (row.kos ? ' · нокаутов ' + row.kos : '') + (row.slain ? ' · убийств ' + row.slain : '')
+          + (row.flames ? ' · погасил огонёк' : '') + (row.saved ? ' · спас амулет' : ''));
         if (row.ups) span.append(' · ', el('span', 'up', row.level + ' ур.!'));
         return span;
       };
       fill('res-alive', r.rows.filter((row) => row.fate === 'fight'), reward);
-      fill('res-beaten', r.rows.filter((row) => row.fate === 'down'), reward);
+      fill('res-beaten', duelView ? r.rows.filter((row) => row.login !== r.champion) : r.rows.filter((row) => row.fate === 'down'),
+        reward);
       if (duelView) fill('res-dead', r.bettors, (row) => el('span', '', '+' + row.coins + ' монет'));
       else fill('res-dead', r.rows.filter((row) => row.fate === 'dead'),
         (row) => el('span', '', (row.by ? 'от руки ' + row.by : 'на арене') + ' · ' + row.level + ' ур.'));
