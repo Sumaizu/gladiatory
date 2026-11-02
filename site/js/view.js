@@ -1,7 +1,7 @@
 import { ARMOR_SLOTS, SAND, SLOT_IDS, STATS, TEAMS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
 import { PLAIN, RARITIES, REFORGE, SHARPEN, TYPES, itemName, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
 import { COLUMNS, FIELD_H, FIELD_W, DUMMIES, LUDUS_TOP, PLACES } from './places.js';
-import { FONT, drawCrowd, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
+import { FONT, drawCrowd, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
 import { ambience, play, setSound } from './sound.js';
 import { P, Pix } from './art.js';
@@ -643,7 +643,6 @@ export class View {
       }
       drawLudusLife(w, t, this.dummyHits, game.forgeNow);
       drawSigns(ctx, this.signs || []);
-      drawSoon(ctx, t);
     }
     const lying = (g) => scene === 'arena' && (g.fate === 'down' || g.fate === 'dead');
     figures.sort((a, b) => (lying(b) - lying(a)) || a.y - b.y);
@@ -1137,7 +1136,12 @@ export class View {
     const w = g.weapon, wName = w ? (w.type === 'sword' ? 'weapon' : w.type) : 'fists', wColor = w && rarityOf(w.rarity).color;
     slot('amulet', 'Божественный амулет: спасёт от смерти', 'amulet', g.amulet ? outcomeOf('amulet').color : '');
     slot('right', w ? itemName(w) : 'Правая рука', wName, wColor);
-    if (w && w.sharp) doll.lastChild.append(el('b', 'sharp', '+' + w.sharp));
+    // заточка — под значком оружия, в пустой клетке куклы
+    if (w && w.sharp) {
+      const sharp = el('b', 'sharp', '+' + w.sharp);
+      sharp.style.gridArea = '3 / 1';
+      doll.append(sharp);
+    }
     if (twoHanded(g)) slot('left', 'Левая рука: двуручное оружие', wName, wColor, ' twin');
     else {
       const left = g.shield ? 'shield' : g.nets > 0 ? 'net' : g.sand > 0 ? 'sand' : null;

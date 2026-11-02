@@ -52,29 +52,40 @@ function stairTexel(x, y) {
 const SAND = { light: rgb('#efdcb4'), mid: rgb('#e2c795'), dark: rgb('#c7a36d'), pebble: rgb('#977751'),
   pebbleL: rgb('#c9b08a'), shine: rgb('#fbf1da') };
 
-function sandTexel(x, y) {
+// песок без общего света: пятна, борозды граблями, крупинки и камешки 2×2. mark — свои следы поверх (у столбов — вытоптанные
+// круги, на арене — разровненные круги); k — свет. Тот же песок на арене (arena.js)
+export function sandAt(x, y, k = 1, mark = null) {
   const n = noise(x, y, 150, 61) * 0.5 + noise(x, y, 52, 62) * 0.32 + noise(x, y, 17, 63) * 0.18;
   let c = mix(SAND.mid, SAND.light, smooth(0.28, 0.74, n));
   const patch = noise(x, y, 70, 64);
   if (patch > 0.6) c = mix(c, SAND.dark, Math.min(0.35, (patch - 0.6) * 1.2));
-  // вытоптанные круги вокруг столбов
-  for (const d of DUMMIES) {
-    const r = Math.hypot((x - d.x) / 48, (y - d.y - 4) / 17);
-    if (r < 1.4) c = mix(c, SAND.dark, 0.3 * Math.max(0, 1 - Math.abs(r - 0.7) / 0.6) * (0.6 + 0.4 * noise(x, y, 5, 65)));
-  }
+  if (mark) c = mark(c);
   // лёгкие борозды, будто песок разровняли граблями
   const streak = noise(x * 0.1, y * 1.8, 8, 66);
   if (streak > 0.72) c = tone(c, 1 - (streak - 0.72) * 0.18);
-  // свет: светлее к середине, тень под галереей, у нижнего края чуть темнее
-  let k = 0.9 + 0.12 * (1 - Math.pow(Math.abs(x - FIELD_W / 2) / (FIELD_W / 2), 2));
-  k *= 0.8 + 0.2 * smooth(WALL.sand, WALL.sand + 36, y);
-  k *= 1 - 0.12 * smooth(WALL.rail - 46, WALL.rail, y);
   // крупинки 2×2, как пиксели фигурок: камешки с бликом, тёмные и светлые песчинки
   const gx = x >> 1, gy = y >> 1, g = hash(gx, gy, 67);
   if (g < 0.004) return tone((x & 1) === 0 && (y & 1) === 0 ? SAND.pebbleL : SAND.pebble, k);
   if (g < 0.016) return tone(mix(c, SAND.dark, 0.55), k);
   if (g > 0.993) return tone(SAND.shine, k);
   return tone(c, k * (1 + (hash(x, y, 68) - 0.5) * 0.02));
+}
+export const SAND_DARK = SAND.dark;
+export { mix, smooth };
+
+function sandTexel(x, y) {
+  // свет: светлее к середине, тень под галереей, у нижнего края чуть темнее
+  let k = 0.9 + 0.12 * (1 - Math.pow(Math.abs(x - FIELD_W / 2) / (FIELD_W / 2), 2));
+  k *= 0.8 + 0.2 * smooth(WALL.sand, WALL.sand + 36, y);
+  k *= 1 - 0.12 * smooth(WALL.rail - 46, WALL.rail, y);
+  // вытоптанные круги вокруг столбов
+  return sandAt(x, y, k, (c) => {
+    for (const d of DUMMIES) {
+      const r = Math.hypot((x - d.x) / 48, (y - d.y - 4) / 17);
+      if (r < 1.4) c = mix(c, SAND.dark, 0.3 * Math.max(0, 1 - Math.abs(r - 0.7) / 0.6) * (0.6 + 0.4 * noise(x, y, 5, 65)));
+    }
+    return c;
+  });
 }
 
 // --- кровля, штукатурка, плиты пола, бордюр, доски впереди ---

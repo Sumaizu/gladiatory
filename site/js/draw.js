@@ -1,21 +1,12 @@
 import { TEAMS, maxHp } from './balance.js';
-import { ARENA, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, FORGE, bayX } from './places.js';
+import { COLUMNS, DUMMIES, FORGE } from './places.js';
+import { drawCrowd, paintArenaArt } from './arena.js';
 import { tierOf } from './gacha.js';
 import { RAINBOW, RAINBOW_CYCLE, RAINBOW_W, SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
-import { LION, P, SPRITE, darker, lionSprite, sandTexel, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, sandSprite, shieldLookOf, shieldSprite, weaponSprite } from './art.js';
+import { LION, P, SPRITE, darker, lionSprite, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, sandSprite, shieldLookOf, shieldSprite, weaponSprite } from './art.js';
 import { drawDummyArt, paintLudusArt } from './ludus.js';
 
 const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
-const SKIN = ['#f0c79e', '#e2b48a', '#c98f62', '#a86e46', '#7d4f32'];
-
-function seeded(seed) {
-  return () => {
-    seed = (seed + 0x6D2B79F5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 function hashOf(text) {
   let h = 2166136261;
@@ -65,18 +56,6 @@ function plaque(ctx, x, y, text, size = 15, tone = '#6b4426') {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x, y + 1);
-}
-
-function column(ctx, x, y, h, tone = '#efe6d6') {
-  ctx.fillStyle = shade(tone, -0.12);
-  ctx.fillRect(x - 6, y, 12, 4);
-  ctx.fillRect(x - 6, y + h - 4, 12, 4);
-  const grad = ctx.createLinearGradient(x - 4, 0, x + 4, 0);
-  grad.addColorStop(0, shade(tone, -0.1));
-  grad.addColorStop(0.5, tone);
-  grad.addColorStop(1, shade(tone, -0.25));
-  ctx.fillStyle = grad;
-  ctx.fillRect(x - 4, y + 4, 8, h - 8);
 }
 
 // --- лудус: вид сбоку, как в Domina; текстуры и спрайты — в art.js ---
@@ -145,140 +124,15 @@ function drawSparks(ctx, t, at, grind) {
   ctx.globalAlpha = 1;
 }
 
-export function drawSoon(ctx, t) {
-  // табличка с ценой гачи — над статуей Фортуны
-  const tx = bayX(2) + BAY_W / 2 + 6, ty = 60;
-  ctx.save();
-  ctx.translate(tx, ty);
-  ctx.rotate(-0.06);
-  const pulse = 1 + 0.04 * Math.sin(t * 3);
-  ctx.scale(pulse, pulse);
-  ctx.font = '900 13px ' + FONT;
-  ctx.fillStyle = '#e8b93c';
-  roundRect(ctx, -58, -12, 116, 24, 12);
-  ctx.fill();
-  ctx.fillStyle = '#3a2804';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('гача · 30 монет', 0, 1);
-  ctx.restore();
-}
-
-function crowd(ctx, random, cx, cy, rx, ry, rows, gap) {
-  const people = [];
-  for (let r = 0; r < rows; r++) {
-    const ex = rx + r * gap, ey = ry + r * gap * 0.75;
-    const n = Math.floor((ex + ey) * Math.PI / 9);
-    for (let i = 0; i < n; i++) {
-      const a = (i + random() * 0.6) / n * Math.PI * 2;
-      const x = cx + Math.cos(a) * ex, y = cy + Math.sin(a) * ey;
-      if (x < -6 || x > FIELD_W + 6 || y < -6 || y > FIELD_H + 6) continue;
-      if (random() < 0.3) continue;
-      people.push({ x, y, skin: SKIN[Math.floor(random() * SKIN.length)],
-        cloth: ['#9a5a50', '#c9bfae', '#5c6f93', '#b39255', '#76648f', '#5f7d62', '#d3cabb'][Math.floor(random() * 7)],
-        phase: random() * Math.PI * 2 });
-    }
-  }
-  return people;
-}
-
 export function paintArena(ctx) {
-  const random = seeded(11);
-  const a = ARENA;
-  ctx.fillStyle = '#5c4d40';
-  ctx.fillRect(0, 0, FIELD_W, FIELD_H);
-  // трибуны
-  for (let r = 14; r >= 0; r--) {
-    ctx.fillStyle = r % 2 ? '#5e5045' : '#685a4d';
-    ctx.beginPath();
-    ctx.ellipse(a.cx, a.cy, a.rx + 22 + r * 18, a.ry + 22 + r * 14, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  const people = crowd(ctx, random, a.cx, a.cy, a.rx + 34, a.ry + 32, 12, 17)
-    .filter((p) => Math.abs(p.x - a.cx) > 92 || p.y > a.cy - a.ry - 12);
-  // императорская ложа
-  const boxTop = 8, boxBottom = a.cy - a.ry - 16;
-  ctx.fillStyle = 'rgba(0,0,0,.3)';
-  ctx.fillRect(a.cx - 86, boxTop + 6, 176, boxBottom - boxTop);
-  ctx.fillStyle = '#3a1c33';
-  ctx.fillRect(a.cx - 84, boxTop, 168, boxBottom - boxTop);
-  for (let i = 0; i < 4; i++) column(ctx, a.cx - 66 + i * 44, boxTop + 26, boxBottom - boxTop - 44, '#efe6d6');
-  ctx.fillStyle = '#7a2a66';
-  ctx.fillRect(a.cx - 90, boxTop, 180, 22);
-  ctx.fillStyle = '#d9a441';
-  for (let i = 0; i < 9; i++) {
-    ctx.beginPath();
-    ctx.arc(a.cx - 80 + i * 20, boxTop + 22, 10, 0, Math.PI);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#7a2a66';
-  for (let i = 0; i < 9; i++) {
-    ctx.beginPath();
-    ctx.arc(a.cx - 80 + i * 20, boxTop + 21, 8, 0, Math.PI);
-    ctx.fill();
-  }
-  const rail = ctx.createLinearGradient(0, boxBottom - 20, 0, boxBottom);
-  rail.addColorStop(0, '#e9dcc4');
-  rail.addColorStop(1, '#b9a98b');
-  ctx.fillStyle = rail;
-  ctx.fillRect(a.cx - 90, boxBottom - 20, 180, 20);
-  ctx.fillStyle = '#d9a441';
-  ctx.fillRect(a.cx - 90, boxBottom - 20, 180, 3);
-  ctx.fillStyle = '#7a2a66';
-  ctx.fillRect(a.cx - 14, boxBottom - 17, 28, 14);
-  // стена арены
-  ctx.fillStyle = '#c9b79c';
-  ctx.beginPath();
-  ctx.ellipse(a.cx, a.cy, a.rx + 22, a.ry + 22, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#9b3a2e';
-  ctx.beginPath();
-  ctx.ellipse(a.cx, a.cy, a.rx + 12, a.ry + 12, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // песок — как в лудусе: тёплый, в дымке, светлее к середине; у стены мягкая тень
-  const sand = document.createElement('canvas');
-  sand.width = FIELD_W;
-  sand.height = FIELD_H;
-  const sctx = sand.getContext('2d'), img = sctx.createImageData(FIELD_W, FIELD_H);
-  for (let y = Math.floor(a.cy - a.ry); y <= a.cy + a.ry; y++) {
-    for (let x = Math.floor(a.cx - a.rx); x <= a.cx + a.rx; x++) {
-      const dx = (x + 0.5 - a.cx) / a.rx, dy = (y + 0.5 - a.cy) / a.ry, d = dx * dx + dy * dy;
-      if (d > 1.02 || x < 0 || y < 0 || x >= FIELD_W || y >= FIELD_H) continue;
-      const edge = Math.sqrt(d), [r, g, b] = sandTexel(x, y, 0.85 - 0.6 * edge * edge);
-      const shade = 1 - 0.13 * Math.pow(Math.max(0, edge - 0.78) / 0.22, 1.6) - 0.04 * Math.max(0, -dy);
-      img.data.set([r * shade, g * shade, b * shade, 255], (y * FIELD_W + x) * 4);
-    }
-  }
-  sctx.putImageData(img, 0, 0);
   ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(a.cx, a.cy, a.rx, a.ry, 0, 0, Math.PI * 2);
-  ctx.clip();
-  ctx.drawImage(sand, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const people = paintArenaArt(ctx);
   ctx.restore();
-  // знамёна по стене
-  for (let i = 0; i < 12; i++) {
-    const ang = i / 12 * Math.PI * 2 + Math.PI / 12;
-    const x = a.cx + Math.cos(ang) * (a.rx + 17), y = a.cy + Math.sin(ang) * (a.ry + 17);
-    ctx.fillStyle = i % 2 ? '#d9a441' : '#7a2f24';
-    ctx.fillRect(x - 5, y - 14, 10, 16);
-    ctx.fillStyle = '#5b4a3a';
-    ctx.fillRect(x - 1, y - 18, 2, 6);
-  }
   return people;
 }
 
-export function drawCrowd(ctx, people, t, roar) {
-  for (const p of people) {
-    const jump = Math.max(0, Math.sin(t * (4 + roar * 6) + p.phase)) * (1 + roar * 3);
-    ctx.fillStyle = p.cloth;
-    ctx.fillRect(p.x - 3, p.y - 2 - jump, 6, 5);
-    ctx.fillStyle = p.skin;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y - 4.5 - jump, 2.6, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
+export { drawCrowd };
 
 // --- гладиатор ---
 

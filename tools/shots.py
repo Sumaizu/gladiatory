@@ -65,6 +65,7 @@ PREPARE = {
   game.timer = 38;
   for (let i = 0; i < 20 * 6; i++) game.step(0.05);
   const shown = Array.from(game.members.values()).filter((g) => g.place !== 'rest').sort((a, b) => b.level - a.level)[0];
+  if (shown.weapon) shown.weapon.sharp = 4;
   game.feed(shown.name, 'проф', { login: shown.login });
   const lupa = game.members.get('lupa');
   if (lupa) {

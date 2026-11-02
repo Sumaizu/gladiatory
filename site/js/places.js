@@ -100,23 +100,30 @@ for (let y = 326; y <= 624; y += 34) {
 // кузня: устье горна (живой огонь), наковальня и точильный круг — тут же искры, пока идёт работа
 export const FORGE = { fire: { x: 756, y: 206 }, anvil: { x: 722, y: 258 }, wheel: { x: 628, y: 258 } };
 
-export const ARENA = { cx: 460, cy: 352, rx: 372, ry: 236 };
+// арена, как и лудус, сбоку: сзади стена с ложей и воротами, слева, справа и спереди — зрители за красным парапетом.
+// Песок — прямоугольник со скруглёнными углами (суперэллипс степени ARENA.n): от центра cx, cy на rx вбок и ry вверх-вниз
+export const ARENA = { cx: 460, cy: 373, rx: 398, ry: 223, n: 6 };
+// стена сзади, парапеты сбоку и спереди (в пикселях поля)
+export const ARENA_WALL = { base: 150, left: 62, right: 858, front: 596 };
 
 export function pointIn(rect, random) {
   return { x: rect.x + 10 + random() * (rect.w - 20), y: rect.y + 10 + random() * (rect.h - 20) };
 }
 
+// насколько точка далеко от середины песка: 1 — край (с отступом pad)
+export function arenaEdge(x, y, pad = 0) {
+  const dx = Math.abs(x - ARENA.cx) / (ARENA.rx - pad), dy = Math.abs(y - ARENA.cy) / (ARENA.ry - pad);
+  return Math.pow(Math.pow(dx, ARENA.n) + Math.pow(dy, ARENA.n), 1 / ARENA.n);
+}
+
 export function inArena(x, y, pad = 0) {
-  const dx = (x - ARENA.cx) / (ARENA.rx - pad), dy = (y - ARENA.cy) / (ARENA.ry - pad);
-  return dx * dx + dy * dy <= 1;
+  return arenaEdge(x, y, pad) <= 1;
 }
 
 export function clampToArena(p, pad = 0) {
-  const rx = ARENA.rx - pad, ry = ARENA.ry - pad;
-  const dx = (p.x - ARENA.cx) / rx, dy = (p.y - ARENA.cy) / ry;
-  const d = Math.sqrt(dx * dx + dy * dy);
+  const d = arenaEdge(p.x, p.y, pad);
   if (d <= 1) return p;
-  p.x = ARENA.cx + dx / d * rx;
-  p.y = ARENA.cy + dy / d * ry;
+  p.x = ARENA.cx + (p.x - ARENA.cx) / d;
+  p.y = ARENA.cy + (p.y - ARENA.cy) / d;
   return p;
 }

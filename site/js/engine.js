@@ -2,7 +2,7 @@ import { AFK_ROUNDS, CRIT_KILL, TEAMS, BLEED, HIT_REWARD, PARAGON, pitStrength, 
   START_POINTS, STATS, TRAIN_XP, SLOT_IDS, PIT, DUEL, emptyGear, GROUND, NET, SAND, SHIELD, SPEAR, armorOf, netUp, offhandFree,
   reachOf, sandUp, shieldUp, twoHanded, typeOf, attackEvery, critOf, crowdBonus, runOf, damageOf, deathChance, dodgeOf, maxHp, xpNeed,
   CRIT_HIT, SHARPEN, SPREAD, WEAPON_TYPES } from './balance.js';
-import { ARENA, DUMMIES, ENTRANCE, PLACES, POST_SPOTS, WARM_SPOTS, clampToArena, pointIn } from './places.js';
+import { ARENA, DUMMIES, ENTRANCE, PLACES, POST_SPOTS, WARM_SPOTS, arenaEdge, clampToArena, pointIn } from './places.js';
 import { DIVINE, PLAIN, PRICE, QUEUE_CAP, REFORGE, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, forgeSpin, itemName, rankOf, sharpChance,
   spin } from './gacha.js';
 
@@ -958,12 +958,12 @@ export class Game {
   // места на арене: равномерно по всему песку, не ближе друг к другу, чем можно
   _spots(n) {
     const spots = [];
-    const gap = Math.max(BODY * 1.6, Math.min(110, Math.sqrt(Math.PI * ARENA.rx * ARENA.ry * 0.55 / Math.max(1, n))));
+    const gap = Math.max(BODY * 1.6, Math.min(110, Math.sqrt(4 * ARENA.rx * ARENA.ry * 0.55 / Math.max(1, n))));
     for (let i = 0; i < n; i++) {
       let best = null, bestGap = -1;
       for (let attempt = 0; attempt < 30; attempt++) {
-        const a = this.random() * Math.PI * 2, r = Math.sqrt(this.random()) * 0.8;
-        const p = { x: ARENA.cx + Math.cos(a) * (ARENA.rx - 40) * r, y: ARENA.cy + Math.sin(a) * (ARENA.ry - 34) * r };
+        const p = { x: ARENA.cx + (this.random() * 2 - 1) * (ARENA.rx - 40) * 0.85,
+          y: ARENA.cy + (this.random() * 2 - 1) * (ARENA.ry - 34) * 0.85 };
         let near = Infinity;
         for (const s of spots) near = Math.min(near, Math.hypot(s.x - p.x, s.y - p.y));
         if (near > bestGap) {
@@ -1123,7 +1123,7 @@ export class Game {
       ax = g.x - ARENA.cx;
       ay = g.y - ARENA.cy;
     }
-    const cx = (g.x - ARENA.cx) / ARENA.rx, cy = (g.y - ARENA.cy) / ARENA.ry, edge = Math.hypot(cx, cy);
+    const cx = (g.x - ARENA.cx) / ARENA.rx, cy = (g.y - ARENA.cy) / ARENA.ry, edge = arenaEdge(g.x, g.y);
     if (edge > 0.75) {
       const len = Math.hypot(ax, ay) || 1, tx = -cy, ty = cx, side = tx * ax + ty * ay >= 0 ? 1 : -1;
       const pull = (edge - 0.75) * 4;
