@@ -8,8 +8,8 @@ export const LEVEL_MAX = 99;
 export const HP_BASE = 200;
 export const HP_PER_LEVEL = 3;
 export const HP_PER_VIT = 25;
-export const DAMAGE_BASE = 10;
-export const DAMAGE_PER_STR = 2.5;
+export const DAMAGE_BASE = 12;
+export const DAMAGE_PER_STR = 2;
 export const SPREAD = 0.15;
 export const ATTACK_EVERY = 1.25;
 // скорость ударов от ловкости с убывающей отдачей: первые очки дают больше, после HASTE_SOFT — заметно меньше
@@ -107,8 +107,18 @@ export const SAND = { range: [40, 220], radius: 70, crowd: 1.5, alone: 0.5, spee
 // а нет такого — за своим. reach — с какого расстояния вещь поднимают
 export const GROUND = { chance: 0.6, better: 1.1, closer: 2, half: 0.5, reach: 14, fling: [120, 200], flingSpeed: 380 };
 
+// урон оружия от редкости: простое из кузни ×1, божественное ×2,4; сверху заточка
+export const WEAPON_MULT = { plain: 1, common: 1.12, rare: 1.25, mythic: 1.42, epic: 1.62, legendary: 1.85, divine: 2.4 };
+// заточка в кузне: +1 … +max, каждая ступень +step к множителю урона (+10 — втрое); шанс успеха chance·fall^ступень,
+// при неудаче оружие ломается с шансом breaks
+export const SHARPEN = { price: 100, max: 10, step: 0.2, chance: 0.9, fall: 0.8, breaks: 0.25 };
+export const weaponMult = (item) => (item ? (WEAPON_MULT[item.rarity] || 1) * (1 + SHARPEN.step * (item.sharp || 0)) : 1);
+
+// скрытая сила: у каждого с самого начала DAMAGE_BASE (характеристика «сила» при этом 0), каждое очко силы
+// прибавляет DAMAGE_PER_STR. Урон — скрытая сила × множитель вида оружия × множитель редкости и заточки
+export const forceOf = (g) => DAMAGE_BASE + DAMAGE_PER_STR * (g.str || 0);
 export function damageOf(g) {
-  return (DAMAGE_BASE + DAMAGE_PER_STR * g.str + (g.weapon ? g.weapon.power : 0)) * typeOf(g).dmg * (g.might || 1);
+  return forceOf(g) * typeOf(g).dmg * weaponMult(g.weapon) * (g.might || 1);
 }
 
 // множитель скорости бега от ловкости

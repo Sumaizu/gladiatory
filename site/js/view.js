@@ -1,6 +1,6 @@
 import { ARMOR_SLOTS, SAND, SLOT_IDS, STATS, TEAMS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
-import { RARITIES, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
-import { FIELD_H, FIELD_W, DUMMIES, PLACES } from './places.js';
+import { PLAIN, RARITIES, REFORGE, SHARPEN, TYPES, itemName, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
+import { COLUMNS, FIELD_H, FIELD_W, DUMMIES, LUDUS_TOP, PLACES } from './places.js';
 import { FONT, drawCrowd, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, drawSoon, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
 import { ambience, play, setSound } from './sound.js';
@@ -26,14 +26,14 @@ const MELEE = new Set(['hit', 'miss', 'block']);
 const shadeBlood = (hex, k) => '#' + [1, 3, 5].map((i) => Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16)
   * k))).toString(16).padStart(2, '0')).join('');
 const WHERE = {
-  train: 'трен', heal: 'лазарет', rest: 'отдых',
+  train: 'трен', rest: 'отдых', temple: 'гача', forge: 'кузня', sharpen: 'кузня',
   fight: 'в бою', down: 'пал', dead: 'погиб',
 };
 
 const COMMANDS = {
-  ludus: [['трен', 'тренироваться: опыт'], ['отдых', 'сесть на скамью и не идти в бой'],
-    ['гача', '30 монет: оружие, доспех, щит, сеть, песок, амулет'], ['сил · лов · вын', 'вложить очко'],
-    ['проф', 'твоя карточка']],
+  ludus: [['трен', 'тренироваться'], ['отдых', 'на скамью, без боя'],
+    ['гача', '30 монет: вещи, редкость оружия'], ['улучшить', SHARPEN.price + ' монет: заточка'],
+    ['реролл', REFORGE.price + ' монет: другое оружие'], ['сил · лов · вын', 'вложить очко'], ['проф', 'карточка']],
   battle: [['проф', 'твоя карточка'],
     ['трен', 'встать со скамьи: в бой пойдёшь следующим']],
 };
@@ -228,7 +228,17 @@ const MODE_NAMES = { ffa: 'Все против всех', pit: 'Яма со ль
   teams: 'Стенка на стенку' };
 const MODE_HINTS = { ffa: '— каждый сам за себя', pit: '— все вместе против львов', duel: '— один на один, остальные ставят',
   paragon: '— один против всех', teams: '— красные против синих' };
-const REEL = { cells: 30, stop: 25, size: 44, width: 292 };
+// барабан: ячейка 24 и промежуток 3 (как в overlay.css); остановка — на ячейке stop
+const REEL = { cells: 30, stop: 25, size: 27, cell: 24 };
+// окна гачи, кузни и точила стоят между колоннами своего пролёта: 2 — лудильня, 3 — заточка, 4 — перековка
+const BAY_GAP = 16;
+const bayBox = (i) => ({ left: COLUMNS[i] + BAY_GAP, width: COLUMNS[i + 1] - COLUMNS[i] - 2 * BAY_GAP });
+function placeBox(box, i) {
+  const { left, width } = bayBox(i);
+  box.style.left = left + 'px';
+  box.style.width = width + 'px';
+  return width - 12;
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -465,14 +475,15 @@ export class View {
       this.roar = Math.min(1, this.roar + 0.3);
       sound('boo');
     } else if (e.type === 'spin') {
-      this._reel(game);
-      sound('reel');
+      sound(e.kind === 'sharpen' ? 'grind' : e.kind === 'weapon' || e.kind === 'reroll' ? 'anvil' : 'reel');
     } else if (e.type === 'prize') {
       const r = e.result, rank = r.item ? RARITIES.findIndex((x) => x.id === r.item.rarity) : -1;
-      sound(rank >= 3 || r.kind === 'amulet' ? 'jackpot' : rank >= 0 || r.coins || r.kind === 'shield' || r.kind === 'net' ? 'coin'
-        : 'miss');
+      if (r.kind === 'sharpen') sound(r.ok ? (r.to >= 7 ? 'jackpot' : 'level') : r.broke ? 'shatter' : 'miss');
+      else if (r.kind === 'weapon' || r.kind === 'reroll') sound('coin');
+      else sound(rank >= 3 && r.equipped || r.kind === 'amulet' ? 'jackpot'
+        : r.equipped || r.coins || r.kind === 'shield' || r.kind === 'net' ? 'coin' : 'miss');
     } else if (e.type === 'go') {
-      sound(e.place === 'heal' ? 'heal' : e.place === 'train' ? 'train' : 'step');
+      sound(e.place === 'train' ? 'train' : 'step');
     } else if (e.type === 'phase') {
       this._banner(game, e.state);
       if (e.state === 'battle') sound(e.mode === 'pit' ? 'roar' : 'horn');
@@ -608,11 +619,13 @@ export class View {
       if (!this.stains) this.stains = this._stainLayer();
       w.drawImage(this.stains, 0, 0);
     }
-    w.setTransform(this.ratio / PIXEL, 0, 0, this.ratio / PIXEL, 0, 0);
+    // лудус — без потолка: всё в его координатах сдвинуто вверх на LUDUS_TOP
+    const shift = scene === 'ludus' ? LUDUS_TOP : 0;
+    w.setTransform(this.ratio / PIXEL, 0, 0, this.ratio / PIXEL, 0, -shift * this.ratio / PIXEL);
     const ctx = this.ctx;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
+    ctx.setTransform(this.ratio, 0, 0, this.ratio, 0, -shift * this.ratio);
     const t = this.time;
     let figures;
     if (scene === 'arena') {
@@ -628,7 +641,7 @@ export class View {
           this.dummyHits[i] = 0.4;
         });
       }
-      drawLudusLife(w, t, this.dummyHits);
+      drawLudusLife(w, t, this.dummyHits, game.forgeNow);
       drawSigns(ctx, this.signs || []);
       drawSoon(ctx, t);
     }
@@ -653,7 +666,7 @@ export class View {
     if (this.fade > 0) {
       const k = this.fade / FADE;
       ctx.fillStyle = 'rgba(10,8,14,' + Math.min(1, k * 1.4).toFixed(3) + ')';
-      ctx.fillRect(0, 0, FIELD_W, FIELD_H);
+      ctx.fillRect(0, shift, FIELD_W, FIELD_H);
     }
   }
 
@@ -1123,7 +1136,8 @@ export class View {
     };
     const w = g.weapon, wName = w ? (w.type === 'sword' ? 'weapon' : w.type) : 'fists', wColor = w && rarityOf(w.rarity).color;
     slot('amulet', 'Божественный амулет: спасёт от смерти', 'amulet', g.amulet ? outcomeOf('amulet').color : '');
-    slot('right', 'Правая рука', wName, wColor);
+    slot('right', w ? itemName(w) : 'Правая рука', wName, wColor);
+    if (w && w.sharp) doll.lastChild.append(el('b', 'sharp', '+' + w.sharp));
     if (twoHanded(g)) slot('left', 'Левая рука: двуручное оружие', wName, wColor, ' twin');
     else {
       const left = g.shield ? 'shield' : g.nets > 0 ? 'net' : g.sand > 0 ? 'sand' : null;
@@ -1171,33 +1185,44 @@ export class View {
     return cell;
   }
 
-  _reel(game) {
-    const now = game.spinNow;
-    if (!now) return;
+  // в кузне — серые значки видов оружия: какое выкуется
+  _forgeCell(type) {
+    const cell = el('span', 'cell');
+    cell.style.setProperty('--c', PLAIN.color);
+    cell.innerHTML = ICONS[type === 'sword' ? 'weapon' : type];
+    return cell;
+  }
+
+  // барабан: на месте остановки — то, что выпало, вокруг — случайное из того же (гача — для этого же гладиатора)
+  _reel(id, now, cell, filler, width) {
     // окно должно быть видно до запуска: у скрытого элемента CSS-анимация не идёт
-    $('fortune').hidden = false;
-    const strip = $('fortune-strip');
+    $(id).hidden = false;
+    const strip = $(id + '-strip');
     const cells = [];
-    for (let i = 0; i < REEL.cells; i++) cells.push(this._cell(i === REEL.stop ? now.result : spin(Math.random)));
+    for (let i = 0; i < REEL.cells; i++) cells.push(i === REEL.stop ? cell : filler());
     strip.replaceChildren(...cells);
     strip.style.transition = 'none';
     strip.style.transform = 'translateX(0)';
     void strip.offsetWidth;
-    const target = REEL.width / 2 - (REEL.stop * REEL.size + 20);
+    const target = width / 2 - (REEL.stop * REEL.size + REEL.cell / 2);
     strip.style.transition = 'transform ' + now.spin.toFixed(2) + 's cubic-bezier(.12,.75,.2,1)';
     strip.style.transform = 'translateX(' + target.toFixed(1) + 'px)';
-    this.reelId = now.id;
   }
 
   _fortune(game) {
+    this._forge(game);
     const now = game.spinNow, box = $('fortune');
     box.hidden = !now;
     if (!now) return;
-    if (this.reelId !== now.id) this._reel(game);
+    if (this.reelId !== now.id) {
+      const g = game.members.get(now.login), width = placeBox(box, 2);
+      this._reel('fortune', now, this._cell(now.result), () => this._cell(spin(Math.random, g) || now.result), width);
+      this.reelId = now.id;
+    }
     const g = game.members.get(now.login);
     const who = nick('', g ? g.name : now.login, now.login);
     if (g && !starOf(g.login)) who.style.color = g.color;
-    $('fortune-who').replaceChildren(who, now.done ? '' : ' крутит гачу…');
+    $('fortune-who').replaceChildren(who);
     const prize = $('fortune-prize');
     const key = now.id + ':' + now.done;
     if (prize.dataset.key !== key) {
@@ -1205,17 +1230,21 @@ export class View {
       prize.replaceChildren();
       prize.style.color = '';
       const r = now.result;
-      if (now.done && r.item) {
+      if (now.done && r.item && r.item.kind === 'weapon') {
+        // выпала редкость для своего оружия
         prize.style.color = rarityOf(r.item.rarity).color;
-        prize.append(itemText(r.item), el('small', '', r.equipped ? (r.offhandLost ? 'надевает — вещь из левой руки пропадает' : 'надевает')
-          : r.locked ? 'божественная вещь не меняется'
-          : r.item.kind === 'weapon' ? 'редкость ниже своей — выброшено' : 'не лучше своего — выброшено'));
+        prize.append(rarityOf(r.item.rarity).name + ' оружию', el('small', '', r.equipped ? 'редкость выше'
+          : r.locked ? 'божественное не меняется' : 'не выше своей'));
+      } else if (now.done && r.item) {
+        prize.style.color = rarityOf(r.item.rarity).color;
+        prize.append(itemText(r.item), el('small', '', r.equipped ? 'надевает'
+          : r.locked ? 'божественная не меняется' : 'не лучше своего'));
       } else if (now.done && r.kind === 'amulet') {
         prize.style.color = outcomeOf(r.kind).color;
         prize.append(outcomeOf(r.kind).name, el('small', '', 'один раз спасёт от смерти'));
       } else if (now.done && (r.kind === 'shield' || r.kind === 'net' || r.kind === 'sand')) {
         prize.style.color = outcomeOf(r.kind).color;
-        prize.append(outcomeOf(r.kind).name, el('small', '', r.equipped ? 'берёт' : 'вторая рука занята — выброшено'));
+        prize.append(outcomeOf(r.kind).name, el('small', '', r.equipped ? 'берёт' : 'рука занята'));
       } else if (now.done && r.coins) {
         prize.style.color = outcomeOf(r.kind).color;
         prize.append('+' + r.coins + ' монет', el('small', '', outcomeOf(r.kind).name));
@@ -1224,7 +1253,52 @@ export class View {
       }
     }
     const waiting = game.spins.length;
-    $('fortune-queue').textContent = waiting ? 'в очереди ещё ' + waiting : '';
+    $('fortune-queue').textContent = waiting ? 'ещё ' + waiting : '';
+  }
+
+  // кузня: выковать первое оружие или перековать — барабан серых видов оружия; заточка — шанс и чем кончилось
+  _forge(game) {
+    const now = game.forgeNow, box = $('forge');
+    box.hidden = !now;
+    if (!now) return;
+    const r = now.result, sharpen = now.kind === 'sharpen';
+    if (this.forgeId !== now.id) {
+      // заточка — над точилом, первое оружие и перековка — над горном
+      const width = placeBox(box, sharpen ? 3 : 4);
+      $('forge-reel').hidden = sharpen;
+      if (!sharpen) this._reel('forge', now, this._forgeCell(r.type), () => this._forgeCell(TYPES[Math.floor(Math.random() * TYPES.length)]), width);
+      this.forgeId = now.id;
+    }
+    const g = game.members.get(now.login);
+    const who = nick('', g ? g.name : now.login, now.login);
+    if (g && !starOf(g.login)) who.style.color = g.color;
+    $('forge-who').replaceChildren(who);
+    const odds = $('forge-odds');
+    if (sharpen) {
+      odds.replaceChildren('+' + r.from + ' → +' + (r.from + 1), el('small', '', 'шанс ' + Math.round(r.chance * 100) + '%'));
+    } else {
+      odds.replaceChildren();
+    }
+    const prize = $('forge-prize');
+    const key = now.id + ':' + now.done;
+    if (prize.dataset.key !== key) {
+      prize.dataset.key = key;
+      prize.replaceChildren();
+      prize.style.color = '';
+      if (now.done && sharpen) {
+        prize.style.color = r.ok ? '#86efac' : r.broke ? '#fb923c' : '';
+        prize.append(r.ok ? 'Вышло: +' + r.to + '!' : r.broke ? 'Сломалось!' : 'Не вышло',
+          el('small', '', r.ok ? 'урон ×' + (1 + SHARPEN.step * r.to).toFixed(1) : r.broke ? 'гача — снова в кузне'
+            : 'оружие цело'));
+      } else if (now.done) {
+        const item = { kind: 'weapon', type: r.type, rarity: r.rarity };
+        prize.style.color = rarityOf(r.rarity).color;
+        prize.append(itemName(item), el('small', '', r.offhandLost ? 'левая рука пустеет'
+          : now.kind === 'reroll' ? 'заточка с нуля' : 'в руки'));
+      }
+    }
+    const waiting = game.forging.length;
+    $('forge-queue').textContent = waiting ? 'ещё ' + waiting : '';
   }
 
   _results(game) {

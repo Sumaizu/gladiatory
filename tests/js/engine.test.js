@@ -1,12 +1,13 @@
 import { eq, no, ok, test } from './harness.js';
 import { playNote, reportPlay } from '../../site/js/stats.js';
 import { clean, fromQuery, toQuery } from '../../site/js/config.js';
-import { AGI_CAP, WEAPON_TYPES, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HEAL_RATE, HIT_REWARD, PIT, POINTS_PER_LEVEL, PARAGON, NET, SAND, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { AGI_CAP, WEAPON_TYPES, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HIT_REWARD, WEAPON_MULT, forceOf, weaponMult, PIT, POINTS_PER_LEVEL, PARAGON, NET, SAND, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../site/js/balance.js';
 import { starOf } from '../../site/js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../site/js/engine.js';
-import { inArena } from '../../site/js/places.js';
-import { DIVINE, OUTCOMES, PRICE, RARITIES, rarityOf, SHOW_TIME, SPIN_TIME, spin } from '../../site/js/gacha.js';
+import { PLACES, POST_SPOTS, WARM_SPOTS, inArena } from '../../site/js/places.js';
+import { DIVINE, OUTCOMES, PRICE, RARITIES, REFORGE, SHARPEN, TYPES, forgeSpin, rarityOf, sharpChance, SHOW_TIME, SPIN_TIME,
+  spin } from '../../site/js/gacha.js';
 
 const SETTINGS = clean({ ludus: 60, battle: 90, death: 0 });
 
@@ -121,15 +122,15 @@ test('на скамье в зоне отдыха гладиатор сидит, 
   eq([a.x, a.y], spot, 'не встаёт сам');
 });
 
-test('лазарет бесплатный и лечит быстрее отдыха', () => {
+test('лазарета нет: в лудусе раны не лечатся, а после боя у всех полное здоровье', () => {
   const g = game();
-  const [a, b] = join(g, 'Brutus', 'Crixus');
-  a.hp = b.hp = 30;
-  g._goTo(a, 'heal');
-  eq([a.place, a.coins], ['heal', START_COINS]);
+  const [a] = join(g, 'Brutus', 'Crixus');
+  a.hp = 30;
   for (let i = 0; i < 20 * 30; i++) g.step(0.05);
-  eq(a.pose, 'lie');
-  ok(a.hp > b.hp, 'в лазарете здоровья больше');
+  eq(a.hp, 30, 'в лудусе само не заживает');
+  g.next();
+  fight(g);
+  for (const m of g.members.values()) eq(m.hp, maxHp(m), m.name);
 });
 
 test('команды «лазарет» нет — раненых уносят туда сами после боя', () => {
@@ -140,17 +141,8 @@ test('команды «лазарет» нет — раненых уносят �
   eq(a.place, 'train');
 });
 
-test('вылечился в лазарете и писал в чат — идёт тренироваться', () => {
-  const g = game();
-  const [a] = join(g, 'Brutus');
-  a.hp = maxHp(a) - 1;
-  g._goTo(a, 'heal');
-  for (let i = 0; i < 20 * 20; i++) g.step(0.05);
-  eq(a.place, 'train');
-  eq(a.hp, maxHp(a));
-});
 
-test('афк: молчал ' + AFK_ROUNDS + ' раунда — после боя на скамью, а кто писал — в лазарет и потом на тренировку', () => {
+test('афк: молчал ' + AFK_ROUNDS + ' раунда — после боя на скамью, а кто писал — на тренировку', () => {
   const g = game({ settings: { ludus: 20, battle: 20, death: 0 } });
   const [afk, b, c] = join(g, 'Afk', 'B', 'C');
   const round = () => {
@@ -174,17 +166,26 @@ test('афк: молчал ' + AFK_ROUNDS + ' раунда — после боя
   ok(g.isActive(b), 'B писал');
   eq(afk.place, 'rest');
   ok(afk.afk);
-  eq(b.place, b.hp < maxHp(b) ? 'heal' : 'train');
-  // вылечился — на тренировку
-  b.hp = maxHp(b) - 0.01;
-  b.place = 'heal';
-  b.walking = false;
-  for (let i = 0; i < 20 * 5 && b.place === 'heal'; i++) g.step(0.05);
   eq(b.place, 'train');
   // афк написал хоть что-то — встаёт со скамьи
   g.feed('Afk', 'привет', { login: 'afk' });
-  ok(afk.place === 'heal' || afk.place === 'train');
+  eq(afk.place, 'train');
   no(afk.afk);
+});
+
+test('на трибуне мест не хватило — отдыхающие стоят в ряд у левой стены', () => {
+  const g = game();
+  const seats = PLACES.rest.seats.length, names = Array.from({ length: seats + 3 }, (_, i) => 'R' + i);
+  for (const name of names) g.feed(name, 'отдых', { login: name.toLowerCase() });
+  for (let i = 0; i < 20 * 30; i++) g.step(0.05);
+  const all = [...g.members.values()];
+  eq(all.filter((m) => m.pose === 'sit').length, seats);
+  const line = all.filter((m) => m.seat >= seats);
+  eq(line.length, 3);
+  for (const m of line) {
+    ok(PLACES.rest.line.some((s) => s.x === m.x && s.y === m.y), 'стоит на месте у стены');
+    eq(m.pose, null);
+  }
 });
 
 test('сам сел на скамью — болтовня в чате его не поднимает', () => {
@@ -315,17 +316,17 @@ test('кто пришёл во время боя, ждёт в лудусе и б
   ok(g.fighters.includes(late));
 });
 
-test('итоги сменяются лудусом, раны остаются', () => {
+test('итоги сменяются лудусом, раны не остаются', () => {
   const g = game();
   join(g, 'A', 'B', 'C');
   g.next();
   fight(g);
   for (let i = 0; i < 20 * (RESULTS_TIME + 1); i++) g.step(0.05);
   eq(g.state, 'ludus');
-  const hurt = Array.from(g.members.values()).filter((m) => m.hp < maxHp(m));
-  ok(hurt.length >= 2, 'павшие вернулись ранеными');
-  for (const m of g.members.values()) eq(m.place, m.hp < maxHp(m) ? 'heal' : 'rest', 'раненые — в лазарет');
-  ok(Array.from(g.members.values()).some((m) => m.place === 'heal'));
+  for (const m of g.members.values()) {
+    eq(m.hp, maxHp(m), 'после боя — полное здоровье');
+    ok(m.place === 'train' || m.place === 'rest', m.place);
+  }
 });
 
 test('время боя вышло — выстоявших несколько, чемпиона нет', () => {
@@ -345,7 +346,7 @@ test('сохранение: прогресс переживает перезап
   const g = game({ roster: new Roster(memory, 'k') });
   const [a] = join(g, 'Brutus');
   a.coins = 500;
-  a.weapon = { kind: 'weapon', rarity: 'epic', power: 11, type: 'spear' };
+  a.weapon = { kind: 'weapon', rarity: 'epic', type: 'spear', sharp: 3 };
   a.shield = true;
   a.nets = 1;
   a.shield = false;
@@ -354,7 +355,7 @@ test('сохранение: прогресс переживает перезап
   g.stop();
   const again = game({ roster: new Roster(memory, 'k') });
   const [b] = join(again, 'Brutus');
-  eq([b.weapon, b.str, b.coins, b.shield, b.nets], [{ kind: 'weapon', rarity: 'epic', power: 11, type: 'spear' }, 2, 500,
+  eq([b.weapon, b.str, b.coins, b.shield, b.nets], [{ kind: 'weapon', rarity: 'epic', type: 'spear', sharp: 3 }, 2, 500,
     false, 1]);
   eq(b.hp, maxHp(b), 'вернулся в игру — здоровье полное');
 });
@@ -400,9 +401,8 @@ test('шанс гибели растёт от сильного удара, но 
   eq(deathChance(0.8, 500, 100), 0.9);
 });
 
-test('формулы: опыт до уровня растёт, лазарет лечит быстрее отдыха', () => {
+test('формулы: опыт до уровня растёт', () => {
   ok(xpNeed(2) > xpNeed(1));
-  ok(HEAL_RATE.heal > HEAL_RATE.rest && HEAL_RATE.rest > 0);
   eq(plural(1, 'а', 'б', 'в') + plural(3, 'а', 'б', 'в') + plural(11, 'а', 'б', 'в'), 'абв');
 });
 
@@ -433,6 +433,7 @@ test('гача: монеты снимаются в момент прокрутк
   const g = game({ settings: { ludus: 900 } });
   const [a] = join(g, 'Brutus');
   a.coins = 100;
+  a.weapon = weapon('sword');
   g.feed('Brutus', 'трен', { login: 'brutus' });
   g.feed('Brutus', 'гача', { login: 'brutus' });
   eq([a.coins, g.spins.length, a.place], [100, 1, 'temple'], 'в очереди деньги не сняты, сразу идёт к храму');
@@ -452,6 +453,8 @@ test('гача: монеты снимаются в момент прокрутк
 test('гача: без денег нельзя, «гача все» — на сколько хватает, но не больше 10', () => {
   const g = game();
   const [a, b] = join(g, 'A', 'B');
+  a.weapon = weapon('sword');
+  b.weapon = weapon('sword');
   a.coins = 29;
   g.feed('A', 'гача', { login: 'a' });
   eq(g.spins.length, 0);
@@ -464,31 +467,47 @@ test('гача: без денег нельзя, «гача все» — на с�
   g.feed('B', 'гача все', { login: 'b' });
   eq(g.spins.length, 10);
 });
-test('гача: вещь надевается, только если лучше; оружие даёт урон, доспех режет урон', () => {
+test('гача: редкость оружия растёт, только если выше своей; урон — сила × вид × редкость; доспех режет урон', () => {
   const g = game();
   const [a] = join(g, 'A');
+  const fists = damageOf(a);
+  a.weapon = { kind: 'weapon', type: 'sword', rarity: 'plain', sharp: 0 };
   const base = damageOf(a);
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'epic', power: 11, type: 'sword' } });
-  ok(damageOf(a) > base, 'сильнее кулаков');
-  // сила оружия умножается вместе с базой на множитель меча
-  ok(Math.abs(damageOf(a) - (damageOf({ str: a.str, weapon: { type: 'sword', power: 0 } }) + 11 * WEAPON_TYPES.sword.dmg)) < 1e-9);
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'common', power: 2, type: 'sword' } });
-  eq(a.weapon.power, 11, 'хуже — выброшено');
+  ok(base > fists, 'сильнее кулаков');
+  ok(Math.abs(base - forceOf(a) * WEAPON_TYPES.sword.dmg) < 1e-9, 'простое — урон от скрытой силы и вида');
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'epic', type: 'sword' } });
+  eq(a.weapon.rarity, 'epic');
+  ok(Math.abs(damageOf(a) - base * WEAPON_MULT.epic) < 1e-9, 'редкость умножает урон');
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'common', type: 'sword' } });
+  eq(a.weapon.rarity, 'epic', 'ниже — выброшено');
   g._prize(a, { kind: 'item', item: { kind: 'armor', slot: 'body', rarity: 'rare', power: 8 } });
   eq(armorOf(a), 0.08);
-  g._prize(a, { kind: 'handful', coins: 12 });
-  eq(a.coins, START_COINS + 12);
 });
-test('хроника: из гачи — только надетое легендарное, амулет и взятые щит или сеть', () => {
+
+test('скрытая сила: с самого начала есть, очки силы её растят; сила-характеристика у новичка 0', () => {
+  const g = game();
+  const [a] = join(g, 'A');
+  eq(a.str, 0);
+  ok(forceOf(a) > 0);
+  const before = forceOf(a);
+  g.feed('A', 'сил', { login: 'a' });
+  ok(forceOf(a) > before);
+  a.weapon = weapon('hammer');
+  const hammer = damageOf(a);
+  a.weapon = weapon('sword');
+  ok(hammer > damageOf(a), 'у каждого вида свой множитель');
+});
+test('хроника: из гачи — только легендарное, амулет и взятые щит или сеть', () => {
   const g = game();
   const [a, b] = join(g, 'A', 'B');
+  a.weapon = { kind: 'weapon', type: 'spear', rarity: 'plain', sharp: 0 };
   g.lines = [];
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'epic', power: 11, type: 'sword' } });
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'epic', type: 'spear' } });
   eq(g.lines.length, 0, 'эпическое — молча');
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'legendary', power: 14, type: 'spear' } });
-  eq(g.lines.map((l) => l.text), ['A надевает «легендарное копьё»']);
-  a.weapon = { kind: 'weapon', rarity: DIVINE.id, power: 30, type: 'sword' };
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'legendary', power: 14, type: 'sword' } });
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'legendary', type: 'spear' } });
+  eq(g.lines.map((l) => l.text), ['A получает «легендарное копьё»']);
+  a.weapon = { kind: 'weapon', rarity: DIVINE.id, type: 'sword', sharp: 0 };
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', rarity: 'legendary', type: 'sword' } });
   eq(g.lines.length, 1, 'не надето — молча');
   g._prize(b, { kind: 'shield' });
   g._prize(b, { kind: 'net' });
@@ -500,6 +519,7 @@ test('гача: не крутится в последние 5 секунд лу�
   const g = game({ settings: { ludus: 20, battle: 20 } });
   const [a] = join(g, 'A', 'B');
   a.coins = 300;
+  a.weapon = weapon('sword');
   for (let i = 0; i < 20 * 14; i++) g.step(0.05);
   g.feed('A', 'гача 2', { login: 'a' });
   for (let i = 0; i < 20 * 5 && g.state === 'ludus'; i++) g.step(0.05);
@@ -521,6 +541,7 @@ test('гача: остановка игры возвращает монеты з
   const g = game({ roster: new Roster(memory, 'k') });
   const [a] = join(g, 'A');
   a.coins = PRICE * 4;
+  a.weapon = weapon('sword');
   g.feed('A', 'гача 4', { login: 'a' });
   for (let i = 0; i < 20 * 20 && !g.spinNow; i++) g.step(0.05);
   g.step(0.1);
@@ -813,19 +834,25 @@ test('новичок дерётся кулаками: слабее меча, н�
   ok(reachOf(a) < reachOf(b));
 });
 
-test('гача: пока нет оружия, первая прокрутка гарантированно даёт оружие', () => {
+test('первая гача без оружия — в кузне: простое серое оружие случайного вида; остальные крутки ждут его', () => {
   const random = rng(21);
   for (let i = 0; i < 500; i++) {
-    const r = spin(random, { weapon: null, shield: false, nets: 0 });
-    ok(r.item && r.item.kind === 'weapon' && ['sword', 'greatsword', 'spear', 'axe', 'hammer', 'trident'].includes(r.item.type),
-      JSON.stringify(r));
+    const r = spin(random, { weapon: null, gear: {}, shield: false, nets: 0, sand: 0 });
+    ok(!r.item || r.item.kind === 'armor', 'без оружия гача оружия не даёт: ' + JSON.stringify(r));
   }
-  const g = game();
+  const g = game({ settings: { ludus: 900 } });
   const [a] = join(g, 'A');
   a.coins = PRICE * 2;
   g.feed('A', 'гача 2', { login: 'a' });
-  for (let i = 0; i < 20 * 20 && !(g.spinNow && g.spinNow.done); i++) g.step(0.05);
-  ok(a.weapon, 'после первой прокрутки в руке оружие');
+  eq([g.forging.length, g.spins.length, a.place], [1, 1, 'forge'], 'сперва в кузню');
+  for (let i = 0; i < 20 * 60 && (g.forgeNow || g.forging.length || g.spinNow || g.spins.length); i++) g.step(0.05);
+  ok(a.weapon && TYPES.includes(a.weapon.type), JSON.stringify(a.weapon));
+  eq(a.coins, 0, 'обе крутки сделаны');
+  eq(a.place, 'train', 'вернулся на тренировку');
+  // остальные виды — поровну
+  const seen = new Set();
+  for (let i = 0; i < 300; i++) seen.add(forgeSpin(random));
+  eq(seen.size, TYPES.length);
 });
 
 test('инвентарь: броня падает в свой слот, слоты складываются, но не выше потолка', () => {
@@ -940,7 +967,7 @@ test('Яма со львами: от льва гибнут чаще (×' + PIT.d
   ok(b);
 });
 
-test('вступил в игру — здоровье полное; уже в игре — после боя ранен как обычно', () => {
+test('вступил в игру — здоровье полное; после боя — тоже', () => {
   const memory = new Memory();
   const g = game({ roster: new Roster(memory, 'k') });
   const [a] = join(g, 'A', 'B');
@@ -951,19 +978,15 @@ test('вступил в игру — здоровье полное; уже в и
   eq(a2.hp, maxHp(a2), 'раны зажили');
   again.next();
   fight(again);
-  const hurt = Array.from(again.members.values()).filter((m) => m.hp < maxHp(m));
-  ok(hurt.length >= 1, 'после боя в той же игре — раненые');
-  const m = hurt[0], before = m.hp;
-  again.feed(m.name, 'привет', { login: m.login });
-  eq(m.hp, before, 'новое сообщение того, кто уже в игре, не лечит');
+  for (const m of again.members.values()) eq(m.hp, maxHp(m), m.name);
 });
 
 test('Дуэль: первый случайный, противник — ближайший по мощи', () => {
   const g = game({ mode: 'duel' });
   const [a, b, c, d, e] = join(g, 'A', 'B', 'C', 'D', 'E');
   for (const m of [a, b]) Object.assign(m, { str: 9, vit: 8, weapon: weapon('sword') });
-  a.weapon.power = 20;
-  b.weapon.power = 18;
+  a.weapon.sharp = 4;
+  b.weapon.sharp = 3;
   ok(ratingOf(a) > ratingOf(b) && ratingOf(b) > ratingOf(c), 'мощь растёт со статами и оружием');
   eq(ratingOf(c), ratingOf(d));
   const seen = new Map();
@@ -1047,6 +1070,8 @@ test('гача: очередь идёт к храму заранее, кажды
   const g = game({ settings: { ludus: 900 } });
   const [a, b] = join(g, 'A', 'B');
   a.coins = b.coins = 100;
+  a.weapon = weapon('sword');
+  b.weapon = weapon('axe');
   g.feed('A', 'трен', { login: 'a' });
   g.feed('B', 'трен', { login: 'b' });
   for (let i = 0; i < 20 * 10; i++) g.step(0.05);
@@ -1073,13 +1098,15 @@ test('режим следующего боя выбран заранее, в н�
   for (let i = 0; i < 60; i++) {
     while (g.state !== 'ludus') g.next();
     const planned = g.nextMode;
-    ok(['ffa', 'pit', 'duel', 'teams'].includes(planned));
+    // за 60 боёв кто-нибудь может дорасти и до испытания парагона
+    ok(['ffa', 'pit', 'duel', 'teams', 'paragon'].includes(planned), planned);
     for (const m of g.members.values()) g.feed(m.name, 'трен', { login: m.login });
     g.next();
     eq(g.mode, planned);
     seen.add(planned);
     for (const m of g.members.values()) m.hp = 1e9;
   }
+  seen.delete('paragon');
   eq(seen, new Set(['ffa', 'pit', 'duel', 'teams']));
 });
 
@@ -1523,7 +1550,8 @@ test('убил гладиатора насмерть — легендарное 
   g.next();
   b.hp = -5;
   g._knockOut(b, a);
-  eq([a.weapon.rarity, a.weapon.power], ['divine', 24]);
+  eq(a.weapon.rarity, 'divine');
+  ok(Math.abs(weaponMult(a.weapon) - WEAPON_MULT.divine) < 1e-9, 'урон оружия — множитель божественного');
   eq(a.gear.body.rarity, 'legendary', 'сперва оружие, доспех ждёт следующего убийства');
   c.hp = -5;
   g._knockOut(c, a);
@@ -1562,19 +1590,49 @@ test('без смерти, льва или легендарных вещей б�
   eq(a.weapon.rarity, 'legendary', 'просто повалил — не считается');
 });
 
-test('оружие из гачи той же редкости или выше заменяет старое, даже если урон меньше; ниже — выбрасывается', () => {
+test('гача поднимает редкость своего оружия: вид и заточка те же; та же или ниже — выбрасывается', () => {
   const g = game();
   const [a] = join(g, 'A', 'B');
-  a.weapon = { kind: 'weapon', type: 'sword', rarity: 'epic', power: 12 };
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'spear', rarity: 'epic', power: 9 } });
-  eq([a.weapon.type, a.weapon.power], ['spear', 9], 'та же редкость — меняет');
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'greatsword', rarity: 'rare', power: 50 } });
-  eq(a.weapon.type, 'spear', 'редкость ниже — не меняет');
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'sword', rarity: 'legendary', power: 13 } });
-  eq(a.weapon.rarity, 'legendary');
+  a.weapon = { kind: 'weapon', type: 'sword', rarity: 'rare', sharp: 2 };
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'sword', rarity: 'epic' } });
+  eq([a.weapon.type, a.weapon.rarity, a.weapon.sharp], ['sword', 'epic', 2]);
+  const same = { kind: 'item', item: { kind: 'weapon', type: 'sword', rarity: 'epic' } };
+  g._prize(a, same);
+  no(same.equipped, 'та же — не меняет');
+  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'sword', rarity: 'rare' } });
+  eq(a.weapon.rarity, 'epic', 'ниже — не меняет');
   a.gear.body = { kind: 'armor', slot: 'body', rarity: 'epic', power: 19 };
   g._prize(a, { kind: 'item', item: { kind: 'armor', slot: 'body', rarity: 'epic', power: 17 } });
   eq(a.gear.body.power, 19, 'доспех — по-прежнему только если крепче');
+});
+
+test('гача: оружие выпадает только своего вида; с легендарного оружия и доспеха они больше не выпадают', () => {
+  const random = rng(5);
+  const owner = { weapon: { type: 'trident', rarity: 'rare' }, gear: { head: { rarity: 'legendary' } }, shield: true, nets: 0,
+    sand: 0, amulet: false };
+  const kinds = new Set(), slots = new Set();
+  for (let i = 0; i < 4000; i++) {
+    const r = spin(random, owner);
+    if (r.item && r.item.kind === 'weapon') kinds.add(r.item.type);
+    if (r.item && r.item.kind === 'armor') slots.add(r.item.slot);
+  }
+  eq([...kinds], ['trident']);
+  no(slots.has('head'), 'легендарный шлем — шлемов больше нет');
+  owner.weapon.rarity = 'divine';
+  for (let i = 0; i < 2000; i++) {
+    const r = spin(random, owner);
+    no(r.item && r.item.kind === 'weapon', 'божественное оружие не выпадает');
+  }
+  // всё легендарное, вторая рука занята, амулет есть — выпадать нечему: крутка не идёт и монеты целы
+  const full = { weapon: { type: 'sword', rarity: 'legendary' }, shield: true, nets: 0, sand: 0, amulet: true,
+    gear: { head: { rarity: 'legendary' }, body: { rarity: 'divine' }, legs: { rarity: 'legendary' }, feet: { rarity: 'legendary' } } };
+  eq(spin(random, full), null);
+  const g = game({ settings: { ludus: 900 } });
+  const [a] = join(g, 'A');
+  Object.assign(a, full, { coins: 100 });
+  g.feed('A', 'гача', { login: 'a' });
+  for (let i = 0; i < 20 * 20; i++) g.step(0.05);
+  eq([g.spinNow, g.spins.length, a.coins], [null, 0, 100]);
 });
 
 test('гача: с одноручным оружием и пустой второй рукой щит, сеть и мешок с песком выпадают по 20%', () => {
@@ -1598,26 +1656,19 @@ test('гача: с одноручным оружием и пустой втор�
   eq(share(Object.assign({ weapon: { type: 'sword' } }, free, { sand: 1 })).slice(0, 3), [0, 0, 0], 'мешок в руке — тоже');
 });
 
-test('гача: двуручное выпадает и с занятой второй рукой, а надетое — вещь из неё пропадает', () => {
-  const random = rng(5), types = new Set();
-  for (let i = 0; i < 4000; i++) {
-    const r = spin(random, { weapon: { type: 'sword', rarity: 'common' }, shield: true, nets: 0, sand: 0 });
-    if (r.item && r.item.kind === 'weapon') types.add(r.item.type);
-  }
-  ok(types.has('greatsword') && types.has('axe') && types.has('hammer'), [...types].join());
+test('кузня: выковал или перековал двуручное — вещь из второй руки пропадает', () => {
   const g = game();
   const [a, b, c] = join(g, 'A', 'B', 'C');
   for (const [m, hand] of [[a, { shield: true }], [b, { nets: 1 }], [c, { sand: 1 }]]) {
     Object.assign(m, { weapon: weapon('sword') }, hand);
-    const result = { kind: 'item', item: { kind: 'weapon', type: 'axe', rarity: 'legendary', power: 16 } };
+    const result = { kind: 'reroll', type: 'axe', rarity: 'rare' };
     g._prize(m, result);
-    eq([m.weapon.type, m.shield, m.nets, m.sand, result.offhandLost], ['axe', false, 0, 0, true], m.name);
+    eq([m.weapon.type, m.weapon.rarity, m.shield, m.nets, m.sand, result.offhandLost], ['axe', 'rare', false, 0, 0, true], m.name);
   }
-  // двуручное не надето (редкость ниже) — щит остаётся
+  // одноручное — щит остаётся
   Object.assign(a, { weapon: weapon('sword'), shield: true });
-  a.weapon.rarity = 'legendary';
-  g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'hammer', rarity: 'common', power: 2 } });
-  eq([a.weapon.type, a.shield], ['sword', true]);
+  g._prize(a, { kind: 'reroll', type: 'trident', rarity: 'rare' });
+  eq([a.weapon.type, a.shield], ['trident', true]);
 });
 
 test('гача: мешок с песком — во вторую руку, только если она свободна', () => {
@@ -1691,29 +1742,29 @@ test('трезубец выбивает оружие: оно летит на п�
 });
 
 test('оружие на песке: берут лучшее, если до него вдвое ближе, чем до врага', () => {
-  const setup = (power, far) => {
+  const setup = (rarity, far) => {
     const g = game();
     const [a, b] = join(g, 'A', 'B');
     g.next();
-    a.weapon = weapon('sword', 2);
-    b.weapon = weapon('sword', 2);
+    a.weapon = weapon('sword');
+    b.weapon = weapon('sword');
     a.x = 300; a.y = 300; b.x = 300 + 300; b.y = 300;
-    const item = weapon('sword', power);
+    const item = Object.assign(weapon('sword'), { rarity });
     g._lay({ kind: 'weapon', item, owner: 'x' }, a.x - far, a.y, 0);
     // dt побольше — шанс решиться сработает наверняка, и за этот шаг он дойдёт и поднимет
     g._seekGround(a, g._standing(), 10);
     return a.weapon === item;
   };
-  ok(setup(16, 60), 'лучше и рядом — берёт');
-  no(setup(2, 60), 'не лучше — не берёт');
-  no(setup(16, 200), 'дальше половины пути до врага — не берёт');
+  ok(setup('legendary', 60), 'лучше и рядом — берёт');
+  no(setup('rare', 60), 'не лучше — не берёт');
+  no(setup('legendary', 200), 'дальше половины пути до врага — не берёт');
 });
 
 test('без оружия: бежит к ближайшему, что не хуже прежнего вдвое, иначе — за своим', () => {
   const g = game();
   const [a, b] = join(g, 'A', 'B');
   g.next();
-  const mine = weapon('sword', 16);
+  const mine = Object.assign(weapon('sword'), { rarity: 'legendary', sharp: 5 });
   a.weapon = mine;
   const rating = g._ratingWith(a, mine);
   a.weapon = null;
@@ -1722,13 +1773,13 @@ test('без оружия: бежит к ближайшему, что не ху�
   b.stunT = 100;
   b.x = 700;
   g._lay({ kind: 'weapon', item: mine, owner: 'a' }, 450, 300, 0);
-  const weak = { kind: 'weapon', type: 'sword', rarity: 'common', power: 1 };
+  const weak = { kind: 'weapon', type: 'sword', rarity: 'plain', sharp: 0 };
   g._lay({ kind: 'weapon', item: weak, owner: 'x' }, 330, 300, 0);
   ok(g._ratingWith(a, weak) < rating * 0.5);
   g._seekGround(a, g._standing(), 0.05);
   eq(a.goFor.item, mine, 'слабое рядом — бежит за своим');
   a.goFor = null;
-  const fair = weapon('spear', 12);
+  const fair = Object.assign(weapon('spear'), { rarity: 'epic', sharp: 3 });
   g._lay({ kind: 'weapon', item: fair, owner: 'x' }, 360, 300, 0);
   g._seekGround(a, g._standing(), 0.05);
   eq(a.goFor.item, fair, 'не хуже вдвое — ближайшее');
@@ -1817,6 +1868,90 @@ test('добил своим брошенным легендарным копьё
   ok(g.ground.some((it) => it.item === spear), 'божественное копьё лежит на песке');
   g._endBattle();
   eq(a.weapon.rarity, 'divine', 'и после боя оно у владельца божественное');
+});
+
+test('тренировка: у каждого столба два места, на занятое никто не встаёт; кому не хватило — разминается', () => {
+  const g = game();
+  const all = join(g, ...Array.from({ length: 40 }, (_, i) => 'T' + i));
+  for (let i = 0; i < 20 * 20; i++) g.step(0.05);
+  const spots = all.map((m) => m.spot).filter(Boolean);
+  eq(new Set(spots).size, spots.length, 'у каждого своё место');
+  ok(spots.every((id) => POST_SPOTS.some((s) => s.id === id) || WARM_SPOTS.some((s) => s.id === id)));
+  // все места у столбов заняты — новичок идёт разминаться на песок
+  all.forEach((m, i) => {
+    m.spot = POST_SPOTS[i] ? POST_SPOTS[i].id : WARM_SPOTS[i].id;
+  });
+  const [late] = join(g, 'Late');
+  ok(late.drill && WARM_SPOTS.some((s) => s.id === late.spot), 'разминается');
+  eq(late.dummy, null);
+  // у столба стоит лицом к нему
+  const free = POST_SPOTS[0];
+  all[0].spot = null;
+  g.random = () => 0.9;
+  const at = g._spot(late, 'train');
+  eq([at.x, at.y, late.spot, late.spotFace], [free.x, free.y, free.id, free.face]);
+});
+
+const until = (g, done, seconds = 60) => {
+  for (let i = 0; i < 20 * seconds && !done(); i++) g.step(0.05);
+};
+const idle = (g) => !g.forgeNow && !g.forging.length && !g.spinNow && !g.spins.length;
+
+test('заточка: «улучшить» за 100 монет у точила, +1 за удачную; шанс падает, +10 — урон втрое', () => {
+  eq(sharpChance(0), SHARPEN.chance);
+  ok(Math.abs(sharpChance(5) / sharpChance(4) - SHARPEN.fall) < 1e-9, 'шанс падает в геометрической прогрессии');
+  ok(sharpChance(9) < 0.2);
+  const blade = { kind: 'weapon', type: 'sword', rarity: 'rare', sharp: 10 };
+  ok(Math.abs(weaponMult(blade) - 3 * WEAPON_MULT.rare) < 1e-9, '+10 — втрое');
+  const g = game({ settings: { ludus: 900 } });
+  const [a] = join(g, 'A');
+  g.feed('A', 'улучшить', { login: 'a' });
+  eq(g.forging.length, 0, 'без оружия точить нечего');
+  a.weapon = weapon('sword');
+  a.coins = SHARPEN.price * 2 + 50;
+  g.feed('A', 'улучшить все', { login: 'a' });
+  eq([g.forging.length, a.place], [2, 'sharpen'], 'на сколько хватает денег; идёт к точилу');
+  g.random = () => 0.01;
+  until(g, () => idle(g));
+  eq([a.weapon.sharp, a.coins, a.place], [2, 50, 'train']);
+});
+
+test('заточка: неудача — оружие цело, но с шансом 25% ломается; дальше +10 не точится', () => {
+  const g = game();
+  const [a] = join(g, 'A');
+  a.weapon = Object.assign(weapon('axe'), { sharp: 6 });
+  const seq = (...xs) => () => xs.shift();
+  g.random = seq(0.99, 0.9);
+  const miss = g._roll(a, { kind: 'sharpen' });
+  eq([miss.ok, miss.broke, miss.to], [false, false, 6]);
+  g._prize(a, miss);
+  eq(a.weapon.sharp, 6, 'не вышло — заточка та же');
+  g.random = seq(0.99, SHARPEN.breaks - 0.01);
+  const broke = g._roll(a, { kind: 'sharpen' });
+  ok(broke.broke);
+  g.lines = [];
+  g._prize(a, broke);
+  eq(a.weapon, null, 'сломалось');
+  eq(g.lines.map((l) => l.kind), ['broke']);
+  a.weapon = Object.assign(weapon('sword'), { sharp: SHARPEN.max });
+  a.coins = 1000;
+  g.feed('A', 'улучшить', { login: 'a' });
+  for (let i = 0; i < 20 * 10; i++) g.step(0.05);
+  eq([a.weapon.sharp, a.coins], [SHARPEN.max, 1000], '+10 — предел, монеты целы');
+});
+
+test('перековка: «реролл» за 300 — другой вид, та же редкость, заточка сначала', () => {
+  const g = game({ settings: { ludus: 900 } });
+  const [a] = join(g, 'A');
+  a.weapon = { kind: 'weapon', type: 'sword', rarity: 'epic', sharp: 3 };
+  a.coins = REFORGE.price + 10;
+  g.feed('A', 'реролл', { login: 'a' });
+  g.feed('A', 'реролл', { login: 'a' });
+  eq([g.forging.length, a.place], [1, 'forge'], 'одна перековка за раз; идёт к наковальне');
+  until(g, () => idle(g));
+  ok(a.weapon.type !== 'sword' && TYPES.includes(a.weapon.type), a.weapon.type);
+  eq([a.weapon.rarity, a.weapon.sharp, a.coins, a.place], ['epic', 0, 10, 'train']);
+  for (let i = 0; i < 300; i++) ok(forgeSpin(Math.random, 'axe') !== 'axe');
 });
 
 test('мешок с песком слепит врагов вокруг цели (своих в стенке — нет), слепой мажет чаще', () => {

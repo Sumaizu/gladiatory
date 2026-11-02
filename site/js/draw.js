@@ -1,8 +1,9 @@
 import { TEAMS, maxHp } from './balance.js';
-import { ARENA, BAYS, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, bayX } from './places.js';
+import { ARENA, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, FORGE, bayX } from './places.js';
 import { tierOf } from './gacha.js';
 import { RAINBOW, RAINBOW_CYCLE, RAINBOW_W, SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
-import { LION, P, SPRITE, darker, drawDummyArt, lionSprite, sandTexel, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, paintLudusArt, sandSprite, shieldLookOf, shieldSprite, weaponSprite } from './art.js';
+import { LION, P, SPRITE, darker, lionSprite, sandTexel, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, sandSprite, shieldLookOf, shieldSprite, weaponSprite } from './art.js';
+import { drawDummyArt, paintLudusArt } from './ludus.js';
 
 const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
 const SKIN = ['#f0c79e', '#e2b48a', '#c98f62', '#a86e46', '#7d4f32'];
@@ -92,29 +93,61 @@ export function drawSigns(ctx, list) {
   for (const [x, y, text, size, tone] of list) plaque(ctx, x, y, text, size, tone);
 }
 
-export function drawLudusLife(ctx, t, dummyHits) {
-  DUMMIES.forEach((d, i) => drawDummyArt(ctx, d.kind, d.x, d.y, dummyHits[i] || 0, t));
+// work — что сейчас делают в кузне (game.forgeNow): пока идёт работа, у наковальни или точила летят искры
+export function drawLudusLife(ctx, t, dummyHits, work = null) {
+  DUMMIES.forEach((d, i) => drawDummyArt(ctx, d.kind, d.x, d.y, dummyHits[i] || 0));
+  drawForgeFire(ctx, t);
+  if (work && !work.done) drawSparks(ctx, t, work.kind === 'sharpen' ? FORGE.wheel : FORGE.anvil, work.kind === 'sharpen');
   // факелы на колоннах
   for (const cx of COLUMNS.slice(1, -1)) {
     const f = 0.7 + 0.3 * Math.sin(t * 11 + cx);
     ctx.fillStyle = '#3a2418';
-    ctx.fillRect(cx + 12, 124, 4, 14);
-    ctx.fillRect(cx + 10, 122, 8, 3);
-    const tg = ctx.createRadialGradient(cx + 14, 116, 1, cx + 14, 116, 30);
+    ctx.fillRect(cx + 16, 124, 4, 14);
+    ctx.fillRect(cx + 14, 122, 8, 3);
+    const tg = ctx.createRadialGradient(cx + 18, 116, 1, cx + 18, 116, 30);
     tg.addColorStop(0, 'rgba(255,200,90,' + (0.55 * f).toFixed(3) + ')');
     tg.addColorStop(1, 'rgba(255,120,40,0)');
     ctx.fillStyle = tg;
-    ctx.fillRect(cx - 16, 86, 60, 60);
+    ctx.fillRect(cx - 12, 86, 60, 60);
     ctx.fillStyle = '#ff9a3c';
-    ctx.fillRect(cx + 10, 112 - f * 4, 8, 10 + f * 4);
+    ctx.fillRect(cx + 14, 112 - f * 4, 8, 10 + f * 4);
     ctx.fillStyle = '#ffe08a';
-    ctx.fillRect(cx + 12, 116 - f * 2, 4, 6 + f * 2);
+    ctx.fillRect(cx + 16, 116 - f * 2, 4, 6 + f * 2);
   }
 }
 
+// живой огонь в устье горна: мерцающее зарево на стене и полу и пляшущие языки
+function drawForgeFire(ctx, t) {
+  const { x, y } = FORGE.fire, f = 0.75 + 0.25 * Math.sin(t * 9) * Math.sin(t * 5.3 + 1);
+  const glow = ctx.createRadialGradient(x, y + 6, 4, x, y + 6, 70);
+  glow.addColorStop(0, 'rgba(255,170,70,' + (0.45 * f).toFixed(3) + ')');
+  glow.addColorStop(1, 'rgba(255,90,20,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x - 70, y - 64, 140, 140);
+  for (let i = 0; i < 6; i++) {
+    const h = 6 + 8 * Math.abs(Math.sin(t * (7 + i) + i * 1.7)), fx = x - 10 + i * 4;
+    ctx.fillStyle = i % 2 ? '#ffb43c' : '#ffe08a';
+    ctx.fillRect(fx, y + 16 - h, 2, h);
+  }
+}
+
+// искры: от наковальни — веером вверх при каждом ударе, от точила — струёй вбок
+function drawSparks(ctx, t, at, grind) {
+  for (let i = 0; i < 9; i++) {
+    const k = (t * (grind ? 2.6 : 1.8) + i / 9) % 1, a = grind ? 0.2 + (i % 3) * 0.15 : -Math.PI / 2 + (i - 4) * 0.32;
+    const r = 6 + k * (grind ? 46 : 30);
+    const x = at.x + (grind ? -8 : 0) + Math.cos(grind ? Math.PI + a : a) * r;
+    const y = at.y - (grind ? 2 : 6) + Math.sin(a) * r * (grind ? 0.6 : 1) + k * k * 18;
+    ctx.globalAlpha = 1 - k;
+    ctx.fillStyle = k < 0.4 ? '#fff2b0' : '#ffb43c';
+    ctx.fillRect(Math.round(x / 2) * 2, Math.round(y / 2) * 2, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+}
+
 export function drawSoon(ctx, t) {
-  // табличка «скоро» у лудильни
-  const tx = bayX(2) + BAY_W / 2, ty = 106;
+  // табличка с ценой гачи — над статуей Фортуны
+  const tx = bayX(2) + BAY_W / 2 + 6, ty = 60;
   ctx.save();
   ctx.translate(tx, ty);
   ctx.rotate(-0.06);
@@ -314,11 +347,20 @@ function fist(ctx, p, color) {
   ctx.fillRect(Math.round(p[0]) - 1, Math.round(p[1]) + 1, 3, 1);
 }
 
-function drawArms(ctx, g, look, bob) {
+// drill — руки на разминке: [дальняя кисть, ближняя кисть], оружие отложено
+function drawArms(ctx, g, look, bob, drill = null) {
   const skin = look.skin, skinD = darker(skin, 0.8), guard = '#3f3833';
   const length = g.swingMax || 0.3, phase = g.swing > 0 ? 1 - g.swing / length : 0;
   ctx.save();
   ctx.translate(-SPRITE.x, -SPRITE.foot - bob);
+  if (drill) {
+    limb(ctx, SHOULDER.far, drill[0], skinD);
+    fist(ctx, drill[0], skinD);
+    limb(ctx, SHOULDER.near, drill[1], skin);
+    fist(ctx, drill[1], skin);
+    ctx.restore();
+    return;
+  }
   // что в руке: оружие; после броска копья (рука ещё доводит замах) — пустая рука по кадрам копья
   const type = g.weapon ? g.weapon.type : g.swing > 0 && g.anim === 'throw' ? 'spear' : 'fists';
   if (type === 'fists') {
@@ -411,17 +453,45 @@ export function drawGladiator(ctx, g, t, scene) {
   }
   const fate = scene === 'arena' ? g.fate : null;
   const pose = scene === 'ludus' && !g.walking ? g.pose : null;
-  const lying = fate === 'down' || fate === 'dead' || pose === 'lie';
+  const lying = fate === 'down' || fate === 'dead';
   const seed = hashOf(g.login);
   const look = lookOf(g, seed);
   let frame = 'stand';
+  // отдыхает у стены (на трибуне не хватило места) — стоит смирно: ноги прямо, руки опущены вдоль тела
+  const resting = scene === 'ludus' && !g.walking && g.place === 'rest' && pose !== 'sit';
   if (pose === 'sit') frame = 'sit';
+  else if (resting) frame = 'idle';
   else if (g.walking && !lying) frame = Math.sin(t * 10 + seed) > 0 ? 'walk1' : 'walk2';
+  // разминка на песке: бег на месте, прыжки, приседания, прыжки «звёздочкой»
+  let lift = 0, hands = resting ? [[11, 25], [15, 25]] : null;
+  const drill = scene === 'ludus' && !g.walking && !lying && g.place === 'train' ? g.drill : null;
+  if (drill) {
+    const k = t + (seed % 97) / 13;
+    if (drill === 'run') {
+      const s = Math.sin(k * 15);
+      frame = s > 0 ? 'walk1' : 'walk2';
+      lift = s > 0 ? 1 : 0;
+      hands = s > 0 ? [[15, 19], [10, 20]] : [[9, 20], [16, 19]];
+    } else if (drill === 'jump') {
+      const s = Math.sin(k * 5.5);
+      lift = s > 0 ? Math.round(s * 7) : 0;
+      hands = lift > 3 ? [[10, 3], [17, 3]] : [[13, 22], [17, 22]];
+    } else if (drill === 'squat') {
+      frame = Math.sin(k * 3.6) > 0 ? 'kneel' : 'stand';
+      lift = frame === 'kneel' ? -7 : 0;
+      hands = [[21, 15], [22, 17]];
+    } else {
+      const s = Math.sin(k * 6.5);
+      lift = s > 0 ? 1 : 0;
+      hands = s > 0 ? [[7, 4], [19, 4]] : [[11, 23], [16, 23]];
+    }
+  }
   const sprite = gladiatorSprite(look, frame, fate === 'dead', g.flash > 0.08 && !lying);
   const x = Math.round(g.x / P) * P, y = Math.round(g.y / P) * P;
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(P, P);
+  // тень на земле
   ctx.fillStyle = 'rgba(30,15,8,.3)';
   ctx.fillRect(lying ? -16 : -8, -1, lying ? 32 : 16, 3);
   if (fate === 'dead') {
@@ -430,15 +500,17 @@ export function drawGladiator(ctx, g, t, scene) {
     ctx.fillRect(-9, 3, 14, 1);
   }
   if (lying) {
-    if (g.face < 0 && pose !== 'lie') ctx.scale(-1, 1);
-    ctx.drawImage(lyingSprite(look, pose === 'lie', fate === 'dead'), -12, pose === 'lie' ? -8 : -8);
+    // павший на арене — как упал
+    if (g.face < 0) ctx.scale(-1, 1);
+    ctx.drawImage(lyingSprite(look, fate === 'dead'), -12, -8);
     ctx.restore();
     return;
   }
   ctx.scale(g.face < 0 ? -1 : 1, 1);
-  const bob = g.walking ? (frame === 'walk1' ? 1 : 0) : 0;
+  const bob = g.walking ? (frame === 'walk1' ? 1 : 0) : Math.max(0, lift);
   ctx.drawImage(sprite, -SPRITE.x, -SPRITE.foot - bob);
-  if (frame === 'stand' || frame === 'walk1' || frame === 'walk2') drawArms(ctx, g, look, bob);
+  // у присевшего тело ниже на 7 пикселей — руки тоже
+  if (frame === 'stand' || frame === 'walk1' || frame === 'walk2' || hands) drawArms(ctx, g, look, hands ? lift : bob, hands);
   ctx.restore();
   if (scene === 'arena' && g.stunT > 0 && g.fate === 'fight' && !g.dazed) {
     // накинутая сеть
@@ -552,20 +624,12 @@ export function drawLabel(ctx, g, scene, highlight) {
   const pose = scene === 'ludus' && !g.walking ? g.pose : null;
   // на арене у лежачих ни имени, ни здоровья — только у тех, кто ещё дерётся
   if (fate && fate !== 'fight') return;
-  const lying = fate === 'down' || fate === 'dead' || pose === 'lie';
-  // на скамьях и койках соседи рядом — подписи через одну выше, чтобы не налезали
-  const stagger = pose && g.seat !== null && g.seat !== undefined && g.seat % 2 ? 15 : 0;
-  const top = g.y - (g.lion ? (fate === 'fight' ? 70 : 40) : lying ? 26 : pose === 'sit' ? 64 : 86) - stagger;
-  // на скамьях и койках имя не пишем — только полоску здоровья; имя видно у тех, кто ходит и тренируется
-  if (pose && !highlight) {
-    const part = Math.max(0, Math.min(1, g.hp / maxHp(g)));
-    const bw = 24, bx = g.x - bw / 2, by = top + 4 + stagger;
-    ctx.fillStyle = 'rgba(20,16,30,.8)';
-    ctx.fillRect(bx - 1, by - 1, bw + 2, 5);
-    ctx.fillStyle = part > 0.5 ? '#4ade80' : part > 0.25 ? '#fbbf24' : '#f87171';
-    ctx.fillRect(bx, by, bw * part, 3);
-    return;
-  }
+  const lying = fate === 'down' || fate === 'dead';
+  const top = g.y - (g.lion ? (fate === 'fight' ? 70 : 40) : lying ? 26 : pose === 'sit' ? 64 : 86);
+  // у отдыхающих (на трибуне и у стены) подписей нет, кроме того, чью карточку открыли; имя видно у тех, кто ходит и
+  // тренируется
+  const resting = scene === 'ludus' && !g.walking && g.place === 'rest';
+  if ((pose || resting) && !highlight) return;
   // уровень над головой не пишем — он есть в списке гладиаторов; ник цветом из твича
   ctx.font = '700 12px ' + FONT;
   ctx.textAlign = 'center';
@@ -585,13 +649,22 @@ export function drawLabel(ctx, g, scene, highlight) {
     ctx.strokeText(g.name, g.x, top + 1);
   }
   ctx.fillText(g.name, g.x, top + 1);
-  if (fate === 'dead') return;
-  const hpMax = maxHp(g), part = Math.max(0, Math.min(1, g.hp / hpMax));
-  const bw = 34, bx = g.x - bw / 2, by = top + 6;
+  // здоровье — только в бою
+  if (fate === 'dead' || scene !== 'arena') return;
+  hpBar(ctx, g.x, top + 6, 28, g.hp / maxHp(g));
+}
+
+// полоска здоровья: тонкая, с закруглёнными краями, на тёмной подложке
+function hpBar(ctx, cx, y, w, part) {
+  part = Math.max(0, Math.min(1, part));
+  const x = cx - w / 2;
   ctx.fillStyle = 'rgba(20,16,30,.8)';
-  ctx.fillRect(bx - 1, by - 1, bw + 2, 6);
+  roundRect(ctx, x - 1, y - 1, w + 2, 5, 2.5);
+  ctx.fill();
+  if (part <= 0) return;
   ctx.fillStyle = part > 0.5 ? '#4ade80' : part > 0.25 ? '#fbbf24' : '#f87171';
-  ctx.fillRect(bx, by, bw * part, 4);
+  roundRect(ctx, x, y, Math.max(3, w * part), 3, 1.5);
+  ctx.fill();
 }
 
 // ники стримеров на холсте — та же радуга и тот же снежный блик, что в CSS

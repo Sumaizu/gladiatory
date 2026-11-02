@@ -71,6 +71,13 @@ PREPARE = {
     lupa.coins = 200;
     game.feed('Lupa', 'гача 2', { login: 'lupa' });
   }
+  // у точила кто-то точит оружие — видно окно кузни
+  const smith = Array.from(game.members.values()).find((g) => g.weapon && g.place === 'train' && g.login !== 'lupa'
+    && g !== shown);
+  if (smith) {
+    smith.coins = 300;
+    game.feed(smith.name, 'улучшить 2', { login: smith.login });
+  }
   return game.state;
 """,
     "duel": TEAM + """

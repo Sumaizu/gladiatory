@@ -1,22 +1,19 @@
 // пиксельная графика как в Чатобороне: один пиксель рисунка — два пикселя поля, текстуры и спрайты с обводкой
-import { BAYS, BAY_W, COLUMNS, FIELD_H, FIELD_W, PLACES, WALL, bayX } from './places.js';
 import { tierOf } from './gacha.js';
 import { netUp, sandUp, shieldUp } from './balance.js';
 
 export const P = 2;
-const W = FIELD_W / P;
-const H = FIELD_H / P;
 const OUT = '#3a2416';
 
 // --- шум и цвет ---
 
-function hash(x, y, s) {
+export function hash(x, y, s) {
   let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(s | 0, 1274126177)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1103515245);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-function noise(x, y, scale, s) {
+export function noise(x, y, scale, s) {
   const fx = x / scale, fy = y / scale, ix = Math.floor(fx), iy = Math.floor(fy);
   const tx = fx - ix, ty = fy - iy, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
   const a = hash(ix, iy, s), b = hash(ix + 1, iy, s), c = hash(ix, iy + 1, s), d = hash(ix + 1, iy + 1, s);
@@ -30,11 +27,11 @@ export function rgb(hex) {
   return [n >> 16, (n >> 8) & 255, n & 255];
 }
 
-function tone(c, k) {
+export function tone(c, k) {
   return [Math.max(0, Math.min(255, c[0] * k)), Math.max(0, Math.min(255, c[1] * k)), Math.max(0, Math.min(255, c[2] * k))];
 }
 
-function hex(c) {
+export function hex(c) {
   return '#' + c.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
 }
 
@@ -114,100 +111,9 @@ export class Pix {
 }
 
 const cache = new Map();
-function remember(key, make) {
+export function remember(key, make) {
   if (!cache.has(key)) cache.set(key, make());
   return cache.get(key);
-}
-
-// --- текстуры лудуса ---
-
-function cot() {
-  const p = new Pix(22, 8);
-  p.rect(0, 3, 22, 2, '#6b4329');
-  p.rect(1, 5, 2, 3, '#4e2f1c');
-  p.rect(19, 5, 2, 3, '#4e2f1c');
-  for (let x = 1; x < 21; x++) {
-    p.px(x, 1, x % 4 === 0 ? '#d8ccb6' : '#efe6d4');
-    p.px(x, 2, x % 3 === 0 ? '#d2c3a8' : '#e4d8c2');
-  }
-  p.rect(1, 0, 5, 2, '#f6efe0');
-  return p.outline().canvas();
-}
-
-function amphora(color) {
-  const p = new Pix(8, 14);
-  p.ellipse(4, 8, 3.6, 5, color, darker(color, 0.7), darker(color, 1.25));
-  p.rect(3, 1, 2, 3, darker(color, 0.85));
-  p.rect(2, 1, 4, 1, darker(color, 0.7));
-  p.px(1, 4, darker(color, 0.7));
-  p.px(6, 4, darker(color, 0.7));
-  p.rect(3, 13, 2, 1, darker(color, 0.6));
-  for (let x = 2; x < 7; x++) p.px(x, 7, '#2a1a10');
-  return p.outline().canvas();
-}
-
-function statue() {
-  const p = new Pix(30, 58);
-  const m = '#e8e0d0', md = '#c4b9a6', ml = '#fbf7ee';
-  p.rect(5, 44, 20, 14, '#b9ab95');
-  p.rect(3, 42, 24, 3, '#d4c8b2');
-  p.rect(3, 55, 24, 3, '#a39680');
-  // фигура в хитоне
-  for (let y = 16; y < 42; y++) {
-    const half = 4 + (y - 16) * 0.17;
-    for (let x = Math.round(14 - half); x <= Math.round(14 + half); x++) {
-      const fold = (x + Math.floor(y / 3)) % 4 === 0;
-      p.px(x, y, fold ? md : x < 13 ? ml : m);
-    }
-  }
-  p.ellipse(14, 11, 3.5, 4, m, md, ml);
-  p.rect(12, 6, 5, 2, md);
-  p.line(18, 20, 23, 26, m, 2);
-  // колесо Фортуны
-  for (let a = 0; a < 24; a++) {
-    const t = a / 24 * Math.PI * 2;
-    p.px(24 + Math.cos(t) * 5, 28 + Math.sin(t) * 5, '#d9a441');
-  }
-  for (let k = 0; k < 4; k++) p.line(24 - Math.cos(k * 0.785) * 5, 28 - Math.sin(k * 0.785) * 5,
-    24 + Math.cos(k * 0.785) * 5, 28 + Math.sin(k * 0.785) * 5, '#b8862e');
-  p.px(24, 28, '#f2c94c');
-  return p.outline().canvas();
-}
-
-function shelf() {
-  const p = new Pix(24, 22);
-  const jars = ['#7fb069', '#c9a227', '#a3c4d9', '#c9584a', '#9b7bc4'];
-  for (const y of [8, 20]) p.rect(0, y, 24, 2, '#5a3a22');
-  for (let k = 0; k < 5; k++) {
-    const c = jars[k];
-    p.rect(1 + k * 5, 3, 3, 5, c);
-    p.px(1 + k * 5, 3, darker(c, 1.3));
-    p.rect(1 + k * 5, 2, 3, 1, '#d8ccb6');
-    const c2 = jars[(k + 2) % 5];
-    p.rect(1 + k * 5, 15, 3, 5, c2);
-    p.px(1 + k * 5, 15, darker(c2, 1.3));
-  }
-  return p.outline().canvas();
-}
-
-function plant() {
-  const p = new Pix(14, 18);
-  p.rect(4, 12, 6, 6, '#a8582f');
-  p.rect(3, 12, 8, 2, '#c06a3a');
-  for (let i = 0; i < 26; i++) {
-    const a = hash(i, 1, 71) * Math.PI, r = 3 + hash(i, 2, 71) * 4;
-    p.px(7 + Math.cos(a) * r * 1.1, 11 - Math.sin(a) * r, hash(i, 3, 71) > 0.5 ? '#4d7a2e' : '#3b5e22');
-  }
-  return p.outline().canvas();
-}
-
-
-// мягкие текстуры в полном разрешении: плавные градиенты и едва заметный шум, без швов кладки
-const BAY_RECTS = COLUMNS.slice(0, -1).map((x, i) => ({ x: x + 13, w: COLUMNS[i + 1] - x - 26 }));
-
-function smoothstep(a, b, v) {
-  const t = Math.max(0, Math.min(1, (v - a) / (b - a)));
-  return t * t * (3 - 2 * t);
 }
 
 // песок как в Domina: тёплый персиково-золотой, в лёгкой дымке, с крупными мягкими разводами и редкими крупинками
@@ -223,271 +129,13 @@ export function sandTexel(x, y, haze = 0.5) {
   return tone(c, k);
 }
 
-function texel(x, y) {
-  const grain = 1 + (hash(x, y, 3) - 0.5) * 0.025;
-  if (y < WALL.top) {
-    const beam = (y % 14) < 2 ? 0.9 : 1;
-    return tone(rgb('#3d291c'), (0.8 + y / WALL.top * 0.25) * beam * grain);
-  }
-  if (y < WALL.floor) {
-    // стена: тёплая штукатурка, тень под крышей и в нишах
-    let k = 0.82 + 0.18 * smoothstep(WALL.top, WALL.top + 70, y);
-    k *= 0.96 + 0.08 * noise(x, y, 70, 5);
-    if (y < WALL.top + 12) k *= y < WALL.top + 3 ? 1.12 : 1.04;
-    const inBay = BAY_RECTS.some((b) => x > b.x && x < b.x + b.w) && y > WALL.top + 30;
-    if (inBay) k *= 0.86 - 0.05 * smoothstep(WALL.floor - 40, WALL.floor, y);
-    return tone(rgb('#76533b'), k * grain);
-  }
-  if (y < WALL.step) {
-    // пол галереи: плавный, с еле заметными полосами
-    let k = 0.86 + 0.14 * smoothstep(WALL.floor, WALL.step, y);
-    if ((y - WALL.floor) % 16 === 0) k *= 0.95;
-    if (y < WALL.floor + 6) k *= 0.8 + 0.2 * smoothstep(WALL.floor, WALL.floor + 6, y);
-    k *= 0.97 + 0.06 * noise(x, y, 50, 9);
-    return tone(rgb('#9a6f4e'), k * grain);
-  }
-  if (y < WALL.sand) {
-    const k = y < WALL.step + 2 ? 1.18 : 0.78;
-    return tone(rgb('#8a6447'), k * grain);
-  }
-  if (y < WALL.front) {
-    // песок: мягкая тень от галереи сверху, к середине светлее, по краям дымка гуще
-    const shade = 0.86 + 0.14 * smoothstep(WALL.sand, WALL.sand + 46, y);
-    const haze = 0.75 - 0.5 * Math.pow(Math.abs(x - FIELD_W / 2) / (FIELD_W / 2), 2);
-    return tone(sandTexel(x, y, haze), shade);
-  }
-  let k = 0.85 + 0.1 * noise(x * 0.15, y, 6, 31);
-  if ((y - WALL.front) % 12 === 0) k *= 0.85;
-  return tone(rgb('#4d3121'), k * grain);
-}
-
-function softColumn(ctx, cx) {
-  const top = WALL.top + 12, bottom = WALL.step, w = 24, mid = top + (bottom - top) * 0.52;
-  const body = (y0, y1, base) => {
-    const g = ctx.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0);
-    g.addColorStop(0, darker(base, 0.78));
-    g.addColorStop(0.38, darker(base, 1.08));
-    g.addColorStop(0.62, base);
-    g.addColorStop(1, darker(base, 0.7));
-    ctx.fillStyle = g;
-    ctx.fillRect(cx - w / 2, y0, w, y1 - y0);
-  };
-  ctx.fillStyle = 'rgba(40,20,10,.18)';
-  ctx.fillRect(cx - w / 2 + 6, top, w, bottom - top);
-  body(top + 8, mid, '#c99278');
-  body(mid, bottom - 8, '#ddc6ae');
-  for (const [y, h] of [[top, 9], [bottom - 9, 9]]) {
-    const g = ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, '#e2c4a6');
-    g.addColorStop(1, '#a9876a');
-    ctx.fillStyle = g;
-    ctx.fillRect(cx - w / 2 - 5, y, w + 10, h);
-  }
-}
-
-function softDoor(ctx, x, y, w, h) {
-  const g = ctx.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, '#3a2519');
-  g.addColorStop(1, '#4d3324');
-  ctx.fillStyle = g;
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = 'rgba(0,0,0,.12)';
-  for (let i = 1; i < 4; i++) ctx.fillRect(x + i * w / 4, y + 2, 1, h - 2);
-  ctx.fillStyle = '#5e4130';
-  ctx.fillRect(x - 3, y - 4, w + 6, 4);
-}
-
-function softBench(ctx, x, y, w) {
-  ctx.fillStyle = 'rgba(40,20,10,.2)';
-  ctx.fillRect(x + 3, y + 5, w, 9);
-  const g = ctx.createLinearGradient(0, y - 4, 0, y + 4);
-  g.addColorStop(0, '#a77a56');
-  g.addColorStop(1, '#6e4a31');
-  ctx.fillStyle = g;
-  ctx.fillRect(x, y - 4, w, 7);
-  ctx.fillStyle = '#5a3b27';
-  ctx.fillRect(x + 6, y + 3, 5, 10);
-  ctx.fillRect(x + w - 11, y + 3, 5, 10);
-}
-
-function softRailing(ctx) {
-  const top = WALL.rail, bottom = WALL.front;
-  ctx.fillStyle = 'rgba(40,20,10,.16)';
-  ctx.fillRect(0, top - 8, FIELD_W, 10);
-  for (let x = 16; x < FIELD_W; x += 22) {
-    const g = ctx.createLinearGradient(x, 0, x + 6, 0);
-    g.addColorStop(0, '#7d5539');
-    g.addColorStop(1, '#5a3a26');
-    ctx.fillStyle = g;
-    ctx.fillRect(x, top + 6, 6, bottom - top - 6);
-  }
-  const rail = (y, h) => {
-    const g = ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, '#a3734f');
-    g.addColorStop(1, '#6a4630');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, y, FIELD_W, h);
-  };
-  rail(top, 9);
-  rail(top + 22, 6);
-  for (let x = 8; x < FIELD_W; x += 132) {
-    const g = ctx.createLinearGradient(x, 0, x + 14, 0);
-    g.addColorStop(0, '#8a603f');
-    g.addColorStop(1, '#55382a');
-    ctx.fillStyle = g;
-    ctx.fillRect(x, top - 12, 14, bottom - top + 12);
-    ctx.fillStyle = '#a3734f';
-    ctx.fillRect(x - 2, top - 16, 18, 5);
-  }
-}
-
-// возвращает таблички для чёткого слоя; фон рисуется в полном разрешении поля
-export function paintLudusArt(ctx) {
-  const img = ctx.createImageData(FIELD_W, FIELD_H);
-  for (let y = 0; y < FIELD_H; y++) {
-    for (let x = 0; x < FIELD_W; x++) img.data.set([...texel(x, y), 255], (y * FIELD_W + x) * 4);
-  }
-  ctx.putImageData(img, 0, 0);
-  ctx.imageSmoothingEnabled = false;
-  const put = (canvas, x, y) => ctx.drawImage(canvas, Math.round(x), Math.round(y), canvas.width * P, canvas.height * P);
-  for (const i of BAYS.rest) {
-    const x = bayX(i);
-    softDoor(ctx, x + 50, WALL.floor - 128, 56, 128);
-    put(amphora('#9a5a36'), x + 12, WALL.floor - 28);
-    put(amphora('#86502f'), x + 128, WALL.floor - 28);
-  }
-  for (const i of BAYS.rest) {
-    softBench(ctx, bayX(i) + 6, 262 - 2, BAY_W - 12);
-    softBench(ctx, bayX(i) + 18, 286 - 2, BAY_W - 28);
-  }
-  const tx = bayX(BAYS.temple[0]);
-  const glow = ctx.createRadialGradient(tx + BAY_W / 2, 150, 10, tx + BAY_W / 2, 150, 110);
-  glow.addColorStop(0, 'rgba(255,210,140,.16)');
-  glow.addColorStop(1, 'rgba(255,210,140,0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(tx, WALL.top, BAY_W, WALL.floor - WALL.top);
-  put(statue(), tx + BAY_W / 2 - 30, WALL.floor - 116);
-  put(plant(), tx + 18, WALL.floor - 36);
-  put(plant(), tx + BAY_W - 46, WALL.floor - 36);
-  for (const i of BAYS.heal) {
-    const x = bayX(i);
-    softDoor(ctx, x + 56, WALL.floor - 118, 48, 118);
-    put(shelf(), x + 4, 112);
-    put(shelf(), x + 108, 112);
-  }
-  for (const s of PLACES.heal.seats) if (s.y < WALL.step) put(cot(), s.x - 22, s.y - 6);
-  for (const cx of COLUMNS) softColumn(ctx, cx);
-  softRailing(ctx);
-  // тёплая дымка поверх всего, как на старой плёнке
-  const haze = ctx.createLinearGradient(0, 0, 0, FIELD_H);
-  haze.addColorStop(0, 'rgba(120,60,30,.10)');
-  haze.addColorStop(0.5, 'rgba(255,220,170,.04)');
-  haze.addColorStop(1, 'rgba(60,30,15,.12)');
-  ctx.fillStyle = haze;
-  ctx.fillRect(0, 0, FIELD_W, FIELD_H);
-  const signs = [];
-  signs.push([(bayX(BAYS.rest[0]) + bayX(BAYS.rest[1]) + BAY_W) / 2, 72, 'Зона отдыха', 14, '#5d4426']);
-  signs.push([bayX(BAYS.temple[0]) + BAY_W / 2, 72, 'Лудильня', 14, '#7a5a2a']);
-  signs.push([(bayX(BAYS.heal[0]) + bayX(BAYS.heal[1]) + BAY_W) / 2, 72, 'Лазарет', 14, '#6b2f28']);
-  return signs;
-}
-
-// --- тренировочные мишени ---
-
-function dummyArt(kind) {
-  const p = new Pix(30, 40), wood = '#6b4329', woodL = '#8a5a38', woodD = '#4a2c1a';
-  const post = (x, top, w = 3) => {
-    p.rect(x, top, w, 40 - top, wood);
-    p.rect(x, top, 1, 40 - top, woodL);
-    p.rect(x + w - 1, top, 1, 40 - top, woodD);
-  };
-  if (kind === 'shield') {
-    post(14, 10);
-    p.rect(8, 22, 15, 2, woodD);
-    p.ellipse(15.5, 18, 8, 8, '#6d5a3a', '#4f412a', '#8c7650');
-    p.ellipse(15.5, 18, 5.5, 5.5, '#8a7348', '#6d5a3a', '#a68c5c');
-    p.ellipse(15.5, 18, 2, 2, '#c9a24a', '#8a6a2a');
-    p.rect(12, 6, 7, 4, '#3a3632');
-  } else if (kind === 'straw') {
-    post(14, 4);
-    p.rect(4, 12, 23, 2, woodD);
-    for (let y = 10; y < 28; y++) for (let x = 10; x < 21; x++) {
-      if (Math.abs(x - 15.5) > 5 - (y < 13 ? 13 - y : 0)) continue;
-      p.px(x, y, (x + y) % 3 ? '#d9b75e' : '#b8953f');
-    }
-    for (const y of [15, 21]) p.rect(10, y, 11, 1, '#7a5a2a');
-    p.ellipse(15.5, 6, 4.5, 4.5, '#c9a87a', '#a8865a', '#e0c49a');
-    p.rect(12, 9, 7, 1, '#7a5a2a');
-    p.px(14, 6, '#5a3a22');
-    p.px(17, 6, '#5a3a22');
-  } else if (kind === 'palus') {
-    for (let y = 6; y < 40; y++) for (let x = 12; x < 19; x++) {
-      const k = x === 12 ? 1.25 : x === 18 ? 0.7 : 0.9 + 0.2 * noise(x * 4, y * 0.4, 2, 101);
-      p.px(x, y, hex(tone(rgb(wood), k)));
-    }
-    p.ellipse(15.5, 6, 3.5, 2, woodL, wood);
-    for (const y of [14, 26]) p.rect(11, y, 9, 2, '#a89060');
-    for (const [x, y] of [[14, 18], [16, 20], [15, 31], [13, 34]]) p.px(x, y, woodD);
-  } else if (kind === 'target') {
-    p.line(15, 20, 8, 39, woodD, 2);
-    p.line(15, 20, 22, 39, woodD, 2);
-    post(14, 22, 2);
-    const rings = ['#e8dfc4', '#c8302a', '#e8dfc4', '#c8302a', '#f2c94c'];
-    rings.forEach((c, i) => p.ellipse(15.5, 14, 10 - i * 2, 10 - i * 2, c));
-    for (let a = 0; a < 40; a++) {
-      const t = a / 40 * Math.PI * 2;
-      p.px(15.5 + Math.cos(t) * 9.5, 14 + Math.sin(t) * 9.5, '#b8953f');
-    }
-  } else {
-    // рама с мешком: мешок рисуется отдельно и качается
-    post(3, 2);
-    post(25, 2);
-    p.rect(3, 1, 25, 3, wood);
-    p.rect(3, 1, 25, 1, woodL);
-    p.rect(15, 4, 1, 5, '#a89060');
-  }
-  return p.outline().canvas();
-}
-
-function sackArt() {
-  const p = new Pix(12, 18);
-  for (let y = 0; y < 18; y++) {
-    const half = y < 3 ? 2 + y : Math.min(5, 3 + y * 0.3);
-    for (let x = Math.round(6 - half); x < Math.round(6 + half); x++) p.px(x, y, (x * 2 + y) % 5 ? '#a8865a' : '#8a6a42');
-  }
-  p.rect(3, 3, 6, 1, '#5a3a22');
-  return p.outline().canvas();
-}
-
-export const DUMMY_KINDS = ['shield', 'straw', 'palus', 'target', 'bag'];
-
-export function drawDummyArt(ctx, kind, x, y, hit, t) {
-  const sprite = remember('dummy:' + kind, () => dummyArt(kind));
-  const wobble = Math.sin(hit * 30) * hit;
-  ctx.save();
-  ctx.translate(Math.round(x / P) * P, Math.round(y / P) * P);
-  ctx.scale(P, P);
-  ctx.fillStyle = 'rgba(40,20,10,.28)';
-  ctx.fillRect(-11, -1, 22, 3);
-  if (kind === 'bag') {
-    ctx.drawImage(sprite, -15, -40);
-    const sack = remember('sack', sackArt);
-    ctx.translate(0, -31);
-    ctx.rotate(wobble * 0.9 + Math.sin(t * 1.3 + x) * 0.04);
-    ctx.drawImage(sack, -6, 0);
-  } else {
-    ctx.rotate(wobble * 0.25);
-    ctx.drawImage(sprite, -15, -40);
-  }
-  ctx.restore();
-}
 
 // --- гладиаторы: высокие стройные фигуры в профиль, как в Domina — без обводки, только тени ---
 
 const SKINS = ['#e6cdad', '#d7b391', '#bf9472', '#9c7052', '#76523b'];
 const HAIR = ['#2b1d14', '#4a2f1c', '#6e4424', '#a8823e', '#1c1410'];
 const METALS = ['#4b4540', '#5c4d3f', '#7a6243', '#6c7176', '#868c92', '#a2a7ac', '#b8954a', '#c0282e'];
-const BLADES = ['#8a6a44', '#b08250', '#9aa1a8', '#d6dde3', '#bcd8ec', '#c4ecd6', '#e8c35a', '#ff3b3b'];
+const BLADES = ['#8d9092', '#b08250', '#9aa1a8', '#d6dde3', '#bcd8ec', '#c4ecd6', '#e8c35a', '#ff3b3b'];
 const CLOTH = '#e9e0cf';
 const CLOTH_D = '#bdb09a';
 const BELT = '#4a3426';
@@ -526,7 +174,7 @@ export function shieldLookOf(g, seed) {
 const gearKey = (look) => [look.head, look.body, look.legs, look.feet].join('');
 const BOOTS = ['#5a3a22', '#6b4329', '#4a3426', '#5c4d3f', '#6c7176', '#868c92', '#b8954a'];
 
-// поза: stand, walk1, walk2, sit, kneel. Ступни на y = 39, центр x = 12, смотрит вправо
+// поза: stand, walk1, walk2, sit, kneel, idle (стоит смирно, ноги прямо). Ступни на y = 39, центр x = 12, смотрит вправо
 function gladiatorArt(look, pose, dead) {
   const p = new Pix(SPRITE.w, SPRITE.h);
   const skin = look.skin, skinD = darker(skin, 0.8), skinL = darker(skin, 1.07);
@@ -580,11 +228,12 @@ function gladiatorArt(look, pose, dead) {
     p.line(18, 33, 18, 38, skin, 3);
     foot(19, 39);
   } else {
-    const back = pose === 'walk1' ? 6 : pose === 'walk2' ? 10 : 7;
-    const front = pose === 'walk1' ? 18 : pose === 'walk2' ? 14 : 17;
+    const idle = pose === 'idle';
+    const back = idle ? 11 : pose === 'walk1' ? 6 : pose === 'walk2' ? 10 : 7;
+    const front = idle ? 14 : pose === 'walk1' ? 18 : pose === 'walk2' ? 14 : 17;
     p.line(11, 24, back, 38, skinD, 3);
     foot(back, 39);
-    const knee = [Math.round((14 + front) / 2) + 1, 31];
+    const knee = idle ? [14, 31] : [Math.round((14 + front) / 2) + 1, 31];
     p.line(14, 24, knee[0], knee[1], skin, 3);
     p.line(knee[0], knee[1], front, 38, skin, 3);
     foot(front + 1, 39);
@@ -622,7 +271,7 @@ function gladiatorArt(look, pose, dead) {
     }
   }
   // руки в стойке и на ходу рисуются отдельно (draw.js) и двигаются вместе с оружием
-  const live = pose === 'stand' || pose === 'walk1' || pose === 'walk2';
+  const live = pose === 'stand' || pose === 'walk1' || pose === 'walk2' || pose === 'idle';
   if (pose === 'kneel') {
     p.line(14, 13 + dy, 18, 5 + dy, skin, 2);
     p.rect(17, 0 + dy, 5, 4, '#f2eee4');
@@ -753,30 +402,58 @@ function gladiatorArt(look, pose, dead) {
   });
 }
 
-// лежит на спине, голова слева: в лазарете под одеялом, на арене — без
-function lyingArt(look, blanket, dead) {
-  const p = new Pix(25, 9);
-  const skin = look.skin, skinD = darker(skin, 0.8), metal = METALS[look.head], metalD = darker(metal, 0.7);
-  p.rect(14, 5, 8, 2, skin);
-  p.rect(14, 7, 8, 1, skinD);
-  p.rect(22, 4, 2, 3, BELT);
-  p.rect(11, 4, 3, 4, CLOTH);
-  p.rect(11, 4, 1, 4, BELT);
-  for (let x = 5; x < 11; x++) for (let y = 4; y < 8; y++) p.px(x, y, y === 7 ? skinD : skin);
-  if (look.body >= 2) p.rect(5, 4, 5, 3, METALS[look.body]);
-  p.rect(6, 7, 7, 1, GUARD);
-  if (look.helmet === 'bare') {
-    p.rect(1, 3, 4, 4, skin);
-    p.rect(0, 3, 2, 4, look.hair);
-  } else {
-    p.rect(0, 3, 5, 5, metal);
-    p.rect(0, 3, 5, 1, metalD);
-    p.rect(0, 4, 1, 2, look.color);
+// павший на арене: лежит на спине, голова слева, лицо вверх; свет сверху. Те же цвета кожи, волос, ткани и
+// снаряжения по редкости, что у стоящей фигурки. 24×9 пикселей
+function lyingArt(look, dead) {
+  const p = new Pix(24, 9);
+  const skin = look.skin, skinD = darker(skin, 0.8), skinL = darker(skin, 1.08);
+  const shade3 = (tier) => [METALS[tier], darker(METALS[tier], 0.68), darker(METALS[tier], 1.3)];
+  // ноги: ближняя сверху светлее, дальняя ниже в тени; колени чуть согнуты
+  p.rect(16, 4, 5, 2, skin);
+  p.rect(16, 4, 5, 1, skinL);
+  p.px(18, 3, skinL);
+  p.rect(16, 6, 6, 2, skinD);
+  if (look.legs) {
+    const [m, mD, mL] = shade3(look.legs);
+    p.rect(18, 3, 3, 3, m);
+    p.rect(18, 3, 3, 1, mL);
+    p.rect(18, 6, 3, 1, mD);
   }
-  if (blanket) {
-    for (let x = 8; x < 24; x++) for (let y = 3; y < 8; y++) {
-      p.px(x, y, y === 3 ? '#f7f1e4' : (x + y) % 5 === 0 ? '#d2c6b0' : '#e7ddca');
-    }
+  // ступни вверх: сандалии, ботинки или сапоги по редкости
+  const boot = look.feet ? BOOTS[Math.min(BOOTS.length - 1, look.feet)] : null;
+  p.rect(21, 2, 2, 4, boot || skin);
+  p.px(21, 2, boot ? darker(boot, 1.3) : skinL);
+  p.rect(22, 6, 2, 2, boot || skinD);
+  // набедренная повязка с поясом цвета игрока
+  p.rect(13, 3, 3, 5, CLOTH);
+  p.rect(13, 7, 3, 1, CLOTH_D);
+  p.rect(12, 3, 1, 5, BELT);
+  p.rect(13, 4, 3, 1, look.color);
+  // торс: грудь вверх; доспех по редкости
+  for (let x = 6; x < 12; x++) for (let y = 3; y < 8; y++) p.px(x, y, y === 3 ? skinL : y === 7 ? skinD : skin);
+  if (look.body) {
+    const [m, mD, mL] = shade3(look.body);
+    p.rect(6, 3, 6, 3, m);
+    p.rect(6, 3, 6, 1, mL);
+    p.rect(6, 5, 6, 1, mD);
+  }
+  // рука вдоль тела, наруч на ней
+  p.rect(7, 6, 6, 1, skinD);
+  p.rect(7, 6, 3, 1, GUARD);
+  p.px(13, 6, skin);
+  // шея и голова: затылок на подушке, лицо вверх
+  p.rect(5, 4, 1, 3, skinD);
+  if (look.helmet === 'bare') {
+    p.ellipse(2.5, 5, 2.4, 2.6, skin, skinD, skinL);
+    p.rect(0, 5, 2, 3, look.hair);
+    p.px(3, 2, skin);
+    p.px(2, 4, '#3a2a20');
+  } else {
+    const [m, mD, mL] = shade3(look.head);
+    p.ellipse(2.5, 5, 2.6, 2.8, m, mD, mL);
+    p.px(3, 3, '#2a2420');
+    p.px(4, 4, '#2a2420');
+    p.rect(0, 3, 1, 3, look.color);
   }
   if (!dead) return p.canvas();
   return p.canvas((c) => {
@@ -785,9 +462,9 @@ function lyingArt(look, blanket, dead) {
   });
 }
 
-export function lyingSprite(look, blanket, dead) {
-  return remember(['lie4', look.color, gearKey(look), look.helmet, look.skin, look.hair, blanket, dead].join(':'),
-    () => lyingArt(look, blanket, dead));
+export function lyingSprite(look, dead) {
+  return remember(['lie5', look.color, gearKey(look), look.helmet, look.skin, look.hair, dead].join(':'),
+    () => lyingArt(look, dead));
 }
 
 // оружие — в пикселях фигурки и в том же стиле: три тона (свет слева, основной, тень справа), без обводки.

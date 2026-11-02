@@ -1,6 +1,11 @@
-// гача в лудильне: редкости в тех же пропорциях, что в Чатобороне; монет и пустоты нет; щит и сеть — без редкости
-import { ARMOR_SLOTS, SLOT_IDS, WEAPON_TYPES, offhandFree } from './balance.js';
+// гача в лудильне: редкости в тех же пропорциях, что в Чатобороне; монет и пустоты нет; щит и сеть — без редкости.
+// Оружие гача не даёт: первое (простое, серое) выковывается в кузне, а гача только поднимает его редкость
+import { ARMOR_SLOTS, SHARPEN, SLOT_IDS, WEAPON_TYPES, offhandFree } from './balance.js';
 export const PRICE = 30;
+export { SHARPEN };
+// кузня: перековка — новый вид оружия той же редкости
+export const REFORGE = { price: 300 };
+export const sharpChance = (level) => SHARPEN.chance * Math.pow(SHARPEN.fall, level);
 // крутка вдвое быстрее прежней — лудус теперь минута
 export const SPIN_TIME = 1.1;
 export const SHOW_TIME = 1.5;
@@ -19,22 +24,23 @@ export const OUTCOMES = [
   { id: 'amulet', name: 'Божественный амулет', color: '#ff3b47', chance: 0.03 },
 ];
 
-// weapon — прибавка к урону, armor — процент, на который режется входящий урон
+// armor — процент, на который режется входящий урон (урон оружия от редкости — WEAPON_MULT в balance.js)
 export const RARITIES = [
-  { id: 'common', name: 'Обычный', n: 'Обычное', f: 'Обычная', p: 'Обычные', color: '#4ade80', chance: 0.27, weapon: 2,
-    armor: 4 },
-  { id: 'rare', name: 'Редкий', n: 'Редкое', f: 'Редкая', p: 'Редкие', color: '#60a5fa', chance: 0.2, weapon: 4, armor: 8 },
+  { id: 'common', name: 'Обычный', n: 'Обычное', f: 'Обычная', p: 'Обычные', color: '#4ade80', chance: 0.27, armor: 4 },
+  { id: 'rare', name: 'Редкий', n: 'Редкое', f: 'Редкая', p: 'Редкие', color: '#60a5fa', chance: 0.2, armor: 8 },
   { id: 'mythic', name: 'Мифический', n: 'Мифическое', f: 'Мифическая', p: 'Мифические', color: '#c084fc', chance: 0.1,
-    weapon: 7, armor: 13 },
+    armor: 13 },
   { id: 'epic', name: 'Эпический', n: 'Эпическое', f: 'Эпическая', p: 'Эпические', color: '#facc15', chance: 0.07,
-    weapon: 11, armor: 19 },
+    armor: 19 },
   { id: 'legendary', name: 'Легендарный', n: 'Легендарное', f: 'Легендарная', p: 'Легендарные', color: '#f97316',
-    chance: 0.06, weapon: 16, armor: 26 },
+    chance: 0.06, armor: 26 },
 ];
+// простое оружие из кузни — серое, без редкости; в гаче не выпадает
+export const PLAIN = { id: 'plain', name: 'Простой', n: 'Простое', f: 'Простая', p: 'Простые', color: '#9ca3af' };
 
 // божественные вещи в гаче не выпадают: убил гладиатора насмерть — одна его легендарная вещь становится божественной
-// (сперва оружие, если оно легендарное, иначе случайный легендарный доспех). Сила вещи ×mult, и гача её больше не меняет —
-// до смерти или парагона
+// (сперва оружие, если оно легендарное, иначе случайный легендарный доспех). Доспех ×mult, оружие — множитель урона
+// из WEAPON_MULT, и гача её больше не меняет — до смерти или парагона
 export const DIVINE = { id: 'divine', name: 'Божественный', n: 'Божественное', f: 'Божественная', p: 'Божественные',
   color: '#ff3b3b', mult: 1.5 };
 
@@ -50,56 +56,71 @@ function pick(list, random) {
   return list[list.length - 1];
 }
 
-export const rarityOf = (id) => RARITIES.find((rarity) => rarity.id === id) || (id === DIVINE.id ? DIVINE : null);
+export const rarityOf = (id) => RARITIES.find((rarity) => rarity.id === id) || (id === DIVINE.id ? DIVINE
+  : id === PLAIN.id ? PLAIN : null);
+// простое — -1, как и пустой слот: для гачи оно ниже любой редкости
 export const rankOf = (item) => (!item ? -1 : item.rarity === DIVINE.id ? RARITIES.length
   : RARITIES.findIndex((rarity) => rarity.id === item.rarity));
+// с легендарной редкости вещь (оружие или доспех в своём слоте) из гачи больше не выпадает
+export const maxedOut = (item) => rankOf(item) >= RARITIES.length - 1;
 
-// броня выпадает в случайный слот: шлем, броня, поножи или сапоги
+
+// броня выпадает в случайный слот: шлем, броня, поножи или сапоги. Оружие — только вид и редкость, без чисел
 export function makeItem(random, kind, rarity, type = null) {
-  const roll = 1 - SPREAD + 2 * SPREAD * random();
   if (kind === 'armor') {
+    const roll = 1 - SPREAD + 2 * SPREAD * random();
     const slot = type || SLOT_IDS[Math.floor(random() * SLOT_IDS.length)];
     return { kind, slot, rarity: rarity.id, power: Math.max(1, Math.round(rarity.armor * ARMOR_SLOTS[slot].share * roll)) };
   }
-  return { kind, rarity: rarity.id, power: Math.max(1, Math.round(rarity.weapon * roll)),
-    type: type || TYPES[Math.floor(random() * TYPES.length)] };
+  return { kind, rarity: rarity.id, type: type || TYPES[Math.floor(random() * TYPES.length)], sharp: 0 };
 }
 
-// owner — кто крутит: щит и сеть выпадают, только если его вторая рука свободна
+// owner — кто крутит. Щит, сеть и мешок выпадают, только если его вторая рука свободна; оружие — только его же вид
+// (выпадает редкость), доспех — в слоты, где ещё нет легендарного. Легендарное (или божественное) оружие и доспехи
+// больше не выпадают; если выпадать нечему — null
 export function spin(random, owner = null) {
   const outcomes = OUTCOMES.filter((o) => !owner || (o.id === 'amulet' ? !owner.amulet
     : !o.offhand || offhandFree(owner)));
-  // у кого ещё нет оружия, тому первая же гача гарантированно даёт оружие
-  if (owner && !owner.weapon) return { kind: 'item', item: makeItem(random, 'weapon', pick(RARITIES, random)) };
   // одноручное оружие и пустая вторая рука — вещи для неё чаще
   const oneHand = owner && owner.weapon && (WEAPON_TYPES[owner.weapon.type] || WEAPON_TYPES.sword).hands === 1;
-  let roll = random();
-  for (const o of outcomes) {
-    roll -= o.chance * (oneHand && o.offhand ? o.offhand : 1);
-    if (roll < 0) return { kind: o.id };
+  const weights = outcomes.map((o) => o.chance * (oneHand && o.offhand ? o.offhand : 1));
+  const weapon = !owner || Boolean(owner.weapon) && !maxedOut(owner.weapon);
+  const slots = SLOT_IDS.filter((slot) => !owner || !maxedOut(owner.gear && owner.gear[slot]));
+  // остаток после щита, сети, мешка и амулета — оружие и доспех поровну (что из них ещё может выпасть)
+  const items = weapon || slots.length ? Math.max(0, 1 - weights.reduce((sum, w) => sum + w, 0)) : 0;
+  const total = weights.reduce((sum, w) => sum + w, 0) + items;
+  if (total <= 0) return null;
+  let roll = random() * total;
+  for (let i = 0; i < outcomes.length; i++) {
+    roll -= weights[i];
+    if (roll < 0) return { kind: outcomes[i].id };
   }
-  return { kind: 'item', item: makeItem(random, random() < 0.5 ? 'weapon' : 'armor', pick(RARITIES, random)) };
+  const rarity = pick(RARITIES, random);
+  if (weapon && (!slots.length || random() < 0.5)) {
+    return { kind: 'item', item: makeItem(random, 'weapon', rarity, owner ? owner.weapon.type : null) };
+  }
+  return { kind: 'item', item: makeItem(random, 'armor', rarity, slots[Math.floor(random() * slots.length)]) };
+}
+
+// кузня: какой вид оружия выкуется (первое оружие или перековка) — любой, кроме нынешнего
+export function forgeSpin(random, except = null) {
+  const types = TYPES.filter((type) => type !== except);
+  return types[Math.floor(random() * types.length)];
 }
 
 const adjective = (rarity, gender) => (!rarity ? '' : gender === 'n' ? rarity.n : gender === 'f' ? rarity.f
   : gender === 'p' ? rarity.p : rarity.name);
 
+// у заточенного оружия — ступень заточки: «Редкий меч +3»
 export function itemName(item) {
   const rarity = rarityOf(item.rarity);
   const what = item.kind === 'armor' ? ARMOR_SLOTS[item.slot] || ARMOR_SLOTS.body
     : WEAPON_TYPES[item.type] || WEAPON_TYPES.sword;
-  return adjective(rarity, what.gender) + ' ' + what.name;
+  return adjective(rarity, what.gender) + ' ' + what.name + (item.sharp ? ' +' + item.sharp : '');
 }
 
-// коротко для слота инвентаря: редкость видна цветом
-export function slotText(item) {
-  const what = item.kind === 'armor' ? ARMOR_SLOTS[item.slot] || ARMOR_SLOTS.body
-    : WEAPON_TYPES[item.type] || WEAPON_TYPES.sword;
-  return what.name + ' +' + item.power + (item.kind === 'armor' ? '%' : '');
-}
-
-export const itemText = (item) => itemName(item) + ' +' + item.power + (item.kind === 'armor' ? '% ' : ' ')
-  + KINDS[item.kind].stat;
+// урон оружия не показываем (он зависит от силы — виден в карточке), броню — процентом
+export const itemText = (item) => itemName(item) + (item.kind === 'armor' ? ' +' + item.power + '% ' + KINDS.armor.stat : '');
 
 // для рисунка: 0 — ничего, 1–5 — редкость, легендарное — золото, божественное — красное
 export const tierOf = (item) => (item ? rankOf(item) + 1 + (item.rarity === 'legendary' || item.rarity === DIVINE.id ? 1 : 0)
@@ -109,10 +130,12 @@ export const outcomeOf = (id) => OUTCOMES.find((outcome) => outcome.id === id) |
 
 export function cleanItem(raw, kind) {
   if (!raw || typeof raw !== 'object' || !rarityOf(raw.rarity)) return null;
+  if (kind === 'weapon') {
+    // у старых сохранений у оружия было число урона — теперь только вид, редкость и заточка
+    const sharp = Math.max(0, Math.min(SHARPEN.max, Math.trunc(Number(raw.sharp)) || 0));
+    return { kind, rarity: raw.rarity, type: TYPES.includes(raw.type) ? raw.type : 'sword', sharp };
+  }
   const power = Math.trunc(Number(raw.power));
-  if (!(power > 0)) return null;
-  const item = { kind, rarity: raw.rarity, power: Math.min(power, 99) };
-  if (kind === 'weapon') item.type = WEAPON_TYPES[raw.type] ? raw.type : 'sword';
-  if (kind === 'armor') item.slot = ARMOR_SLOTS[raw.slot] ? raw.slot : 'body';
-  return item;
+  if (!(power > 0) || raw.rarity === PLAIN.id) return null;
+  return { kind, rarity: raw.rarity, power: Math.min(power, 99), slot: ARMOR_SLOTS[raw.slot] ? raw.slot : 'body' };
 }

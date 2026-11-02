@@ -1,7 +1,7 @@
 // все звуки синтезируются на лету — файлов нет
 const GAP = { punch: 0.06, cleave: 0.08, chop: 0.08, smash: 0.12, stab: 0.06, pierce: 0.07, maul: 0.08, swoosh: 0.15,
   daze: 0.3, disarm: 0.3, shatter: 0.4, sandburst: 0.3, blind: 0.4, pickup: 0.2, hit: 0.07, crit: 0.1, miss: 0.12, down: 0.15, death: 0.4, horn: 1, level: 0.3, coin: 0.15, join: 0.2,
-  cheer: 1.5, champion: 2, reel: 0.5, jackpot: 1, boo: 0.8, roar: 1.5, growl: 0.6, block: 0.1, crack: 0.5, net: 0.4, whoosh: 0.2, thwack: 0.09, heal: 0.4, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5 };
+  cheer: 1.5, champion: 2, reel: 0.5, jackpot: 1, boo: 0.8, roar: 1.5, growl: 0.6, block: 0.1, crack: 0.5, net: 0.4, whoosh: 0.2, thwack: 0.09, anvil: 0.3, grind: 0.6, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5 };
 
 let audio = null;
 let master = null;
@@ -172,8 +172,18 @@ const SOUNDS = {
     tone(ac, { freq: 180 + Math.random() * 40, to: 90, dur: 0.12, type: 'triangle', gain: 0.22 });
     hiss(ac, { dur: 0.06, gain: 0.18, freq: 1200, q: 1.5 });
   },
-  heal(ac) {
-    [659, 880, 1175].forEach((freq, i) => tone(ac, { freq, dur: 0.5, type: 'sine', gain: 0.1, at: i * 0.09 }));
+  // кузня: удары молота по наковальне — звонкий металл с гулом
+  anvil(ac) {
+    for (let i = 0; i < 3; i++) {
+      tone(ac, { freq: 1760, to: 1700, dur: 0.35, type: 'triangle', gain: 0.1, at: i * 0.32 });
+      tone(ac, { freq: 2640, dur: 0.2, type: 'sine', gain: 0.05, at: i * 0.32 });
+      hiss(ac, { dur: 0.05, gain: 0.25, freq: 3000, q: 1, at: i * 0.32 });
+    }
+  },
+  // точило: шорох камня по стали
+  grind(ac) {
+    hiss(ac, { dur: 0.9, gain: 0.22, freq: 4200, q: 4 });
+    hiss(ac, { dur: 0.9, gain: 0.1, freq: 900, q: 1.2 });
   },
   train(ac) {
     tone(ac, { freq: 330, dur: 0.12, type: 'square', gain: 0.05 });
