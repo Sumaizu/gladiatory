@@ -193,13 +193,3 @@ fieldset { border: 0; margin: 0 0 18px; padding: 0; display: grid; gap: 12px; mi
 
 .footer { display: flex; justify-content: flex-end; }
 
-.alpha {
-  flex: none; align-self: center; padding: 6px 22px; border-radius: 12px; text-align: center;
-  background: #d0201a; color: #fff; font-size: 26px; line-height: 1.2; font-weight: 900; letter-spacing: .04em;
-  text-transform: uppercase; box-shadow: 0 0 0 3px rgba(255, 255, 255, .85), 0 10px 30px rgba(208, 32, 26, .35);
-}
-.alpha span { font-size: 15px; font-weight: 700; letter-spacing: 0; text-transform: none; }
-@media (max-width: 700px) {
-  .alpha { font-size: 20px; }
-  .alpha span { display: block; }
-}
