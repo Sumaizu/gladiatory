@@ -441,25 +441,29 @@ function drawStatus(ctx, g, t) {
   }
 }
 
-// божественный амулет (второй шанс): время от времени от фигуры разлетаются красные лучи-искры
+// божественный амулет (второй шанс): возле гладиатора парит красный кристаллик — медленно облетает его на уровне
+// плеч, покачивается, мерцает; за спиной бледнее
+const CRYSTAL = ['..#..', '.#o#.', '#oO##', '#o###', '##*##', '.###.', '..#..'];
 function drawAmuletSparks(ctx, x, y, t, seed) {
-  const cycle = 1.6, k = ((t + (seed % 100) / 37) % cycle) / cycle;
-  if (k > 0.55) return;
-  const burst = Math.floor((t + (seed % 100) / 37) / cycle), a = k / 0.55;
+  const phase = t * 1.4 + (seed % 100) / 16, behind = Math.sin(phase) < 0;
+  const cx = Math.round((x + Math.cos(phase) * 20) / 2) * 2;
+  const cy = Math.round((y - 50 + Math.sin(phase) * 5 + Math.sin(t * 3.1 + seed) * 3) / 2) * 2;
   ctx.save();
-  ctx.globalAlpha = 1 - a;
-  for (let i = 0; i < 6; i++) {
-    const ang = (i / 6) * Math.PI * 2 + burst * 1.3 + (seed % 7);
-    const r0 = 10 + a * 22, r1 = r0 + 6 + a * 8, cx = x, cy = y - 40;
-    ctx.strokeStyle = i % 2 ? '#ff3b47' : '#ff8a6a';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(cx + Math.cos(ang) * r0, cy + Math.sin(ang) * r0 * 1.3);
-    ctx.lineTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1 * 1.3);
-    ctx.stroke();
-    ctx.fillStyle = '#ffd0c0';
-    ctx.fillRect(Math.round(cx + Math.cos(ang) * r1) - 1, Math.round(cy + Math.sin(ang) * r1 * 1.3) - 1, 2, 2);
-  }
+  ctx.globalAlpha = behind ? 0.55 : 1;
+  const glow = ctx.createRadialGradient(cx, cy, 1, cx, cy, 12);
+  glow.addColorStop(0, 'rgba(255,70,80,.45)');
+  glow.addColorStop(1, 'rgba(255,40,60,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(cx - 12, cy - 12, 24, 24);
+  const twinkle = Math.sin(t * 5 + seed) > 0.6;
+  CRYSTAL.forEach((row, j) => {
+    for (let i = 0; i < row.length; i++) {
+      const c = row[i];
+      if (c === '.') continue;
+      ctx.fillStyle = c === 'O' ? (twinkle ? '#ffffff' : '#ffd0d4') : c === 'o' ? '#ff6b74' : c === '*' ? '#8a0f1c' : j > 4 ? '#a8121f' : '#e0202f';
+      ctx.fillRect(cx - 5 + i * 2, cy - 7 + j * 2, 2, 2);
+    }
+  });
   ctx.restore();
 }
 
