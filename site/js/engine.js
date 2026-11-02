@@ -610,7 +610,7 @@ export class Game {
       if (g.place === 'rest' || g.place === 'heal' || g.place === 'temple') return;
       g.wait -= dt;
       if (g.place === 'train' && g.swing <= 0 && this.random() < dt * 1.6) {
-        g.swing = 0.3;
+        this._startSwing(g, 'hit');
         g.jab = (g.jab || 0) + 1;
       }
       if (g.wait > 0) return;
@@ -754,6 +754,7 @@ export class Game {
       g.weaponOf = g.shieldOf = g.netOf = g.sandOf = g.login;
       g.lost = null;
       g.goFor = null;
+      g.windup = null;
       g.dazed = false;
       g.blindT = 0;
       g.savedNow = false;
@@ -1049,6 +1050,16 @@ export class Game {
         this._runAway(g, standing, dt);
         continue;
       }
+      if (g.windup) {
+        g.walking = false;
+        g.windup.t -= dt;
+        if (g.windup.t <= 0) {
+          const target = g.windup.target;
+          g.windup = null;
+          if (g.weapon && target.fate === 'fight') this._throw(g, target, 'spear');
+        }
+        continue;
+      }
       // оружие на песке: решил подобрать — бежит за ним; остался без оружия — ищет, чем драться
       if (!g.lion && this._seekGround(g, standing, dt)) continue;
       const fighting = standing.filter((s) => s.fate === 'fight');
@@ -1070,7 +1081,9 @@ export class Game {
       const dx = t.x - g.x, dy = t.y - g.y, d = Math.hypot(dx, dy) || 1;
       if (Math.abs(dx) > 2) g.face = dx > 0 ? 1 : -1;
       if (g.cool <= 0 && (this._canThrowSpear(g, t) || this._canThrowFar(g, t, d, dt))) {
-        this._throw(g, t, 'spear');
+        // бросок — с замахом: рука уходит над голову, копьё вылетает в конце замаха
+        g.windup = { t: SPEAR.windup, target: t };
+        this._startSwing(g, 'throw', SPEAR.anim);
         g.cool = attackEvery(g);
         continue;
       }
@@ -1157,7 +1170,7 @@ export class Game {
 
   // копьё улетает из рук (потом лежит на песке), мешок с песком — одноразовый, сеть остаётся у бросившего
   _throw(g, t, kind) {
-    g.swing = 0.3;
+    if (kind !== 'spear') this._startSwing(g, 'toss', 0.45);
     const p = { kind, from: g, to: t, x: g.x, y: g.y - 30, angle: 0,
       speed: kind === 'spear' ? SPEAR.speed : kind === 'sand' ? SAND.speed : NET.speed };
     if (kind === 'spear') {
@@ -1262,6 +1275,14 @@ export class Game {
     return o ? o.home : null;
   }
 
+  // замах на экране: hit — удар, throw — бросок копья, toss — бросок сети или мешка, disarm — рывок трезубцем
+  _startSwing(g, anim, length = 0) {
+    g.anim = anim;
+    g.animType = g.weapon ? g.weapon.type : 'fists';
+    g.swingMax = length || typeOf(g).anim || 0.3;
+    g.swing = g.swingMax;
+  }
+
   // сила бойца с этим оружием в руках: урон в секунду × живучесть (без корня, как в мощи, — чтобы «вдвое хуже»
   // значило вдвое меньше урона)
   _ratingWith(g, item) {
@@ -1359,13 +1380,13 @@ export class Game {
   // щит: шанс отбить любой удар, при отбитии иногда ломается (секира раскалывает его куда чаще)
   _blocked(d, crit = false, a = null) {
     if (!shieldUp(d) || d.stunT > 0 || this.random() >= SHIELD.block) return false;
-    this._emit('block', { login: d.login, x: d.x, y: d.y, crit });
+    this._emit('block', { login: d.login, x: d.x, y: d.y, crit, from: a ? a.login : null });
     const axe = a && typeOf(a).shieldBreak;
     if (this.random() < (axe || SHIELD.breaks * (crit ? SHIELD.critBreaks : 1))) {
       d.shield = false;
       const home = this._homeOf(d.shieldOf);
       if (home) home.shield = false;
-      this._emit('shieldbreak', { login: d.login, x: d.x, y: d.y });
+      this._emit('shieldbreak', { login: d.login, x: d.x, y: d.y, axe: Boolean(axe) });
     }
     return true;
   }
@@ -1392,17 +1413,18 @@ export class Game {
 
   // weapon — чем бьют, если не тем, что в руках (брошенное копьё уже не в руках)
   _attack(a, d, { mult = 1, ranged = false, weapon = null, weaponOf = null } = {}) {
+    const w = weapon ? Object.assign({}, a, { weapon }) : a, type = typeOf(w);
+    const hand = w.weapon ? w.weapon.type : a.lion ? 'claws' : 'fists';
     if (!ranged) {
-      a.swing = 0.3;
+      this._startSwing(a, 'hit');
       a.jab = (a.jab || 0) + 1;
     }
-    const w = weapon ? Object.assign({}, a, { weapon }) : a, type = typeOf(w);
     const stunned = d.stunT > 0;
     // брошенное копьё промахивается чаще (и по запутанному в сети), зато чаще критует; молот и ослеплённый — мажут чаще
     const spear = ranged && type.throw;
     if (this.random() < (stunned ? 0 : dodgeOf(d)) + (spear ? SPEAR.miss : 0) + (type.miss || 0)
       + (a.blindT > 0 ? SAND.miss : 0)) {
-      this._emit('miss', { x: d.x, y: d.y, login: d.login });
+      this._emit('miss', { x: d.x, y: d.y, login: d.login, from: a.login, weapon: hand, ranged });
       return;
     }
     // крит решается до щита: отбитый крит бьёт по щиту сильнее
@@ -1417,7 +1439,7 @@ export class Game {
     d.flash = 0.18;
     a.dealt += dmg;
     if (!a.lion) a.hitsNow = (a.hitsNow || 0) + 1;
-    this._emit('hit', { x: d.x, y: d.y, amount: dmg, crit, login: d.login, from: a.login, ranged });
+    this._emit('hit', { x: d.x, y: d.y, amount: dmg, crit, login: d.login, from: a.login, ranged, weapon: hand });
     if (d.hp <= 0) {
       this._knockOut(d, a, crit, weapon ? { item: weapon, owner: weaponOf } : null);
       return;
@@ -1430,7 +1452,10 @@ export class Game {
       d.target = null;
       this._emit('daze', { login: d.login, x: d.x, y: d.y });
     }
-    if (type.disarm && d.weapon && !d.lion && d !== this.boss && this.random() < type.disarm) this._fling(d, a);
+    if (type.disarm && d.weapon && !d.lion && d !== this.boss && this.random() < type.disarm) {
+      this._fling(d, a);
+      this._startSwing(a, 'disarm');
+    }
     // парагона в испытании кровь не берёт
     if (crit && d !== this.boss && this.random() < BLEED.chance) {
       if (!(d.bleedT > 0)) this._emit('bleed', { login: d.login, x: d.x, y: d.y });
@@ -1464,6 +1489,7 @@ export class Game {
     d.by = a.name;
     d.bleedT = 0;
     d.stunT = 0;
+    d.windup = null;
     this._dropAll(d);
     d.hp = dead ? 0 : Math.max(1, Math.round(hpMax * BEATEN_HP));
     a.kosNow++;

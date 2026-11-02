@@ -790,76 +790,147 @@ export function lyingSprite(look, blanket, dead) {
     () => lyingArt(look, blanket, dead));
 }
 
-// оружие смотрит клинком вверх; pivot — где его держит рука
+// оружие — в пикселях фигурки и в том же стиле: три тона (свет слева, основной, тень справа), без обводки.
+// Смотрит клинком вверх; px, py — где его держит правая рука. Металл клинка — цвета редкости, древки и обмотки — свои
+const WOODS = ['#5a3e26', '#7a5636', '#94693f'];
+const WRAPS = ['#2e241f', '#4a3a30', '#665246'];
+const IRONS = ['#4a4e54', '#6c7176', '#9aa0a6'];
+const GOLDS = ['#8a6a2a', '#b8954a', '#e2c070'];
+
+// вертикальная полоса в один-два пикселя: древко, рукоять, обмотка (через пиксель светлее)
+function pole(p, x, y0, y1, pal, { wide = false, wrap = false } = {}) {
+  for (let y = y0; y <= y1; y++) {
+    const lit = wrap && y % 2 === 0;
+    p.px(x, y, lit ? pal[2] : pal[1]);
+    if (wide) p.px(x + 1, y, lit ? pal[1] : pal[0]);
+  }
+}
+
 function weaponArt(type, tier) {
-  const blade = BLADES[Math.min(BLADES.length - 1, tier)];
+  const m = BLADES[Math.min(BLADES.length - 1, tier)], mL = darker(m, 1.25), mD = darker(m, 0.72), mDD = darker(m, 0.56);
   if (type === 'greatsword') {
-    const p = new Pix(4, 21);
-    p.rect(1, 1, 2, 14, blade);
-    p.px(1, 0, blade);
-    p.rect(2, 1, 1, 14, darker(blade, 0.72));
-    p.rect(0, 15, 4, 1, '#6b5236');
-    p.rect(1, 16, 2, 4, '#4a3426');
-    p.rect(1, 20, 2, 1, '#8a7044');
-    return { canvas: p.canvas(), px: 1.5, py: 18 };
+    // огромный тяжёлый меч, как у Гатса: широкий длинный клинок-плита, грубая гарда, длинная рукоять на две руки
+    const p = new Pix(6, 31);
+    p.rect(2, 0, 2, 1, m);
+    p.px(1, 1, mL);
+    p.rect(2, 1, 2, 1, m);
+    p.px(4, 1, mD);
+    for (let y = 2; y <= 21; y++) {
+      p.px(1, y, mL);
+      p.px(2, y, m);
+      p.px(3, y, y > 3 && y < 19 ? mD : m);
+      p.px(4, y, mDD);
+    }
+    p.rect(0, 22, 6, 1, IRONS[2]);
+    p.rect(0, 23, 6, 1, IRONS[0]);
+    pole(p, 2, 24, 28, WRAPS, { wide: true, wrap: true });
+    p.rect(1, 29, 4, 1, IRONS[1]);
+    p.rect(2, 30, 2, 1, IRONS[0]);
+    return { canvas: p.canvas(), px: 2.5, py: 24.5, k: 1 };
   }
-  if (type === 'axe') {
-    // секира: длинное древко, широкое полукруглое лезвие справа, шип сзади
-    const p = new Pix(8, 22);
-    p.rect(3, 2, 1, 20, '#7a5636');
-    for (const y of [9, 15]) p.px(3, y, '#5a3e26');
-    p.px(3, 1, blade);
-    [1, 2, 3, 4, 4, 3, 2, 1].forEach((w, i) => {
-      p.rect(4, 1 + i, w, 1, blade);
-      p.px(3 + w, 1 + i, darker(blade, 1.25));
-    });
-    p.rect(4, 6, 2, 3, darker(blade, 0.72));
-    p.rect(1, 3, 2, 2, darker(blade, 0.8));
-    p.px(0, 4, darker(blade, 0.8));
-    return { canvas: p.canvas(), px: 3.5, py: 18 };
-  }
-  if (type === 'hammer') {
-    // молот: тяжёлый брусок на коротком древке
-    const p = new Pix(8, 22);
-    p.rect(3, 6, 2, 16, '#7a5636');
-    p.rect(3, 13, 2, 1, '#5a3e26');
-    p.rect(0, 0, 8, 6, blade);
-    p.rect(0, 0, 8, 1, darker(blade, 1.25));
-    p.rect(0, 5, 8, 1, darker(blade, 0.65));
-    p.rect(7, 1, 1, 4, darker(blade, 0.75));
-    p.rect(2, 2, 4, 2, darker(blade, 0.85));
-    return { canvas: p.canvas(), px: 4, py: 18 };
-  }
-  if (type === 'trident') {
-    // трезубец: три зубца на перекладине, длинное древко
-    const p = new Pix(7, 30);
-    p.rect(3, 0, 1, 7, blade);
-    p.rect(0, 2, 1, 5, blade);
-    p.rect(6, 2, 1, 5, blade);
-    p.px(0, 1, darker(blade, 1.2));
-    p.px(6, 1, darker(blade, 1.2));
-    p.rect(0, 7, 7, 1, darker(blade, 0.72));
-    p.rect(3, 8, 1, 22, '#7a5636');
-    for (const y of [16, 24]) p.px(3, y, '#5a3e26');
-    return { canvas: p.canvas(), px: 3, py: 20 };
+  if (type === 'sword') {
+    // гладиус средней длины: узкий клинок с острием, латунная гарда, рукоять с перехватом, шарик на конце
+    const p = new Pix(4, 19);
+    p.px(1, 0, mL);
+    for (let y = 1; y <= 12; y++) {
+      p.px(1, y, y < 9 ? mL : m);
+      p.px(2, y, mD);
+    }
+    p.rect(0, 13, 4, 1, GOLDS[1]);
+    p.px(0, 13, GOLDS[2]);
+    pole(p, 1, 14, 16, WOODS, { wide: true, wrap: true });
+    p.rect(1, 17, 2, 1, GOLDS[2]);
+    p.rect(1, 18, 2, 1, GOLDS[0]);
+    return { canvas: p.canvas(), px: 1.5, py: 14.5, k: 1 };
   }
   if (type === 'spear') {
-    const p = new Pix(3, 30);
-    p.px(1, 0, blade);
-    p.rect(0, 1, 3, 3, blade);
-    p.rect(2, 1, 1, 3, darker(blade, 0.72));
-    p.px(1, 4, darker(blade, 0.8));
-    p.rect(1, 5, 1, 25, '#7a5636');
-    for (const y of [14, 22]) p.px(1, y, '#5a3e26');
-    return { canvas: p.canvas(), px: 1, py: 20 };
+    // копьё: листовидный наконечник, железная втулка, древко с обмоткой посередине
+    const p = new Pix(3, 33);
+    p.px(1, 0, mL);
+    for (let y = 1; y <= 4; y++) {
+      p.px(0, y, mL);
+      p.px(1, y, m);
+      p.px(2, y, mD);
+    }
+    p.px(1, 5, mD);
+    p.px(1, 6, IRONS[2]);
+    p.px(1, 7, IRONS[0]);
+    pole(p, 1, 8, 31, WOODS);
+    pole(p, 1, 16, 20, WRAPS, { wrap: true });
+    p.px(1, 32, IRONS[1]);
+    return { canvas: p.canvas(), px: 1, py: 18, k: 1 };
   }
-  const p = new Pix(3, 13);
-  p.rect(1, 0, 1, 8, blade);
-  p.rect(2, 1, 1, 7, darker(blade, 0.72));
-  p.rect(0, 8, 3, 1, '#6b5236');
-  p.rect(1, 9, 1, 3, '#4a3426');
-  p.px(1, 12, '#8a7044');
-  return { canvas: p.canvas(), px: 1, py: 11 };
+  if (type === 'trident') {
+    // трезубец: средний зуб длиннее боковых, у всех жала, перекладина, длинное древко
+    const p = new Pix(7, 33);
+    p.px(3, 0, mL);
+    p.rect(2, 1, 3, 1, m);
+    p.px(4, 1, mD);
+    for (let y = 2; y <= 6; y++) p.px(3, y, y < 4 ? mL : m);
+    for (const x of [0, 6]) {
+      p.px(x, 2, mL);
+      for (let y = 3; y <= 6; y++) p.px(x, y, x ? mD : m);
+    }
+    p.px(1, 3, mD);
+    p.px(5, 3, mD);
+    p.rect(1, 7, 5, 1, mD);
+    p.px(0, 7, mDD);
+    p.px(6, 7, mDD);
+    p.px(3, 8, IRONS[2]);
+    pole(p, 3, 9, 31, WOODS);
+    pole(p, 3, 17, 21, WRAPS, { wrap: true });
+    p.px(3, 32, IRONS[1]);
+    return { canvas: p.canvas(), px: 3, py: 19, k: 1 };
+  }
+  if (type === 'hammer') {
+    // боевой молот: брусок с широкими бойками на концах, железные полосы на древке, обмотка снизу
+    const p = new Pix(9, 29);
+    for (const x of [0, 7]) {
+      p.rect(x, 0, 2, 5, m);
+      p.rect(x, 0, 2, 1, mL);
+      p.rect(x, 4, 2, 1, mDD);
+      p.px(x + 1, 2, mD);
+    }
+    p.rect(2, 1, 5, 3, m);
+    p.rect(2, 1, 5, 1, mL);
+    p.rect(2, 3, 5, 1, mD);
+    p.px(4, 2, mDD);
+    pole(p, 4, 5, 8, IRONS);
+    pole(p, 4, 9, 19, WOODS);
+    p.rect(3, 20, 3, 1, IRONS[1]);
+    pole(p, 4, 21, 26, WRAPS, { wrap: true });
+    p.rect(3, 27, 3, 1, IRONS[1]);
+    p.px(4, 28, IRONS[0]);
+    return { canvas: p.canvas(), px: 4, py: 21.5, k: 1 };
+  }
+  if (type === 'axe') {
+    // двусторонняя секира: две лопасти веером (у втулки узкие, к краю — высокая дуга), шип сверху, древко с перевязью
+    const p = new Pix(13, 30);
+    p.px(6, 0, mL);
+    for (const side of [-1, 1]) {
+      for (let u = 2; u <= 6; u++) {
+        const h = Math.round(0.6 + (u - 1) * 0.95), x = 6 + side * u;
+        for (let y = 6 - h; y <= 6 + h; y++) {
+          const edge = u === 6, top = y < 6 - h + 1;
+          p.px(x, y, edge ? mL : top ? m : y > 6 + h - 1 ? mDD : y > 6 ? mD : m);
+        }
+      }
+      // гравировка — тёмная черта посередине лопасти
+      p.px(6 + side * 4, 6, mDD);
+    }
+    p.rect(5, 1, 3, 10, IRONS[1]);
+    p.rect(5, 1, 1, 10, IRONS[2]);
+    p.rect(7, 1, 1, 10, IRONS[0]);
+    pole(p, 6, 11, 27, WOODS);
+    for (const y of [15, 18, 21, 24]) p.px(6, y, WRAPS[2]);
+    p.rect(5, 12, 3, 1, IRONS[1]);
+    p.rect(5, 19, 3, 1, IRONS[1]);
+    p.rect(5, 28, 3, 1, IRONS[1]);
+    p.px(6, 29, IRONS[0]);
+    return { canvas: p.canvas(), px: 6, py: 22, k: 1 };
+  }
+  if (type === 'claws') return { canvas: new Pix(1, 1).canvas(), px: 0, py: 0, k: 1 };
+  return weaponArt('sword', tier);
 }
 
 // сеть: витая верёвка в два тона, узлы темнее, край — толстый шнур, по краю свинцовые грузила с бликом
@@ -1187,4 +1258,4 @@ export function gladiatorSprite(look, pose, dead = false, flash = false) {
   });
 }
 
-export const weaponSprite = (type, tier) => remember('weapon:' + type + ':' + tier, () => weaponArt(type, tier));
+export const weaponSprite = (type, tier) => remember('weapon3:' + type + ':' + tier, () => weaponArt(type, tier));

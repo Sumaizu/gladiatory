@@ -63,18 +63,19 @@ export function maxHp(g) {
 // виды оружия из гачи. rate — во сколько раз реже удар, dmg — множитель урона, reach — дальность,
 // hands: 2 — щит не работает, cleave — бьёт всех в секторе: arc градусов, на reach досягаемостей вперёд, pierce — какую долю брони копьё пробивает в ближнем бою, throwPierce — брошенное, throw — множитель урона броска,
 // shieldBreak — с каким шансом отбитый щитом удар раскалывает щит, miss — прибавка к промаху,
-// stun — шанс оглушить при попадании на time секунд, disarm — шанс выбить у врага оружие из рук
+// stun — шанс оглушить при попадании на time секунд, disarm — шанс выбить у врага оружие из рук,
+// anim — сколько секунд длится замах на экране (тяжёлое — дольше; удар приходится примерно на треть замаха)
 export const WEAPON_TYPES = {
-  fists: { name: 'кулаки', gender: 'p', rate: 0.85, dmg: 0.6, reach: 0.85, crit: 0, hands: 1 },
-  sword: { name: 'меч', gender: 'm', rate: 0.9, dmg: 1.15, reach: 1, crit: 0, hands: 1 },
+  fists: { name: 'кулаки', gender: 'p', rate: 0.85, dmg: 0.6, reach: 0.85, crit: 0, hands: 1, anim: 0.3 },
+  sword: { name: 'меч', gender: 'm', rate: 0.9, dmg: 1.15, reach: 1, crit: 0, hands: 1, anim: 0.42 },
   greatsword: { name: 'двуручный меч', gender: 'm', rate: 1.5, dmg: 2.1, reach: 1.1, crit: 0.1, hands: 2,
-    cleave: { reach: 1.5, arc: 100 } },
-  claws: { name: 'когти', gender: 'p', rate: 0.95, dmg: 1.15, reach: 1.2, crit: 0.1, hands: 2 },
-  spear: { name: 'копьё', gender: 'n', rate: 1.1, dmg: 1.3, reach: 1.5, crit: 0, hands: 1, pierce: 0.2, throw: 1.7, throwPierce: 0.5 },
-  axe: { name: 'секира', gender: 'f', rate: 1.5, dmg: 2.15, reach: 1.05, crit: 0.05, hands: 2, shieldBreak: 0.6 },
+    cleave: { reach: 1.5, arc: 100 }, anim: 0.7 },
+  claws: { name: 'когти', gender: 'p', rate: 0.95, dmg: 1.15, reach: 1.2, crit: 0.1, hands: 2, anim: 0.3 },
+  spear: { name: 'копьё', gender: 'n', rate: 1.1, dmg: 1.3, reach: 1.5, crit: 0, hands: 1, pierce: 0.2, throw: 1.7, throwPierce: 0.5, anim: 0.42 },
+  axe: { name: 'секира', gender: 'f', rate: 1.5, dmg: 2.15, reach: 1.05, crit: 0.05, hands: 2, shieldBreak: 0.6, anim: 0.65 },
   hammer: { name: 'молот', gender: 'm', rate: 1.5, dmg: 2.5, reach: 1, crit: 0, hands: 2, miss: 0.12,
-    stun: { chance: 0.35, time: 1.5 } },
-  trident: { name: 'трезубец', gender: 'm', rate: 1.05, dmg: 1.2, reach: 1.4, crit: 0, hands: 1, disarm: 0.15 },
+    stun: { chance: 0.35, time: 1.5 }, anim: 0.75 },
+  trident: { name: 'трезубец', gender: 'm', rate: 1.05, dmg: 1.2, reach: 1.4, crit: 0, hands: 1, disarm: 0.15, anim: 0.45 },
 };
 // без оружия — кулаки
 export const typeOf = (g) => (g.weapon ? WEAPON_TYPES[g.weapon.type] || WEAPON_TYPES.sword : WEAPON_TYPES.fists);
@@ -93,8 +94,9 @@ export const NET = { stun: 2, range: [50, 170], chance: 2.5, close: 0.5, speed: 
 // cool — сколько секунд после подбора копьё нельзя метнуть снова; копьё метают в израненного беглеца (low), а ещё —
 // в цель дальше far: каждую секунду с шансом farChance. Брошенное копьё критует в critMult раз чаще, но промахивается
 // на miss чаще (прибавка к увороту цели)
+// windup — сколько секунд замах перед броском (рука над головой), anim — весь бросок на экране вместе с доводкой
 export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, cool: 5, far: 100, farChance: 2,
-  critMult: 2, miss: 0.2 };
+  critMult: 2, miss: 0.2, windup: 0.35, anim: 0.65 };
 // мешок с песком: одноразовый, во второй руке. Бросают в цель с range, когда рядом с ней ещё враги (шанс crowd в
 // секунду) или реже в одиночку (alone); песок слепит всех врагов бросившего в radius на time секунд — их удары и броски
 // промахиваются на miss чаще

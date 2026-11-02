@@ -1,4 +1,4 @@
-import { TEAMS, WEAPON_TYPES, maxHp } from './balance.js';
+import { TEAMS, maxHp } from './balance.js';
 import { ARENA, BAYS, BAY_W, COLUMNS, DUMMIES, FIELD_H, FIELD_W, bayX } from './places.js';
 import { tierOf } from './gacha.js';
 import { RAINBOW, RAINBOW_CYCLE, RAINBOW_W, SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
@@ -254,16 +254,49 @@ export function drawCrowd(ctx, people, t, roar) {
 const lerp = (a, b, k) => a + (b - a) * k;
 const at = (p, q, k) => [lerp(p[0], q[0], k), lerp(p[1], q[1], k)];
 const SHOULDER = { far: [11, 13], near: [15, 13] };
-// точки в координатах спрайта гладиатора (ступни на y = 39, центр x = 12)
-const GRIP = {
-  sword: { idle: [8, 19], hit: [20, 14], turn: [0.5, 2.1] },
-  spear: { idle: [12, 18], hit: [19, 17], turn: [1.35, 1.45] },
-  greatsword: { idle: [16, 19], hit: [19, 16], turn: [0.3, 2.4] },
-  axe: { idle: [16, 19], hit: [19, 16], turn: [0.3, 2.4] },
-  hammer: { idle: [16, 19], hit: [19, 16], turn: [0.2, 2.3] },
-  trident: { idle: [12, 18], hit: [19, 17], turn: [1.35, 1.45] },
-  none: { idle: [9, 19], hit: [9, 19], turn: [0, 0] },
+
+// позы и замахи по ключевым кадрам: [доля анимации, правая кисть (в координатах спрайта: ступни на y = 39, центр
+// x = 12, смотрит вправо), наклон оружия (0 — вверх, по часовой — вперёд)]. Первый кадр — поза в покое.
+// two — на сколько пикселей вдоль рукояти ниже правой держит левая рука (у двуручного)
+const HALF_PI = Math.PI / 2;
+export const ANIMS = {
+  // гладиус: правой рукой чуть перед собой; удар — с правого плеча наискось вперёд-вниз
+  sword: { hit: [[0, [16, 21], 0.55], [0.14, [12, 13], -0.7], [0.3, [22, 20], 2.05], [0.55, [21, 21], 2.2], [1, [16, 21], 0.55]] },
+  // двуручный меч: обеими руками у груди, клинок лежит на правом плече; удар — с плеча через верх наискось вниз перед собой
+  greatsword: { two: 4, hit: [[0, [15, 22], -0.62], [0.15, [13, 15], -1.05], [0.3, [21, 23], 2.15], [0.6, [21, 24], 2.4],
+    [1, [15, 22], -0.62]] },
+  // секира: на правом плече; удар — поднять над головой и рубануть сверху вниз
+  axe: { two: 4, hit: [[0, [15, 22], -0.78], [0.16, [14, 10], -0.12], [0.3, [21, 22], 1.95], [0.6, [21, 23], 2.1],
+    [1, [15, 22], -0.78]] },
+  // молот: обеими руками перед грудью, стоит вертикально (голова — перед лицом, не на нём); удар — завести за спину
+  // и через верх обрушить вниз перед собой
+  hammer: { two: 4, hit: [[0, [18, 24], 0.1], [0.12, [11, 16], -2.55], [0.21, [13, 8], -0.35], [0.3, [21, 23], 1.95],
+    [0.62, [21, 24], 2.05], [1, [18, 24], 0.1]] },
+  // копьё: правой рукой за середину древка, стоймя; удар — опустить и ткнуть вперёд, выбросив кисть;
+  // бросок — рука над головой, отвести назад и метнуть с замахом (копьё вылетает на 0,54 анимации)
+  spear: { hit: [[0, [15, 21], 0.12], [0.12, [11, 20], HALF_PI], [0.3, [23, 19], HALF_PI], [0.55, [20, 20], HALF_PI],
+    [1, [15, 21], 0.12]],
+    throw: [[0, [15, 21], 0.12], [0.22, [11, 7], 1.45], [0.48, [6, 7], 1.3], [0.56, [21, 8], 1.65], [0.8, [20, 16], 1.8],
+      [1, [15, 21], 0.12]] },
+  // трезубец: за середину древка; удар — снизу вперёд-вверх; выбивая оружие — ткнуть вперёд-вверх и резко рвануть
+  // на себя и назад
+  trident: { hit: [[0, [15, 21], 0.25], [0.13, [13, 25], 2.25], [0.3, [22, 17], 1.15], [0.55, [21, 18], 1.25],
+    [1, [15, 21], 0.25]],
+    disarm: [[0, [15, 21], 0.25], [0.18, [22, 15], 1.05], [0.36, [8, 14], -0.65], [0.7, [10, 17], -0.35],
+      [1, [15, 21], 0.25]] },
 };
+// бросок сети или мешка — левой рукой: отвести и швырнуть вперёд
+const TOSS = [[0, [17, 17]], [0.3, [12, 10]], [0.55, [23, 13]], [1, [17, 17]]];
+
+const ease = (k) => k * k * (3 - 2 * k);
+// где кисть и как повёрнуто оружие в долю phase анимации
+export function pose(keys, phase) {
+  let i = 0;
+  while (i < keys.length - 2 && phase > keys[i + 1][0]) i++;
+  const [t0, h0, r0] = keys[i], [t1, h1, r1] = keys[i + 1];
+  const k = ease(Math.max(0, Math.min(1, (phase - t0) / Math.max(1e-6, t1 - t0))));
+  return { hand: at(h0, h1, k), turn: r0 === undefined ? 0 : lerp(r0, r1, k) };
+}
 
 function limb(ctx, from, to, color, guard = null) {
   const n = Math.max(2, Math.ceil(Math.hypot(to[0] - from[0], to[1] - from[1]) * 1.5));
@@ -283,12 +316,14 @@ function fist(ctx, p, color) {
 
 function drawArms(ctx, g, look, bob) {
   const skin = look.skin, skinD = darker(skin, 0.8), guard = '#3f3833';
-  const swing = g.swing > 0 ? Math.sin((1 - g.swing / 0.3) * Math.PI) : 0;
+  const length = g.swingMax || 0.3, phase = g.swing > 0 ? 1 - g.swing / length : 0;
   ctx.save();
   ctx.translate(-SPRITE.x, -SPRITE.foot - bob);
-  const type = g.weapon ? g.weapon.type : 'fists';
+  // что в руке: оружие; после броска копья (рука ещё доводит замах) — пустая рука по кадрам копья
+  const type = g.weapon ? g.weapon.type : g.swing > 0 && g.anim === 'throw' ? 'spear' : 'fists';
   if (type === 'fists') {
     // кулаки: дальний чуть выше, ближний ниже; бьют по очереди
+    const swing = g.swing > 0 && g.anim === 'hit' ? Math.sin(phase * Math.PI) : 0;
     const jab = (g.jab || 0) % 2;
     const far = jab === 0 ? at([16, 14], [23, 13], swing) : [16, 14];
     const near = jab === 1 ? at([18, 17], [24, 15], swing) : [18, 17];
@@ -299,47 +334,55 @@ function drawArms(ctx, g, look, bob) {
     ctx.restore();
     return;
   }
-  const grip = GRIP[type] || GRIP.sword, hand = at(grip.idle, grip.hit, swing);
+  const anim = ANIMS[type] || ANIMS.sword;
+  const keys = g.swing > 0 && anim[g.anim] && (g.animType || type) === type ? anim[g.anim] : anim.hit;
+  const { hand, turn } = pose(keys, g.swing > 0 && keys !== anim.hit || g.anim === 'hit' ? phase : 0);
   const weaponAt = () => {
-    if (type === 'none') return;
+    if (!g.weapon) return;
     const art = weaponSprite(type, tierOf(g.weapon));
     ctx.save();
     ctx.translate(Math.round(hand[0]), Math.round(hand[1]));
-    ctx.rotate(lerp(grip.turn[0], grip.turn[1], swing));
+    ctx.rotate(turn);
+    ctx.scale(art.k, art.k);
     ctx.drawImage(art.canvas, -art.px, -art.py);
     ctx.restore();
   };
-  if ((WEAPON_TYPES[type] || {}).hands === 2) {
-    // двуручное — обеими руками перед собой
-    limb(ctx, SHOULDER.far, [hand[0] - 1, hand[1]], skinD, guard);
+  if (anim.two) {
+    // двуручное — обеими руками: правая у гарды, левая ниже по рукояти
+    const low = [hand[0] - Math.sin(turn) * anim.two, hand[1] + Math.cos(turn) * anim.two];
+    limb(ctx, SHOULDER.far, hand, skinD, guard);
+    fist(ctx, hand, skinD);
     weaponAt();
-    limb(ctx, SHOULDER.near, [hand[0], hand[1] + 1], skin);
-    fist(ctx, [hand[0], hand[1] + 1], skin);
+    limb(ctx, SHOULDER.near, low, skin);
+    fist(ctx, low, skin);
     ctx.restore();
     return;
   }
   limb(ctx, SHOULDER.far, hand, skinD, guard);
   weaponAt();
   fist(ctx, hand, skinD);
-  // ближняя рука: щит, моток сети или пустая у груди
+  // левая рука: щит, моток сети, мешок или пустая у груди; бросая сеть или мешок — замах вперёд
+  const tossing = g.swing > 0 && g.anim === 'toss';
+  const rest = tossing ? pose(TOSS, phase).hand : null;
   if (look.shield !== 'none') {
-    const pos = [17 + swing, 17];
+    const pos = [17 + (g.swing > 0 && g.anim === 'hit' ? Math.sin(phase * Math.PI) : 0), 17];
     limb(ctx, SHOULDER.near, pos, skin);
     const art = shieldSprite(look.shield, look.design, look.color);
     ctx.drawImage(art, Math.round(pos[0] - art.width / 2 + 1), Math.round(pos[1] - art.height / 2));
-  } else if (look.net) {
+  } else if (look.net && !tossing) {
     const pos = [17, 16];
     limb(ctx, SHOULDER.near, pos, skin);
     ctx.drawImage(netHandSprite(), Math.round(pos[0]) - 4, Math.round(pos[1]) - 1);
     fist(ctx, pos, skin);
-  } else if (look.sand) {
+  } else if (look.sand && !tossing) {
     const pos = [17, 18];
     limb(ctx, SHOULDER.near, pos, skin);
     ctx.drawImage(sandSprite(), Math.round(pos[0]) - 4, Math.round(pos[1]) - 1);
     fist(ctx, pos, skin);
   } else {
-    limb(ctx, SHOULDER.near, [17, 17], skin);
-    fist(ctx, [17, 17], skin);
+    const pos = rest || [17, 17];
+    limb(ctx, SHOULDER.near, pos, skin);
+    fist(ctx, pos, skin);
   }
   ctx.restore();
 }
@@ -458,11 +501,11 @@ export function drawThrown(ctx, game) {
     ctx.scale(P, P);
     ctx.fillStyle = 'rgba(30,15,8,.25)';
     if (it.kind === 'weapon') {
-      const art = weaponSprite(it.item.type, tierOf(it.item));
-      const h = art.canvas.height;
-      ctx.fillRect(-Math.round(h / 2), 0, h, 2);
+      const art = weaponSprite(it.item.type, tierOf(it.item)), h = art.canvas.height * art.k;
+      ctx.fillRect(-Math.round(h / 2), 0, Math.round(h), 2);
       ctx.rotate(Math.PI / 2);
-      ctx.drawImage(art.canvas, -art.px, -Math.round(h / 2));
+      ctx.scale(art.k, art.k);
+      ctx.drawImage(art.canvas, -art.canvas.width / 2, -art.canvas.height / 2 - 4);
     } else if (it.kind === 'shield') {
       const owner = game.members.get(it.owner) || { login: it.owner, color: '#8a7a66' };
       const look = shieldLookOf(owner, hashOf(owner.login)), art = shieldSprite(look.shape, look.design, look.color);
@@ -485,12 +528,14 @@ export function drawThrown(ctx, game) {
     if (p.kind === 'spear') {
       const art = weaponSprite(p.item ? p.item.type : 'spear', tierOf(p.item));
       ctx.rotate(p.angle + Math.PI / 2);
-      ctx.drawImage(art.canvas, -art.px, -15);
+      ctx.scale(art.k, art.k);
+      ctx.drawImage(art.canvas, -art.px, -art.canvas.height / 2);
     } else if (p.kind === 'fling') {
       // выбитое оружие кувыркается в полёте
       const art = weaponSprite(p.item.type, tierOf(p.item));
       ctx.rotate(p.x * 0.08);
-      ctx.drawImage(art.canvas, -art.px, -Math.round(art.canvas.height / 2));
+      ctx.scale(art.k, art.k);
+      ctx.drawImage(art.canvas, -art.px, -art.canvas.height / 2);
     } else if (p.kind === 'sand') {
       ctx.rotate(p.x * 0.06);
       ctx.drawImage(sandSprite(), -4, -4);

@@ -1,5 +1,6 @@
 // все звуки синтезируются на лету — файлов нет
-const GAP = { hit: 0.07, crit: 0.1, miss: 0.12, down: 0.15, death: 0.4, horn: 1, level: 0.3, coin: 0.15, join: 0.2,
+const GAP = { punch: 0.06, cleave: 0.08, chop: 0.08, smash: 0.12, stab: 0.06, pierce: 0.07, maul: 0.08, swoosh: 0.15,
+  daze: 0.3, disarm: 0.3, shatter: 0.4, sandburst: 0.3, blind: 0.4, pickup: 0.2, hit: 0.07, crit: 0.1, miss: 0.12, down: 0.15, death: 0.4, horn: 1, level: 0.3, coin: 0.15, join: 0.2,
   cheer: 1.5, champion: 2, reel: 0.5, jackpot: 1, boo: 0.8, roar: 1.5, growl: 0.6, block: 0.1, crack: 0.5, net: 0.4, whoosh: 0.2, thwack: 0.09, heal: 0.4, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5 };
 
 let audio = null;
@@ -59,6 +60,81 @@ const SOUNDS = {
   hit(ac) {
     hiss(ac, { dur: 0.08, gain: 0.35, freq: 2600, q: 2 });
     tone(ac, { freq: 1400 + Math.random() * 500, dur: 0.12, type: 'triangle', gain: 0.12 });
+  },
+  // кулак: глухой шлепок
+  punch(ac) {
+    tone(ac, { freq: 170, to: 70, dur: 0.1, type: 'sine', gain: 0.45 });
+    hiss(ac, { dur: 0.06, gain: 0.2, freq: 700, q: 0.7, kind: 'lowpass' });
+  },
+  // двуручный меч: тяжёлый рассекающий свист и низкий удар
+  cleave(ac) {
+    hiss(ac, { dur: 0.2, gain: 0.4, freq: 1500, q: 1.1 });
+    tone(ac, { freq: 130, to: 55, dur: 0.24, type: 'sawtooth', gain: 0.11 });
+    tone(ac, { freq: 980, to: 760, dur: 0.22, type: 'triangle', gain: 0.07 });
+  },
+  // секира: сочный рубящий «тук» с треском
+  chop(ac) {
+    tone(ac, { freq: 210, to: 80, dur: 0.15, type: 'square', gain: 0.12 });
+    hiss(ac, { dur: 0.12, gain: 0.42, freq: 950, q: 1.6 });
+    tone(ac, { freq: 640, dur: 0.16, type: 'triangle', gain: 0.06, at: 0.02 });
+  },
+  // молот: глухой удар с гулом и звоном металла
+  smash(ac) {
+    tone(ac, { freq: 95, to: 38, dur: 0.42, type: 'sine', gain: 0.65 });
+    hiss(ac, { dur: 0.22, gain: 0.35, freq: 320, q: 0.7, kind: 'lowpass' });
+    tone(ac, { freq: 430, to: 390, dur: 0.5, type: 'triangle', gain: 0.07, at: 0.01 });
+  },
+  // копьё: короткий острый укол
+  stab(ac) {
+    hiss(ac, { dur: 0.06, gain: 0.36, freq: 3800, q: 3 });
+    tone(ac, { freq: 1800, to: 900, dur: 0.07, type: 'square', gain: 0.05 });
+  },
+  // трезубец: укол с тройным металлическим звоном
+  pierce(ac) {
+    hiss(ac, { dur: 0.07, gain: 0.3, freq: 3000, q: 2.5 });
+    [1700, 2150, 2600].forEach((freq, i) => tone(ac, { freq, dur: 0.22, type: 'triangle', gain: 0.045, at: i * 0.02 }));
+  },
+  // лапа льва: рвущий удар
+  maul(ac) {
+    hiss(ac, { dur: 0.14, gain: 0.35, freq: 1100, q: 0.9 });
+    tone(ac, { freq: 150, to: 80, dur: 0.16, type: 'sawtooth', gain: 0.08 });
+  },
+  // промах тяжёлым оружием — низкий гул воздуха
+  swoosh(ac) {
+    hiss(ac, { dur: 0.3, gain: 0.24, freq: 600, q: 0.8 });
+  },
+  // оглушение молотом: звон в голове и «плывущий» тон
+  daze(ac) {
+    tone(ac, { freq: 1250, to: 620, dur: 0.4, type: 'sine', gain: 0.12 });
+    tone(ac, { freq: 1560, to: 780, dur: 0.4, type: 'sine', gain: 0.07, at: 0.07 });
+    tone(ac, { freq: 300, to: 210, dur: 0.15, type: 'square', gain: 0.07 });
+  },
+  // трезубец выбил оружие: лязг и свист улетающего клинка
+  disarm(ac) {
+    tone(ac, { freq: 1320, dur: 0.5, type: 'triangle', gain: 0.12 });
+    tone(ac, { freq: 1980, dur: 0.4, type: 'triangle', gain: 0.06 });
+    hiss(ac, { dur: 0.35, gain: 0.2, freq: 1500, q: 0.8, at: 0.06 });
+  },
+  // секира раскалывает щит: треск дерева и разлетающиеся щепки
+  shatter(ac) {
+    hiss(ac, { dur: 0.35, gain: 0.48, freq: 1200, q: 0.7 });
+    tone(ac, { freq: 260, to: 60, dur: 0.35, type: 'sawtooth', gain: 0.1 });
+    for (let i = 0; i < 4; i++) tone(ac, { freq: 1800 + Math.random() * 1600, dur: 0.05, type: 'square', gain: 0.03, at: 0.04 + i * 0.05 });
+  },
+  // мешок с песком лопается: глухой хлопок и шорох песка
+  sandburst(ac) {
+    tone(ac, { freq: 120, to: 50, dur: 0.18, type: 'sine', gain: 0.4 });
+    hiss(ac, { dur: 0.45, gain: 0.4, freq: 600, q: 0.6, kind: 'lowpass' });
+    hiss(ac, { dur: 0.7, gain: 0.18, freq: 4200, q: 0.6, at: 0.05 });
+  },
+  // ослеп: тонкий звон в ушах
+  blind(ac) {
+    tone(ac, { freq: 2600, to: 2400, dur: 0.6, type: 'sine', gain: 0.035 });
+  },
+  // подобрал оружие с песка
+  pickup(ac) {
+    tone(ac, { freq: 880, dur: 0.06, type: 'triangle', gain: 0.06 });
+    tone(ac, { freq: 1320, dur: 0.1, type: 'triangle', gain: 0.05, at: 0.05 });
   },
   crit(ac) {
     hiss(ac, { dur: 0.12, gain: 0.45, freq: 3200, q: 3 });
@@ -191,12 +267,13 @@ export function play(name) {
 export function playAll(level) {
   const was = [enabled, volume];
   setSound(true, level);
-  const names = ['horn', 'thwack', 'hit', 'crit', 'down', 'heal', 'level', 'death', 'champion'];
+  const names = ['horn', 'hit', 'cleave', 'chop', 'smash', 'stab', 'pierce', 'crit', 'daze', 'disarm', 'sandburst', 'down',
+    'level', 'death', 'champion'];
   names.forEach((name, i) => setTimeout(() => {
     lastPlayed.delete(name);
     play(name);
     if (i === names.length - 1) setSound(was[0], was[1] * 100);
-  }, i * 450));
+  }, i * 400));
 }
 
 // фоновый шум: гул трибун на арене (громче, когда ревут), почти тишина в лудусе

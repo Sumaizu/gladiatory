@@ -16,6 +16,13 @@ const FLOAT_TIME = 1.1;
 const PIXEL = 1;
 const BLOOD = ['#8f1414', '#a8191b', '#6e0d0f', '#c22a22'];
 const SAND_COLORS = ['#fff6d8', '#f3e2b3', '#d6b46e', '#a8804a', '#7a5a30'];
+// у каждого оружия свой звук удара; тяжёлое при промахе гудит ниже
+const HIT_SOUND = { fists: 'punch', sword: 'hit', greatsword: 'cleave', axe: 'chop', hammer: 'smash', spear: 'stab',
+  trident: 'pierce', claws: 'maul' };
+const HEAVY = new Set(['greatsword', 'axe', 'hammer']);
+// на какой доле замаха оружие доходит до цели (как в ключевых кадрах ANIMS в draw.js)
+const IMPACT = 0.3;
+const MELEE = new Set(['hit', 'miss', 'block']);
 const shadeBlood = (hex, k) => '#' + [1, 3, 5].map((i) => Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16)
   * k))).toString(16).padStart(2, '0')).join('');
 const WHERE = {
@@ -255,6 +262,7 @@ export class View {
     this.game = null;
     this.seen = 0;
     this.floats = [];
+    this.pending = [];
     this.bursts = [];
     this.dummyHits = DUMMIES.map(() => 0);
     this.domIn = 0;
@@ -319,6 +327,7 @@ export class View {
       this.game = game;
       this.seen = game ? game.eventId : 0;
       this.floats = [];
+      this.pending = [];
       this.keys = {};
       this.scene = null;
       if (this.cardNodes) for (const box of this.cardNodes.values()) box.remove();
@@ -357,12 +366,21 @@ export class View {
     this.tick = left;
   }
 
+  // удар в ближнем бою показываем (цифра, кровь, звук) в миг, когда оружие в замахе доходит до цели, —
+  // примерно на трети замаха; тяжёлое оружие замахивается дольше
   _events(game) {
     for (const event of game.events) {
       if (event.id <= this.seen) continue;
       this.seen = event.id;
-      this._event(game, event);
+      const a = MELEE.has(event.type) && event.from && !event.ranged ? game.fighters.find((f) => f.login === event.from) : null;
+      const wait = a && a.swing > 0 && a.anim === 'hit' ? a.swingMax * IMPACT - (a.swingMax - a.swing) : 0;
+      if (wait > 0.02) this.pending.push({ at: this.time + wait, event });
+      else this._event(game, event);
     }
+    if (!this.pending.length) return;
+    const due = this.pending.filter((p) => p.at <= this.time);
+    this.pending = this.pending.filter((p) => p.at > this.time);
+    for (const p of due) this._event(game, p.event);
   }
 
   _event(game, e) {
@@ -375,10 +393,11 @@ export class View {
       this.floats.push({ x: e.x + (Math.random() - 0.5) * 14, y: e.y - 46, text: String(e.amount), crit: e.crit,
         life: FLOAT_TIME, kind: 'hit' });
       this.roar = Math.min(1, this.roar + (e.crit ? 0.25 : 0.05));
-      sound(e.crit ? 'crit' : 'hit');
+      sound(HIT_SOUND[e.weapon] || 'hit');
+      if (e.crit) sound('crit');
     } else if (e.type === 'miss') {
       this.floats.push({ x: e.x, y: e.y - 46, text: 'мимо', life: FLOAT_TIME * 0.8, kind: 'miss' });
-      sound('miss');
+      sound(HEAVY.has(e.weapon) ? 'swoosh' : 'miss');
     } else if (e.type === 'down') {
       this._bleed(e.x, e.y - 12, e.fate === 'dead' ? 22 : 8);
       if (e.fate === 'dead') this._stain(e.x + 4, e.y + 2, 13);
@@ -416,8 +435,8 @@ export class View {
       this.floats.push({ x: e.x, y: e.y - 60, text: 'блок!', life: 1.1, kind: 'block' });
       sound('block');
     } else if (e.type === 'shieldbreak') {
-      this.floats.push({ x: e.x, y: e.y - 78, text: 'щит сломан', life: 1.8, kind: 'flee' });
-      sound('crack');
+      this.floats.push({ x: e.x, y: e.y - 78, text: e.axe ? 'щит расколот!' : 'щит сломан', life: 1.8, kind: 'flee' });
+      sound(e.axe ? 'shatter' : 'crack');
     } else if (e.type === 'nettear') {
       this.floats.push({ x: e.x, y: e.y - 84, text: 'сеть порвалась', life: 1.8, kind: 'flee' });
       sound('crack');
@@ -429,14 +448,18 @@ export class View {
       sound('whoosh');
     } else if (e.type === 'disarm') {
       this.floats.push({ x: e.x, y: e.y - 70, text: 'обезоружен!', life: 1.8, kind: 'flee' });
-      sound('crack');
+      sound('disarm');
     } else if (e.type === 'daze') {
       this.floats.push({ x: e.x, y: e.y - 70, text: 'оглушён!', life: 1.6, kind: 'level' });
-      sound('thwack');
+      sound('daze');
     } else if (e.type === 'sand') {
       this._burst(e.x, e.y);
+      sound('sandburst');
     } else if (e.type === 'blind') {
       this.floats.push({ x: e.x, y: e.y - 76, text: 'ослеп!', life: 1.5, kind: 'sand' });
+      sound('blind');
+    } else if (e.type === 'pickup') {
+      sound('pickup');
     } else if (e.type === 'flee') {
       this.floats.push({ x: e.x, y: e.y - 70, text: 'бежит!', life: 1.6, kind: 'flee' });
       this.roar = Math.min(1, this.roar + 0.3);

@@ -278,7 +278,7 @@ site/js/sound.js       звуки
 site/js/stars.js       особые ники
 site/js/demo.js        пример, который виден, пока игра не начата
 tests/js/              тесты
-tools/                 локальный сервер, тесты, симулятор баланса, снимки для README
+tools/                 локальный сервер, тесты, симулятор баланса, снимки для README, кадры анимаций оружия
 ```
 
 Запустить у себя — `site.bat` или `python tools/serve.py`: откроется `http://127.0.0.1:8773/`. Нужен Python 3.9
@@ -292,7 +292,7 @@ python tools/jstest.py
 ```
 
 Симулятор баланса — `python tools/sim.py` (или один опыт: `python tools/sim.py real`). Картинки для этой
-страницы снимает `python tools/shots.py`.
+страницы снимает `python tools/shots.py`, а позы и замахи всего оружия по кадрам (и в GIF) — `python tools/anims.py`.
 
 Сайт выкладывается на GitHub Pages сам: когда в ветку `main` приходят изменения в папке `site/`, она публикуется
 целиком (`.github/workflows/pages.yml`).

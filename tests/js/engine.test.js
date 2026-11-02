@@ -687,6 +687,9 @@ test('копьё: в израненного беглеца метают, пот�
   a.retarget = 10;
   const spear = a.weapon;
   g.step(0.05);
+  ok(a.windup && a.anim === 'throw', 'замах перед броском');
+  eq(a.weapon, spear, 'пока замахивается — копьё в руке');
+  for (let i = 0; i < 20 && a.weapon; i++) g.step(0.05);
   eq(a.weapon, null, 'копьё брошено');
   ok(g.projectiles.some((p) => p.kind === 'spear' && p.from === a));
   for (let i = 0; i < 20 * 10 && !a.weapon && a.fate === 'fight'; i++) g.step(0.05);
