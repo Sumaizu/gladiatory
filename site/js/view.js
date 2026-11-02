@@ -933,8 +933,7 @@ export class View {
     });
     const betting = duel && duel.betting;
     this._set('commands', game.state + (duel ? (betting ? 'bet' : 'duel') + duel.left.login + duel.right.login : ''), (node) => {
-      const list = betting ? [['1', 'ставка на ' + duel.left.name], ['2', 'ставка на ' + duel.right.name],
-        ['что угодно', 'вступить и тоже поставить']]
+      const list = betting ? [['1', 'ставка на ' + duel.left.name], ['2', 'ставка на ' + duel.right.name]]
         : COMMANDS[game.state] || COMMANDS.ludus;
       node.replaceChildren(...list.map(([word, text]) => {
         const item = el('span', 'command');
