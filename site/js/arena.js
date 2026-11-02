@@ -389,15 +389,16 @@ function seeded(seed) {
 function makeCrowd() {
   const random = seeded(17), people = [];
   const pick = (list) => list[Math.floor(random() * list.length)];
-  const person = (x, y, back) => {
+  // face — куда смотрит: слева — вправо, на арену, справа — влево
+  const person = (x, y, back, face = 1) => {
     if (random() < 0.08) return;
-    people.push({ x: x + Math.round((random() - 0.5) * 4), y, back, phase: random() * Math.PI * 2, eager: random(),
+    people.push({ x: x + Math.round((random() - 0.5) * 4), y, back, face, phase: random() * Math.PI * 2, eager: random(),
       look: { skin: pick(SKINS), hair: pick(HAIRS), cloth: pick(CLOTHS), long: random() < 0.4 } });
   };
   for (let s = 0; s < 2; s++) {
     for (let y = 30 + (s % 2) * 14; y < FIELD_H + 30; y += 28) {
       person(s * STEP + 13, y, false);
-      person(FIELD_W - 1 - (s * STEP + 13), y, false);
+      person(FIELD_W - 1 - (s * STEP + 13), y, false, -1);
     }
   }
   for (const [y, shift] of [[W.front + RAIL + 34, 0], [W.front + RAIL + 60, 12]]) {
@@ -479,6 +480,15 @@ export function drawCrowd(ctx, people, t, roar) {
     const s = Math.sin(t * (4 + roar * 6) + p.phase);
     const jump = Math.round(Math.max(0, s) * (1 + roar * 3) / P) * P;
     const up = p.eager < 0.15 + roar * 0.7 && s > -0.2;
-    ctx.drawImage(spectatorSprite(p.look, up, p.back), p.x - 11, p.y - 44 - jump, 22, 44);
+    const sprite = spectatorSprite(p.look, up, p.back);
+    if (p.face > 0) {
+      ctx.drawImage(sprite, p.x - 11, p.y - 44 - jump, 22, 44);
+      continue;
+    }
+    ctx.save();
+    ctx.translate(p.x, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(sprite, -11, p.y - 44 - jump, 22, 44);
+    ctx.restore();
   }
 }
