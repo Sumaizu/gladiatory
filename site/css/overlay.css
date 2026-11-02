@@ -196,6 +196,8 @@ body {
   background: rgba(23, 19, 31, .9); box-shadow: 0 0 0 3px var(--accent), 0 18px 50px rgba(0, 0, 0, .6);
   animation: banner 2.4s ease-in-out forwards; pointer-events: none;
 }
+/* «В бой!» и названия боёв — коротко: бой уже идёт, плашка не должна его закрывать */
+.banner.battle { animation-duration: 1.5s; }
 .banner b { font-size: 38px; line-height: 50px; letter-spacing: .02em; color: var(--accent); text-shadow: 4px 4px 0 #5a1712; }
 .banner.battle b { color: #ff7a6e; }
 .banner span { font-size: 18px; font-weight: 700; }

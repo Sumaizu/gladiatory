@@ -188,6 +188,27 @@ test('на трибуне мест не хватило — отдыхающие 
   }
 });
 
+test('трибуна и стена заняты — дольше всех молчащий неактивный уходит в ворота, пока снова не напишет', () => {
+  const g = game();
+  const places = PLACES.rest.seats.length + PLACES.rest.line.length;
+  const names = Array.from({ length: places }, (_, i) => 'R' + i);
+  for (const name of names) g.feed(name, 'отдых', { login: name.toLowerCase() });
+  for (let i = 0; i < 20 * 30; i++) g.step(0.05);
+  // все давно молчат, а R5 — дольше всех
+  for (const m of g.members.values()) m.saidAt = -100;
+  g.members.get('r5').saidAt = -500;
+  g.feed('Новичок', 'отдых', { login: 'new' });
+  const old = g.members.get('r5');
+  ok(old.leaving, 'R5 уходит');
+  ok(g.members.get('new').seat !== null, 'новичку досталось его место');
+  for (let i = 0; i < 20 * 20 && g.members.has('r5'); i++) g.step(0.05);
+  no(g.members.has('r5'), 'дошёл до ворот и ушёл');
+  ok(g.roster.get('r5'), 'прогресс сохранён');
+  eq(g.members.size, places);
+  g.feed('R5', 'привет', { login: 'r5' });
+  ok(g.members.has('r5'), 'написал — вернулся');
+});
+
 test('сам сел на скамью — болтовня в чате его не поднимает', () => {
   const g = game();
   const [a] = join(g, 'Brutus');
@@ -515,26 +536,31 @@ test('хроника: из гачи — только легендарное, а�
   eq(g.lines.slice(1).map((l) => l.text), ['B берёт щит', 'A надевает божественный амулет']);
 });
 
-test('гача: не крутится в последние 5 секунд лудуса и в бою, очередь ждёт итогов', () => {
+test('за 5 секунд до боя гача и кузня отменяются: монеты не снимаются, в бою и на итогах команды не запоминаются', () => {
   const g = game({ settings: { ludus: 20, battle: 20 } });
-  const [a] = join(g, 'A', 'B');
+  const [a, b] = join(g, 'A', 'B');
   a.coins = 300;
+  b.coins = 300;
   a.weapon = weapon('sword');
-  for (let i = 0; i < 20 * 14; i++) g.step(0.05);
-  g.feed('A', 'гача 2', { login: 'a' });
-  for (let i = 0; i < 20 * 5 && g.state === 'ludus'; i++) g.step(0.05);
-  eq(g.state, 'ludus');
+  b.weapon = weapon('sword');
+  for (let i = 0; i < 20 * 13.5; i++) g.step(0.05);
+  g.feed('A', 'гача 5', { login: 'a' });
+  g.feed('B', 'улучшить 2', { login: 'b' });
+  for (let i = 0; i < 20 * 2 && g.state === 'ludus'; i++) g.step(0.05);
   ok(g.timer <= 5);
-  eq([g.spinNow, g.spins.length, a.coins], [null, 2, 300], 'в последние секунды не крутится');
-  for (let i = 0; i < 20 * 3 && g.state === 'ludus'; i++) g.step(0.05);
+  eq([g.spins.length, g.forging.length], [0, 0], 'очереди отменены');
+  for (let i = 0; i < 20 * 8 && g.state === 'ludus'; i++) g.step(0.05);
   eq(g.state, 'battle');
-  for (let i = 0; i < 20 * 3; i++) g.step(0.05);
-  eq([g.spinNow, a.coins], [null, 300], 'в бою не крутится');
+  const coins = [a.coins, b.coins];
+  ok(coins[0] <= 300 && coins[1] <= 300 && (300 - coins[0]) % PRICE === 0, 'снято только за то, что успели: ' + coins);
+  g.feed('A', 'гача', { login: 'a' });
   fight(g);
-  const before = a.coins;
-  for (let i = 0; i < 20 * 20 && !g.spinNow; i++) g.step(0.05);
-  ok(g.spinNow, 'после боя дошёл до храма и закрутил');
-  eq(a.coins, before - PRICE);
+  eq(g.state, 'results');
+  g.feed('B', 'гача', { login: 'b' });
+  eq([g.spins.length, g.forging.length], [0, 0], 'в бою и на итогах — не запоминаются');
+  const rewarded = [a.coins, b.coins];
+  for (let i = 0; i < 20 * 5; i++) g.step(0.05);
+  eq([g.spinNow, g.forgeNow, a.coins, b.coins], [null, null, ...rewarded], 'после боя ничего не докручивается');
 });
 test('гача: остановка игры возвращает монеты за недокрученное', () => {
   const memory = new Memory();
@@ -1952,6 +1978,23 @@ test('перековка: «реролл» за 300 — другой вид, т�
   ok(a.weapon.type !== 'sword' && TYPES.includes(a.weapon.type), a.weapon.type);
   eq([a.weapon.rarity, a.weapon.sharp, a.coins, a.place], ['epic', 0, 10, 'train']);
   for (let i = 0; i < 300; i++) ok(forgeSpin(Math.random, 'axe') !== 'axe');
+});
+
+test('мешок с песком бросают, только когда у самого меньше половины здоровья; слепота — на ' + SAND.time + ' с', () => {
+  const thrown = (part) => {
+    const g = game();
+    const [a, b] = join(g, 'A', 'B');
+    g.next();
+    Object.assign(a, { weapon: weapon('sword'), sand: 1, x: 300, y: 360 });
+    Object.assign(b, { x: 420, y: 360, stunT: 100 });
+    a.hp = maxHp(a) * part;
+    g.random = () => 0.01;
+    g._stepBattle(0.5);
+    return a.sand === 0;
+  };
+  no(thrown(0.9), 'здоровья много — держит');
+  ok(thrown(0.4), 'меньше половины — бросает');
+  eq(SAND.time, 10);
 });
 
 test('мешок с песком слепит врагов вокруг цели (своих в стенке — нет), слепой мажет чаще', () => {

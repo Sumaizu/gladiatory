@@ -23,6 +23,8 @@ const HEAVY = new Set(['greatsword', 'axe', 'hammer']);
 // на какой доле замаха оружие доходит до цели (как в ключевых кадрах ANIMS в draw.js)
 const IMPACT = 0.3;
 const MELEE = new Set(['hit', 'miss', 'block']);
+// цвета бойцов дуэли: левый (1) — синий, правый (2) — красный
+const DUEL_COLORS = { 1: '#3b7fd9', 2: '#d9483d' };
 const shadeBlood = (hex, k) => '#' + [1, 3, 5].map((i) => Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16)
   * k))).toString(16).padStart(2, '0')).join('');
 const WHERE = {
@@ -37,7 +39,8 @@ const COMMANDS = {
   battle: [['проф', 'твоя карточка'],
     ['трен', 'встать со скамьи: в бой пойдёшь следующим']],
 };
-COMMANDS.results = COMMANDS.ludus;
+// на итогах гача и кузня закрыты — их команд внизу нет
+COMMANDS.results = COMMANDS.ludus.filter(([word]) => !['гача', 'улучшить', 'реролл'].includes(word));
 
 // флажок парагона — как в Чатобороне: золотое полотнище на перекладине, цифра поверх
 const FLAG = { rod: '#8a5a12', rodLight: '#e6b54a', knob: '#ffe08a', edge: '#6b4106', top: '#ffe58a', mid: '#f5b82e',
@@ -346,7 +349,8 @@ export class View {
       $('feed').replaceChildren();
     }
     if (!game) return;
-    const scene = game.state === 'battle' ? 'arena' : 'ludus';
+    // итоги боя показываются ещё на арене, а лудус открывается уже без них
+    const scene = game.state === 'battle' || game.state === 'results' ? 'arena' : 'ludus';
     if (scene !== this.scene) {
       if (this.scene !== null) this.fade = FADE;
       this.scene = scene;
@@ -658,8 +662,12 @@ export class View {
       this._blood(w, dt);
     }
     const cards = new Set(game.cards.map((c) => c.login));
-    for (const g of figures) drawLabel(ctx, g, scene, cards.has(g.login));
-    if (scene === 'arena' && game.duel) this._duelMarks(ctx, game);
+    const duel = scene === 'arena' && game.duel;
+    for (const g of figures) {
+      const side = duel ? (g === duel.left ? 1 : g === duel.right ? 2 : 0) : 0;
+      drawLabel(ctx, g, scene, cards.has(g.login), side ? { n: side, color: DUEL_COLORS[side] } : null);
+    }
+    if (duel && duel.betting) this._duelBets(ctx, game);
     this._bursts(ctx, dt);
     this._floats(ctx, dt);
     if (this.fade > 0) {
@@ -670,29 +678,25 @@ export class View {
   }
 
   // над дуэлянтами — номер для ставки и сколько уже поставили
-  _duelMarks(ctx, game) {
+  // пока идут ставки (бойцы стоят на местах), над ником — сколько уже поставили на каждого
+  _duelBets(ctx, game) {
     const d = game.duel;
     [[d.left, 1], [d.right, 2]].forEach(([g, side]) => {
-      const x = g.x, y = g.y - 122;
-      ctx.fillStyle = side === 1 ? '#5fa8ff' : '#ff7a6e';
-      ctx.beginPath();
-      ctx.arc(x, y, 20, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#fff3dc';
-      ctx.stroke();
-      ctx.fillStyle = '#fff';
+      const x = g.x, y = g.y - 108;
+      const text = 'ставок: ' + game.betsOn(side);
+      ctx.font = '800 12px ' + FONT;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = '20px "Press Start 2P", ' + FONT;
-      ctx.fillText(String(side), x + 1, y + 2);
-      ctx.font = '800 13px ' + FONT;
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = 'rgba(20,12,10,.85)';
-      const text = 'ставок: ' + game.betsOn(side);
-      ctx.strokeText(text, x, y - 32);
+      const w = ctx.measureText(text).width + 14;
+      ctx.fillStyle = 'rgba(20,16,30,.8)';
+      ctx.beginPath();
+      ctx.roundRect(x - w / 2, y - 9, w, 18, 9);
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = DUEL_COLORS[side];
+      ctx.stroke();
       ctx.fillStyle = '#ffd98f';
-      ctx.fillText(text, x, y - 32);
+      ctx.fillText(text, x, y + 1);
     });
   }
 

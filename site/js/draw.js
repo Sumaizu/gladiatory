@@ -399,21 +399,31 @@ function drawStatus(ctx, g, t) {
   }
   if (g.blindT > 0) {
     ctx.save();
-    ctx.globalAlpha = Math.min(1, g.blindT * 1.5);
     // глаза: у человека — на голове, у льва — на морде впереди
     const hx = x + (g.lion ? face * 34 : face * 2), hy = y - (g.lion ? 40 : 58);
-    // песчаная повязка на глазах с тёмным краем — видна и на светлом песке
-    ctx.fillStyle = '#5a3a22';
-    ctx.fillRect(hx - 9, hy - 3, 18, 7);
-    ctx.fillStyle = '#f3e2b3';
-    ctx.fillRect(hx - 8, hy - 2, 16, 2);
-    ctx.fillStyle = '#d6b46e';
-    ctx.fillRect(hx - 8, hy, 16, 3);
-    // песчинки вьются вокруг головы
+    // глаза запорошены: голову окутывает облако бурой пыли, в нём клубится светлая дымка, вокруг вьётся песок
+    const fade = Math.min(1, g.blindT * 1.5);
+    const haze = ctx.createRadialGradient(hx, hy - 2, 2, hx, hy - 2, 22);
+    haze.addColorStop(0, 'rgba(150,108,58,' + (0.6 * fade).toFixed(3) + ')');
+    haze.addColorStop(0.6, 'rgba(160,118,66,' + (0.35 * fade).toFixed(3) + ')');
+    haze.addColorStop(1, 'rgba(170,130,80,0)');
+    ctx.fillStyle = haze;
+    ctx.beginPath();
+    ctx.ellipse(hx, hy - 2, 22, 15, 0, 0, Math.PI * 2);
+    ctx.fill();
     for (let i = 0; i < 6; i++) {
-      const a = t * 4.5 + i * 1.05, r = 12 + Math.sin(t * 3 + i) * 2, dark = i % 2 === 0;
-      ctx.fillStyle = dark ? '#6b4a2a' : '#fff3cf';
-      ctx.fillRect(Math.round(hx + Math.cos(a) * r) - 1, Math.round(hy - 2 + Math.sin(a) * r * 0.45) - 1, dark ? 3 : 2, dark ? 3 : 2);
+      const a = t * 1.6 + i * 1.05, r = 6 + 4 * Math.sin(t * 2.3 + i);
+      ctx.fillStyle = 'rgba(236,214,170,' + (0.4 * fade).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(hx + Math.cos(a) * r, hy - 2 + Math.sin(a) * r * 0.6, 2.5 + (i % 3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // песчинки кружат вокруг головы
+    ctx.globalAlpha = fade;
+    for (let i = 0; i < 10; i++) {
+      const a = t * 4 + i * 0.63, r = 16 + Math.sin(t * 3 + i) * 2, dark = i % 2 === 0;
+      ctx.fillStyle = dark ? '#5a3a22' : '#fff3cf';
+      ctx.fillRect(Math.round(hx + Math.cos(a) * r) - 1, Math.round(hy - 2 + Math.sin(a) * r * 0.45) - 1, 2, 2);
     }
     ctx.restore();
   }
@@ -473,7 +483,9 @@ export function drawThrown(ctx, game) {
   }
 }
 
-export function drawLabel(ctx, g, scene, highlight) {
+// mark — номер бойца на дуэли ({ n, color }): цветной значок с цифрой слева на той же плашке, что и ник, — ничего не
+// висит отдельно над головой и не закрывает соседей
+export function drawLabel(ctx, g, scene, highlight, mark = null) {
   const fate = scene === 'arena' ? g.fate : null;
   const pose = scene === 'ludus' && !g.walking ? g.pose : null;
   // на арене у лежачих ни имени, ни здоровья — только у тех, кто ещё дерётся
@@ -488,10 +500,23 @@ export function drawLabel(ctx, g, scene, highlight) {
   ctx.font = '700 12px ' + FONT;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  const nameW = ctx.measureText(g.name).width, x0 = g.x - nameW / 2;
+  const nameW = ctx.measureText(g.name).width, badge = mark ? 18 : 0;
+  const left = g.x - (nameW + 10 + badge) / 2, x0 = left + badge + 5, cx = x0 + nameW / 2;
   ctx.fillStyle = highlight ? 'rgba(255,205,56,.92)' : 'rgba(20,16,30,.72)';
-  roundRect(ctx, x0 - 5, top - 12, nameW + 10, 16, 6);
+  roundRect(ctx, left, top - 12, nameW + 10 + badge, 16, 6);
   ctx.fill();
+  if (mark) {
+    ctx.fillStyle = mark.color;
+    roundRect(ctx, left, top - 12, 16, 16, 6);
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,243,220,.9)';
+    ctx.stroke();
+    ctx.font = '900 12px ' + FONT;
+    ctx.fillStyle = '#fff';
+    ctx.fillText(String(mark.n), left + 8, top + 1);
+    ctx.font = '700 12px ' + FONT;
+  }
   // в стенке на стенку ник — цвета команды
   const team = fate && g.team ? TEAMS.colors[g.team] : null;
   const star = fate === 'dead' || g.lion || team ? null : starOf(g.login);
@@ -500,9 +525,9 @@ export function drawLabel(ctx, g, scene, highlight) {
     // на жёлтой подложке выбранного светлые ники теряются — даём им тёмный контур
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(20,16,30,.85)';
-    ctx.strokeText(g.name, g.x, top + 1);
+    ctx.strokeText(g.name, cx, top + 1);
   }
-  ctx.fillText(g.name, g.x, top + 1);
+  ctx.fillText(g.name, cx, top + 1);
   // здоровье — только в бою
   if (fate === 'dead' || scene !== 'arena') return;
   hpBar(ctx, g.x, top + 6, 28, g.hp / maxHp(g));

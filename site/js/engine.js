@@ -21,7 +21,7 @@ export const GACHA_WORDS = new Set(['гача', 'крутить']);
 export const SHARPEN_WORDS = new Set(['улучшить', 'заточить', 'заточка', 'улучшение']);
 export const REFORGE_WORDS = new Set(['реролл', 'перековать', 'перековка', 'перековку']);
 export const MIN_FIGHTERS = 2;
-export const RESULTS_TIME = 12;
+export const RESULTS_TIME = 15;
 export const END_DELAY = 2.5;
 export const CARD_TIME = 8;
 export const CARDS_MAX = 3;
@@ -338,8 +338,11 @@ export class Game {
     // сменил цвет в твиче — ник в игре меняется вместе с ним
     else if (COLOR_RE.test(meta.color || '')) g.color = readableColor(meta.color, login);
     g.saidAt = this.clock;
-    // афк со скамьи написал хоть что-то — снова в деле, на тренировку
-    if (g.afk && !g.fate && g.place === 'rest') this._arrive(g, 'train', true);
+    // афк со скамьи (или уже уходящий в ворота) написал хоть что-то — снова в деле, на тренировку
+    if ((g.afk || g.leaving) && !g.fate && g.place === 'rest') {
+      g.leaving = false;
+      this._arrive(g, 'train', true);
+    }
     this._command(g, first, words[1] || '');
   }
 
@@ -426,6 +429,8 @@ export class Game {
   }
 
   _queue(g, kind, arg, cap = QUEUE_CAP) {
+    // за GACHA_CLOSE секунд до боя, в бою и на итогах гача и кузня закрыты — команду не запоминаем
+    if (!this._gachaOpen(0)) return 0;
     const entry = { login: g.login, kind }, queue = kind === 'gacha' ? this.spins : this.forging;
     const queued = queue.filter((s) => s.login === g.login && s.kind === kind).length;
     const afford = Math.floor((g.coins - this._owed(g)) / priceOf(entry));
@@ -438,6 +443,7 @@ export class Game {
 
   // первая гача без оружия — в кузне: выковать простое оружие; остальные крутки из той же команды ждут его
   _gacha(g, arg) {
+    if (!this._gachaOpen(0)) return;
     if (!g.weapon && !this._forgingWeapon(g)) {
       if (g.coins - this._owed(g) < PRICE) return;
       this.forging.push({ login: g.login, kind: 'weapon' });
@@ -462,10 +468,23 @@ export class Game {
       || Boolean(this.forgeNow && this.forgeNow.login === g.login && this.forgeNow.kind === 'weapon');
   }
 
-  // гача крутится в лудусе, пока до боя больше GACHA_CLOSE секунд (и приз успеет выпасть), и на итогах
+  // гача и кузня работают только в лудусе, пока до боя больше GACHA_CLOSE секунд (и приз успеет выпасть)
   _gachaOpen(spinTime) {
-    if (this.state === 'ludus') return this.timer > GACHA_CLOSE + spinTime;
-    return this.state === 'results';
+    return this.state === 'ludus' && this.timer > GACHA_CLOSE + spinTime;
+  }
+
+  // за GACHA_CLOSE секунд до боя всё, что не успели, отменяется: монеты за это не снимаются (в очереди они ещё не
+  // сняты), а кто ждал у статуи или в кузне, возвращается к своему делу
+  _cancelQueues() {
+    const waiting = new Set([...this.spins, ...this.forging].map((s) => s.login));
+    this.spins = [];
+    this.forging = [];
+    for (const login of waiting) {
+      const g = this.members.get(login);
+      const busy = (this.spinNow && this.spinNow.login === login) || (this.forgeNow && this.forgeNow.login === login);
+      if (!g || busy || g.fate || !STATIONS.has(g.place)) continue;
+      this._arrive(g, STATIONS.has(g.back) || !g.back ? 'rest' : g.back, true);
+    }
   }
 
   _stepGacha(dt) {
@@ -546,11 +565,8 @@ export class Game {
     const s = this[nowKey], g = s && this.members.get(s.login);
     this[nowKey] = null;
     if (!s) return;
-    if (!s.done && g) {
-      // не докрутили — монеты назад, прокрутка снова в начало очереди
-      g.coins += s.paid;
-      this[key].unshift({ login: s.login, kind: s.kind });
-    }
+    // не докрутили (начался бой) — монеты назад, а крутка отменяется
+    if (!s.done && g) g.coins += s.paid;
     const more = this.spins.some((next) => next.login === s.login) || this.forging.some((next) => next.login === s.login);
     if (g && !more && !g.fate && STATIONS.has(g.place)) {
       const back = g.back || 'rest';
@@ -656,6 +672,7 @@ export class Game {
   _arrive(g, place, walk = false) {
     g.place = place;
     g.afk = false;
+    g.leaving = false;
     // сел на скамью или встал с неё — мог появиться или пропасть претендент на парагон
     if (this.members.get(g.login) === g) this._planNext();
     g.seat = null;
@@ -694,6 +711,14 @@ export class Game {
       if (stand >= 0) {
         g.seat = seats.length + stand;
         return line[stand];
+      }
+      // и трибуна, и стена заняты — дольше всех молчащий из неактивных уходит в ворота до нового сообщения, его место — новому
+      const idle = this._oldestIdle(g, place);
+      if (idle) {
+        const seat = idle.seat;
+        this._leave(idle);
+        g.seat = seat;
+        return seat < seats.length ? seats[seat] : line[seat - seats.length];
       }
       return pointIn(PLACES[place].walk, this.random);
     }
@@ -737,6 +762,34 @@ export class Game {
     return g.saidAt !== undefined && g.saidAt >= (this.roundStarts[0] ?? 0);
   }
 
+  // кто дольше всех не писал в чат (из тех, кто уже не активен) и занимает место в этом месте отдыха
+  _oldestIdle(g, place) {
+    let oldest = null;
+    for (const o of this.members.values()) {
+      if (o === g || o.fate || o.leaving || o.place !== place || o.seat === null || o.seat === undefined || this.isActive(o)) continue;
+      if (!oldest || (o.saidAt ?? -Infinity) < (oldest.saidAt ?? -Infinity)) oldest = o;
+    }
+    return oldest;
+  }
+
+  // уходит в ворота: в бою — сразу, в лудусе — дойдя до них. Прогресс сохраняется; напишет в чат — вернётся
+  _leave(g) {
+    if (this.state === 'battle') {
+      this._dismiss(g);
+      return;
+    }
+    Object.assign(g, { leaving: true, seat: null, pose: null, tx: ENTRANCE.x, ty: ENTRANCE.y, walking: true });
+    g.face = g.tx >= g.x ? 1 : -1;
+  }
+
+  _dismiss(g) {
+    g.leaving = false;
+    this.roster.put(g);
+    this.members.delete(g.login);
+    this.cards = this.cards.filter((card) => card.login !== g.login);
+    this._planNext();
+  }
+
   _stroll(g, dt) {
     g.swing = Math.max(0, g.swing - dt);
     if (!g.walking) {
@@ -764,6 +817,10 @@ export class Game {
       g.x = g.tx;
       g.y = g.ty;
       g.walking = false;
+      if (g.leaving) {
+        this._dismiss(g);
+        return;
+      }
       g.wait = 4 + this.random() * 5;
       // на трибуне сидит, у стены стоит лицом к песку
       if (g.place === 'rest' && g.seat !== null && g.seat < PLACES.rest.seats.length) g.pose = 'sit';
@@ -812,6 +869,8 @@ export class Game {
 
   _startBattle() {
     // кто сидит на скамье в зоне отдыха, в бой не идёт — смотрит со стороны
+    // кто ещё не дошёл до ворот, уходит сразу
+    for (const g of [...this.members.values()]) if (g.leaving) this._dismiss(g);
     const ready = Array.from(this.members.values()).filter((g) => g.place !== 'rest');
     if (ready.length < MIN_FIGHTERS) {
       this.timer = this.settings.ludus;
@@ -1235,7 +1294,7 @@ export class Game {
         continue;
       }
       // мешок с песком — в цель, вокруг которой толпятся враги (в одиночку — реже)
-      if (sandUp(g) && d >= SAND.range[0] && d <= SAND.range[1]) {
+      if (sandUp(g) && g.hp < maxHp(g) * SAND.low && d >= SAND.range[0] && d <= SAND.range[1]) {
         const crowd = fighting.filter((o) => this._enemy(g, o) && Math.hypot(o.x - t.x, o.y - t.y) <= SAND.radius).length;
         if (this.random() < dt * (crowd >= 2 ? SAND.crowd : SAND.alone)) {
           this._throw(g, t, 'sand');
@@ -1871,6 +1930,7 @@ export class Game {
   _tick(dt) {
     this.clock += dt;
     this.cards = this.cards.filter((card) => card.until > this.clock && this.members.has(card.login));
+    if (this.state === 'ludus' && !this._gachaOpen(0) && (this.spins.length || this.forging.length)) this._cancelQueues();
     this._stepGacha(dt);
     if (this.state === 'ludus' || this.state === 'results') this._stepLudus(dt);
     else if (this.state === 'battle') {
