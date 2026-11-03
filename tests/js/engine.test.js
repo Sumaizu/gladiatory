@@ -1284,6 +1284,42 @@ test('парагон: дорос до ' + PARAGON.level + ' уровня в лу
   no(g._enemy(b, c), 'остальные заодно');
 });
 
+test('досрочное испытание парагона: всё божественное, огонёк и ' + PARAGON.early.fights + ' боёв — уровень не важен', () => {
+  const g = game({ settings: { death: 0 }, mode: null });
+  const [a] = join(g, 'A', 'B', 'C', 'D');
+  g.open();
+  const ready = () => {
+    a.level = 3;
+    a.fights = PARAGON.early.fights;
+    a.streak = FLAME.streak;
+    a.weapon = Object.assign(weapon('sword'), { rarity: DIVINE.id });
+    for (const id of ['head', 'body', 'legs', 'feet']) a.gear[id] = { rarity: DIVINE.id, slot: id };
+  };
+  ready();
+  g._planNext();
+  eq([g.nextMode, g.nextBoss, g.nextEarly], ['paragon', a, true]);
+  ok(g.lines.some((l) => l.text.includes('досрочное испытание парагона')), 'в хронике');
+  for (const spoil of [() => { a.fights = PARAGON.early.fights - 1; }, () => { a.streak = FLAME.streak - 1; },
+    () => { a.gear.feet = { rarity: 'legendary', slot: 'feet' }; }, () => { a.weapon.rarity = 'legendary'; }]) {
+    ready();
+    spoil();
+    g._planNext();
+    eq(g.nextBoss, null);
+  }
+  ready();
+  g._planNext();
+  g.next();
+  eq([g.mode, g.boss, g.early], ['paragon', a, true]);
+  ok(g.lines.some((l) => l.text.startsWith('Досрочное испытание парагона: A')), 'бой назван досрочным');
+  // доросший по-обычному — обычное испытание
+  const h = game({ mode: null });
+  const [x] = join(h, 'X', 'Y', 'Z');
+  h.open();
+  Object.assign(x, { level: PARAGON.level, fights: PARAGON.fights });
+  h._planNext();
+  eq([h.nextBoss, h.nextEarly], [x, false]);
+});
+
 test('парагон: после боя получает парагон и начинает с нуля, выжившие — много опыта', () => {
   const g = game({ settings: { death: 0 }, mode: null });
   const [a, b, c] = join(g, 'A', 'B', 'C');

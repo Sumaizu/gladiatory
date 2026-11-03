@@ -253,6 +253,7 @@ export class Game {
     // режим следующего боя известен заранее — его пишут сверху лудуса; дорос до парагона — его испытание первым делом
     this.rolledMode = this.forceMode || this._rollMode();
     this.nextBoss = null;
+    this.nextEarly = false;
     for (const g of this.members.values()) if (g.skull > 0) g.skull--;
     this._planNext();
     this.fighters = [];
@@ -925,12 +926,18 @@ export class Game {
     // принятый вызов — следующим боем, раньше испытания парагона
     if (this.deathmatch) {
       this.nextBoss = null;
+      this.nextEarly = false;
       this.nextMode = 'deathmatch';
       return;
     }
     const boss = this.forceMode ? null : this._paragonNext();
-    if (boss && boss !== this.nextBoss) this._line(boss.name + ' дорос до парагона — дальше один против всех', 'paragon');
+    const early = Boolean(boss) && !this._paragonDue(boss);
+    if (boss && boss !== this.nextBoss) {
+      this._line(boss.name + (early ? ' идёт на досрочное испытание парагона' : ' дорос до парагона')
+        + ' — дальше один против всех', 'paragon');
+    }
     this.nextBoss = boss;
+    this.nextEarly = early;
     this.nextMode = boss ? 'paragon' : this.rolledMode;
   }
 
@@ -961,7 +968,9 @@ export class Game {
     this.mode = death ? 'deathmatch' : this.forceMode || (boss ? 'paragon' : this.rolledMode || this._rollMode());
     this.nextMode = null;
     this.nextBoss = null;
+    this.nextEarly = false;
     this.boss = this.mode === 'paragon' ? boss : null;
+    this.early = Boolean(this.boss) && !this._paragonDue(this.boss);
     if (this.boss) {
       // испытание: здоровье и урон вдвое (текущее здоровье растёт в той же пропорции)
       const was = maxHp(this.boss);
@@ -1053,7 +1062,7 @@ export class Game {
       const red = ready.filter((g) => g.team === 'red').length;
       this._line('Стенка на стенку: ' + red + ' на ' + (n - red), 'teams');
     } else if (this.boss) {
-      this._line('Испытание парагона: ' + this.boss.name + ' против ' + (n - 1), 'paragon');
+      this._line((this.early ? 'Досрочное испытание парагона: ' : 'Испытание парагона: ') + this.boss.name + ' против ' + (n - 1), 'paragon');
     } else if (this.mode === 'pit') {
       this._line('Яма со львами: ' + lions.length + ' ' + plural(lions.length, 'лев', 'льва', 'львов') + ' против ' + n, 'pit');
     } else {
@@ -1157,12 +1166,24 @@ export class Game {
     this._emit('phase', { state: 'battle', mode: 'duel', fight: true });
   }
 
-  // кто дорос до парагона, провёл нужное число боёв и не сидит на скамье — выходит один против всех
+  // дорос до парагона и провёл нужное число боёв
+  _paragonDue(g) {
+    return g.level >= PARAGON.level && g.fights >= PARAGON.fights;
+  }
+
+  // досрочно: весь доспех и оружие божественные, горит огонёк и провёл не меньше 20 боёв — уровень не важен
+  _paragonEarly(g) {
+    return Boolean(g.weapon && g.weapon.rarity === DIVINE.id && g.gear
+      && SLOT_IDS.every((id) => g.gear[id] && g.gear[id].rarity === DIVINE.id)
+      && (g.streak || 0) >= FLAME.streak && g.fights >= PARAGON.early.fights);
+  }
+
+  // кто дорос до парагона (или готов досрочно) и не сидит на скамье — выходит один против всех
   // (по одному за бой, старший первым)
   _paragonNext(pool = null) {
     let best = null;
     for (const g of pool || this.members.values()) {
-      if (g.lion || g.level < PARAGON.level || g.fights < PARAGON.fights || g.place === 'rest') continue;
+      if (g.lion || g.place === 'rest' || !this._paragonDue(g) && !this._paragonEarly(g)) continue;
       if (!best || g.level > best.level || g.level === best.level && g.xp > best.xp) best = g;
     }
     if (!best) return null;
@@ -2132,6 +2153,7 @@ export class Game {
     this.mode = null;
     this.duel = null;
     this.boss = null;
+    this.early = false;
     this.timer = RESULTS_TIME;
     if (duel && duel.death) {
       this._line('Бой насмерть выиграл ' + winner.name + ', угадали ' + bettors.length, 'death');

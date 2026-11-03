@@ -248,8 +248,9 @@ export const TEAMS = {
 // +points к стартовым очкам характеристик и +coins к стартовому золоту
 // После red обычных парагонов идут красные: флажок красный, счёт с 1; на старте неизменно +redStart (очки и монеты),
 // а за каждый красный — ещё +redCoins монет
+// досрочное испытание (early): весь доспех и оружие божественные, горит огонёк и не меньше 20 боёв — уровень не важен
 export const PARAGON = { level: 10, fights: 30, points: 1, coins: 10, boost: 2, red: 10, redStart: { points: 10, coins: 100 },
-  redCoins: 10,
+  redCoins: 10, early: { fights: 20 },
   reward: { standing: { xp: 160, coins: 40 }, beaten: { xp: 120, coins: 30 }, perKo: { xp: 20, coins: 10 } } };
 
 // стартовые очки и монеты за парагон: обычные — по points и coins за каждый, красные — redStart и redCoins за каждый

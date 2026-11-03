@@ -535,7 +535,7 @@ export class View {
     const people = game.fighters.filter((g) => !g.lion).length, lions = game.fighters.length - people;
     const teams = state === 'battle' && game.mode === 'teams';
     const reds = teams ? game.fighters.filter((g) => g.team === 'red').length : 0;
-    $('banner-title').textContent = duel ? (duel.betting ? (duel.death ? 'БОЙ НАСМЕРТЬ' : 'ДУЭЛЬ') : 'В БОЙ!') : pit ? 'ЯМА СО ЛЬВАМИ' : boss ? 'ИСПЫТАНИЕ ПАРАГОНА'
+    $('banner-title').textContent = duel ? (duel.betting ? (duel.death ? 'БОЙ НАСМЕРТЬ' : 'ДУЭЛЬ') : 'В БОЙ!') : pit ? 'ЯМА СО ЛЬВАМИ' : boss ? (game.early ? 'ДОСРОЧНОЕ ИСПЫТАНИЕ ПАРАГОНА' : 'ИСПЫТАНИЕ ПАРАГОНА')
       : teams ? 'СТЕНКА НА СТЕНКУ'
       : state === 'battle' ? 'В БОЙ!' : 'ЛУДУС';
     $('banner-text').textContent = duel ? duel.left.name + ' против ' + duel.right.name
@@ -976,7 +976,7 @@ export class View {
     const state = game.state;
     const fightName = game.duel ? (game.duel.death ? (game.duel.betting ? 'Арена · Бой насмерть: ставки' : 'Арена · Бой насмерть')
       : game.duel.betting ? 'Арена · Дуэль: ставки' : 'Арена · Дуэль')
-      : game.mode === 'pit' ? 'Арена · Яма со львами' : game.boss ? 'Арена · Испытание парагона'
+      : game.mode === 'pit' ? 'Арена · Яма со львами' : game.boss ? (game.early ? 'Арена · Досрочное испытание парагона' : 'Арена · Испытание парагона')
         : game.mode === 'teams' ? 'Арена · Стенка на стенку' : 'Арена · все против всех';
     const phase = { ludus: 'Лудус · подготовка', battle: fightName, results: 'Итоги боя' }[state] || '';
     this._set('phase', state + phase, (node) => {
@@ -1004,7 +1004,7 @@ export class View {
 
   _status(game) {
     const duel = game.duel;
-    const key = game.state + '|' + game.mode + '|' + game.nextMode + '|' + (game.deathmatch ? game.deathmatch.left + game.deathmatch.right : '') + '|' + (game.nextBoss ? game.nextBoss.login : '') + '|' + game.notice + '|' + (game.state === 'battle' ? game.waiting + ':' + game.watching : '')
+    const key = game.state + '|' + game.mode + '|' + game.nextMode + '|' + (game.deathmatch ? game.deathmatch.left + game.deathmatch.right : '') + '|' + (game.nextBoss ? game.nextBoss.login + game.nextEarly : '') + '|' + game.notice + '|' + (game.state === 'battle' ? game.waiting + ':' + game.watching : '')
       + '|' + (duel ? duel.betting : '');
     this._set('status', key, (node) => {
       node.replaceChildren();
@@ -1027,7 +1027,8 @@ export class View {
       } else if (game.state === 'results') {
         node.append(el('small', '', 'Награды розданы — скоро снова в лудус'));
       } else if (game.state === 'ludus' && game.nextMode) {
-        node.append(el('small', '', 'Дальше:'), el('b', 'next-mode ' + game.nextMode, MODE_NAMES[game.nextMode]),
+        node.append(el('small', '', 'Дальше:'), el('b', 'next-mode ' + game.nextMode,
+          game.nextMode === 'paragon' && game.nextEarly ? 'Досрочное испытание парагона' : MODE_NAMES[game.nextMode]),
           el('small', '', game.nextMode === 'paragon' && game.nextBoss ? '— ' + game.nextBoss.name + ' против всех'
             : game.nextMode === 'deathmatch' && game.deathmatch ? '— ' + nameOf(game, game.deathmatch.left) + ' против '
               + nameOf(game, game.deathmatch.right) + ', павший погибнет'
