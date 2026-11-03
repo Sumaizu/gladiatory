@@ -1,10 +1,10 @@
 import { eq, no, ok, test } from './harness.js';
 import { playNote, reportPlay } from '../../site/js/stats.js';
 import { clean, fromQuery, toQuery } from '../../site/js/config.js';
-import { AGI_CAP, WEAPON_TYPES, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HIT_REWARD, KILL_REWARD, SKULL, FLAME, DEATHMATCH, EVENTS, WEAPON_MULT, forceOf, weaponMult, PIT, POINTS_PER_LEVEL, PARAGON, NET, SAND, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
+import { AGI_CAP, WEAPON_TYPES, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HIT_REWARD, KILL_REWARD, SKULL, FLAME, DEATHMATCH, EVENTS, paragonFlag, WEAPON_MULT, forceOf, weaponMult, PIT, POINTS_PER_LEVEL, PARAGON, NET, SAND, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../site/js/balance.js';
 import { starOf } from '../../site/js/stars.js';
-import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, plural, readableColor } from '../../site/js/engine.js';
+import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, newGladiator, plural, readableColor } from '../../site/js/engine.js';
 import { PLACES, POST_SPOTS, WARM_SPOTS, inArena } from '../../site/js/places.js';
 import { DIVINE, OUTCOMES, PRICE, RARITIES, REFORGE, SHARPEN, TYPES, forgeSpin, rarityOf, sharpChance, SHOW_TIME, SPIN_TIME,
   spin } from '../../site/js/gacha.js';
@@ -595,7 +595,7 @@ test('гача: редкости в пропорциях Чатобороны, �
 
 const always = (value) => () => value;
 
-test('арена: от крита гладиатор убегает, не бьёт и удаляется от обидчика', () => {
+test('арена: от крита и от тяжёлых ран убегают, но не на дуэли', () => {
   const g = game();
   const [a, b] = join(g, 'A', 'B', 'C');
   g.next();
@@ -605,14 +605,23 @@ test('арена: от крита гладиатор убегает, не бьё
   a.x = 400; a.y = 350; b.x = 430; b.y = 350;
   b.agi = 0;
   g._attack(a, b);
-  ok(b.fleeT > 0, 'убегает');
-  ok(b.target === null, 'бросил цель');
-  ok(g.events.some((e) => e.type === 'flee' && e.login === 'b'));
+  ok(b.fleeT > 0, 'от крита — убегает');
   g.random = rng(3);
-  const was = Math.hypot(b.x - a.x, b.y - a.y), hits = g.events.filter((e) => e.type === 'hit' && e.from === 'b').length;
-  for (let i = 0; i < 20; i++) g.step(0.05);
-  ok(Math.hypot(b.x - a.x, b.y - a.y) > was, 'дальше от обидчика');
-  eq(g.events.filter((e) => e.type === 'hit' && e.from === 'b').length, hits, 'пока бежит — не бьёт');
+  const c = g.members.get('c');
+  c.hp = maxHp(c) * 0.1;
+  c.fleeCool = 0;
+  g._stepBattle(0.05);
+  ok(c.fleeT > 0, 'тяжело ранен — убегает');
+  const d = game({ mode: 'duel' });
+  const [x, y] = join(d, 'X', 'Y');
+  d.next();
+  d.next();
+  d.random = queue(0.9, 0.01, 0.5, 0.01, 0.5);
+  y.agi = 0;
+  d._attack(x, y);
+  x.hp = maxHp(x) * 0.1;
+  for (let i = 0; i < 10; i++) d._stepBattle(0.05);
+  no(x.fleeT > 0 || y.fleeT > 0, 'на дуэли не убегают ни от крита, ни от ран');
 });
 
 test('арена: раненый меньше чем на четверть убегает, потом возвращается в бой', () => {
@@ -641,15 +650,15 @@ test('арена: цель убегает — нападающий перекл�
   ok(a.target === c || a.target !== b, 'бьёт не беглеца');
 });
 
-test('арена: цели время от времени меняются сами', () => {
+test('арена: цель упала — гладиатор сразу выбирает новую', () => {
   const g = game();
-  const all = join(g, 'A', 'B', 'C', 'D', 'E', 'F');
+  const all = join(g, 'A', 'B', 'C', 'D');
   g.next();
-  for (const m of all) m.vit = 200;
-  for (const m of all) m.hp = maxHp(m);
-  const first = new Map(all.map((m) => [m.login, m.target && m.target.login]));
-  for (let i = 0; i < 20 * 15; i++) g.step(0.05);
-  ok(all.some((m) => m.target && m.target.login !== first.get(m.login)), 'кто-то сменил цель');
+  const a = all[0], old = a.target;
+  ok(old, 'с начала боя у каждого есть цель');
+  old.fate = 'down';
+  g._stepBattle(0.05);
+  ok(a.target && a.target !== old && a.target.fate === 'fight', 'новая цель');
 });
 
 test('арена: ударили сбоку — может развернуться на обидчика', () => {
@@ -807,7 +816,7 @@ test('гача: щит и сеть без редкости, занимают в�
     if (r.item && r.item.kind === 'weapon') types.add(r.item.type);
   }
   ok(kinds.has('shield') && kinds.has('net'), 'свободной руке выпадают');
-  eq(types, new Set(['sword', 'greatsword', 'spear', 'axe', 'hammer', 'trident']));
+  eq(types, new Set(['sword', 'greatsword', 'spear', 'axe', 'hammer', 'trident', 'rapier']));
   for (const owner of [a, b, c]) {
     for (let i = 0; i < 3000; i++) {
       const r = spin(random, owner);
@@ -1212,8 +1221,8 @@ test('копьё после подбора метают снова не рань
   ok(g._canThrowSpear(a, b));
 });
 
-test('щит блокирует 20% ударов, ломается в 10% блоков, отбитый крит — 20%', () => {
-  eq([SHIELD.block, SHIELD.breaks, SHIELD.breaks * SHIELD.critBreaks], [0.2, 0.1, 0.2]);
+test('щит блокирует половину ударов, ломается в 20% блоков, отбитый крит — 40%', () => {
+  eq([SHIELD.block, SHIELD.breaks, SHIELD.breaks * SHIELD.critBreaks], [0.5, 0.2, 0.4]);
 });
 
 test('божественный амулет: 3% в гаче, второй не выпадает, пока есть первый', () => {
@@ -1430,16 +1439,17 @@ test('щит, отбивший удар, который был бы критом
 
 
 
-test('кровотечение: стоя на месте здоровье не теряет', () => {
+test('кровотечение отнимает здоровье и стоя на месте: за всё время — ' + BLEED.share * 100 + '%', () => {
   const g = game();
   const [a, b] = join(g, 'A', 'B');
   g.next();
   b.bleedT = BLEED.time;
   b.bledBy = a;
-  b.stunT = BLEED.time;
+  b.stunT = BLEED.time + 1;
+  a.stunT = BLEED.time + 1;
   const hp = b.hp;
-  for (let i = 0; i < 40; i++) g.step(0.05);
-  eq(b.hp, hp);
+  for (let i = 0; i < 20 * BLEED.time + 5; i++) g.step(0.05);
+  ok(Math.abs(hp - b.hp - BLEED.share * maxHp(b)) < 2, hp - b.hp);
 });
 
 test('кровотечение замедляет на ' + BLEED.slow * 100 + '%', () => {
@@ -1639,7 +1649,7 @@ test('гача поднимает редкость своего оружия: в
   const [a] = join(g, 'A', 'B');
   a.weapon = { kind: 'weapon', type: 'sword', rarity: 'rare', sharp: 2 };
   g._prize(a, { kind: 'item', item: { kind: 'weapon', type: 'sword', rarity: 'epic' } });
-  eq([a.weapon.type, a.weapon.rarity, a.weapon.sharp], ['sword', 'epic', 2]);
+  eq([a.weapon.type, a.weapon.rarity, a.weapon.sharp], ['sword', 'epic', 0], 'новая редкость — заточка с нуля');
   const same = { kind: 'item', item: { kind: 'weapon', type: 'sword', rarity: 'epic' } };
   g._prize(a, same);
   no(same.equipped, 'та же — не меняет');
@@ -1738,8 +1748,8 @@ test('секира раскалывает щит куда чаще меча', ()
     a.weapon = weapon(type);
     b.shield = true;
     b.agi = 0;
-    // уклонение, крит, блок, поломка (0.5: меч — нет, секира — да)
-    g.random = queue(0.99, 0.99, 0.01, 0.5);
+    // уклонение, крит, блок, поломка (0.4: меч — нет, секира — да)
+    g.random = queue(0.99, 0.99, 0.01, 0.4);
     g._attack(a, b);
     eq(b.shield, !broken, type);
   }
@@ -1946,7 +1956,7 @@ test('заточка: «улучшить» за 100 монет у точила, 
   ok(Math.abs(sharpChance(5) / sharpChance(4) - SHARPEN.fall) < 1e-9, 'шанс падает в геометрической прогрессии');
   ok(sharpChance(9) < 0.2);
   const blade = { kind: 'weapon', type: 'sword', rarity: 'rare', sharp: 10 };
-  ok(Math.abs(weaponMult(blade) - 3 * WEAPON_MULT.rare) < 1e-9, '+10 — втрое');
+  ok(Math.abs(weaponMult(blade) - 2 * WEAPON_MULT.rare) < 1e-9, '+10 — вдвое');
   const g = game({ settings: { ludus: 900 } });
   const [a] = join(g, 'A');
   g.feed('A', 'улучшить', { login: 'a' });
@@ -2291,7 +2301,10 @@ test('парагон: пал в испытании — погибает (аму�
 
 test('бой насмерть по вызову: «вызов @ник», «да» — следующий бой; павший гибнет, победителю — награда за уровень', () => {
   const g = game({ mode: null });
-  const [a, b] = join(g, 'A', 'B', 'C');
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  g.feed('A', 'вызов @b', { login: 'a' });
+  eq(g.challenge, null, 'до ' + DEATHMATCH.level + ' уровня вызвать нельзя');
+  a.level = DEATHMATCH.level;
   b.level = 5;
   g.feed('A', 'вызов @b', { login: 'a' });
   eq([g.challenge.from, g.challenge.to], ['a', 'b']);
@@ -2312,7 +2325,7 @@ test('бой насмерть по вызову: «вызов @ник», «да�
   eq(g.results.mode, 'deathmatch');
   // отказ и молчание
   const h = game();
-  join(h, 'X', 'Y');
+  for (const m of join(h, 'X', 'Y')) m.level = DEATHMATCH.level;
   h.feed('X', 'вызов y', { login: 'x' });
   h.feed('Y', 'нет', { login: 'y' });
   eq([h.challenge, h.deathmatch], [null, null]);
@@ -2321,7 +2334,7 @@ test('бой насмерть по вызову: «вызов @ник», «да�
   eq([h.challenge, h.deathmatch], [null, null], 'не ответил — отказ');
 });
 
-test('события: лев выходит из ворот и бьёт всех, но конец боя не держит; камень с трибун оглушает', () => {
+test('события: лев выходит из ворот и бьёт всех, его бьют первым; пока он жив, бой не кончается; камень оглушает', () => {
   const g = game();
   const [a, b] = join(g, 'A', 'B', 'C');
   g.next();
@@ -2331,13 +2344,97 @@ test('события: лев выходит из ворот и бьёт всех
   const lion = g.fighters.find((f) => f.lion);
   ok(lion, 'лев вышел');
   ok(g._enemy(lion, a) && g._enemy(a, lion), 'враг всем');
+  Object.assign(a, { x: 400, y: 360 });
+  Object.assign(b, { x: 300, y: 360 });
+  Object.assign(lion, { x: 600, y: 360 });
+  let lions = 0;
+  for (let i = 0; i < 200; i++) if (g._pickTarget(a, [a, b, lion]) === lion) lions++;
+  ok(lions > 150, 'льва бьют первым: ' + lions);
   for (const m of g.fighters) if (!m.lion && m !== a) m.fate = 'down';
   g._checkEnd();
-  ok(g.endIn !== null, 'один гладиатор на ногах — бой кончается, лев не в счёт');
+  eq(g.endIn, null, 'один на один со львом — дерутся дальше');
+  lion.fate = 'dead';
+  g._checkEnd();
+  ok(g.endIn !== null, 'лев пал — бой кончается');
   const h = game();
   const [x, y] = join(h, 'X', 'Y');
   h.next();
   h.happen = { t: 0, lionAt: null, rock: true, rockIn: 0.01 };
   for (let i = 0; i < 20 * 4 && !(x.stunT > 0 || y.stunT > 0); i++) h._stepBattle(0.05);
   ok(x.stunT > 0 || y.stunT > 0, 'камень оглушил');
+});
+
+test('гача: амулет всегда 3%; если кроме амулета выпасть нечему — «ничего»', () => {
+  const random = rng(31);
+  const full = { weapon: { type: 'sword', rarity: 'legendary' }, shield: true, nets: 0, sand: 0, amulet: false,
+    gear: { head: { rarity: 'legendary' }, body: { rarity: 'legendary' }, legs: { rarity: 'legendary' }, feet: { rarity: 'legendary' } } };
+  const count = (owner) => {
+    const n = {};
+    for (let i = 0; i < 20000; i++) {
+      const r = spin(random, owner);
+      n[r.kind] = (n[r.kind] || 0) + 1;
+    }
+    return n;
+  };
+  const only = count(full);
+  ok(Math.abs(only.amulet / 20000 - 0.03) < 0.006, 'амулет ' + only.amulet);
+  ok(only.nothing > 19000, 'остальное — ничего');
+  const some = count(Object.assign({}, full, { gear: { head: null } }));
+  ok(Math.abs(some.amulet / 20000 - 0.03) < 0.006, 'и когда есть что-то ещё — тоже 3%: ' + some.amulet);
+  eq(spin(random, Object.assign({}, full, { amulet: true })), null, 'амулет уже есть и выпасть нечему — крутки нет');
+});
+
+test('красный парагон: после 10 — красный флажок со счётом с 1; на старте +10 очков и +100 монет, и +10 монет за каждый', () => {
+  const at = (p) => newGladiator('x', 'X', '#ffffff', 0, p);
+  eq([at(10).points, at(10).coins], [START_POINTS + 10, START_COINS + 100]);
+  eq([at(11).points, at(11).coins], [START_POINTS + 10, START_COINS + 110]);
+  eq([at(13).points, at(13).coins], [START_POINTS + 10, START_COINS + 130]);
+  eq([paragonFlag(10), paragonFlag(11), paragonFlag(13)], [{ red: false, n: 10 }, { red: true, n: 1 }, { red: true, n: 3 }]);
+});
+
+test('рапира: часто, слабо и с кровью; секира пускает кровь и обычным ударом', () => {
+  const r = WEAPON_TYPES.rapier, s = WEAPON_TYPES.sword;
+  ok(r.rate < s.rate && r.dmg < s.dmg && r.bleed > 0 && r.hands === 1);
+  ok(WEAPON_TYPES.axe.bleed > 0);
+  const g = game();
+  const [a, b] = join(g, 'A', 'B');
+  g.next();
+  a.weapon = weapon('rapier');
+  b.agi = 0;
+  // не увернулся, не крит, разброс, кровь
+  g.random = queue(0.99, 0.99, 0.5, 0.01);
+  g._attack(a, b);
+  ok(b.bleedT > 0, 'обычный удар рапиры пустил кровь');
+});
+
+test('сеть держит ' + NET.stun + ' с; бросивший добивает пойманного и не убегает', () => {
+  const g = game();
+  const [a, b] = join(g, 'A', 'B', 'C');
+  g.next();
+  g.random = () => 0.9;
+  g._net(a, b);
+  eq([b.stunT, a.hunt], [NET.stun, b]);
+  a.hp = maxHp(a) * 0.05;
+  a.fleeCool = 0;
+  g._stepBattle(0.05);
+  no(a.fleeT > 0, 'не убегает');
+  eq(a.target, b);
+});
+
+test('бой насмерть отменяется, если кто-то из двоих погиб раньше (и вернулся новым бойцом)', () => {
+  const g = game({ settings: { death: 100 }, mode: null });
+  const [a, b, c] = join(g, 'A', 'B', 'C');
+  for (const m of [a, b]) m.level = DEATHMATCH.level;
+  g.feed('A', 'вызов @b', { login: 'a' });
+  g.next();
+  g.feed('B', 'да', { login: 'b' });
+  ok(g.deathmatch, 'принят во время боя');
+  b.hp = -5;
+  g._knockOut(b, c);
+  eq([b.fate, g.deathmatch], ['dead', null], 'погиб — бой отменён');
+  fight(g);
+  g.feed('B', 'привет', { login: 'b' });
+  g.next();
+  g.next();
+  ok(g.mode !== 'deathmatch', 'новый боец в бой насмерть не идёт');
 });

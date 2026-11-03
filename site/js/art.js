@@ -505,20 +505,35 @@ function weaponArt(type, tier) {
     p.rect(2, 30, 2, 1, IRONS[0]);
     return { canvas: p.canvas(), px: 2.5, py: 24.5, k: 1 };
   }
+  if (type === 'rapier') {
+    // рапира: тонкий длинный прямой клинок, чашка гарды, прямая крестовина, рукоять с обмоткой и шарик на конце
+    const p = new Pix(5, 30);
+    p.px(2, 0, mL);
+    for (let y = 1; y <= 20; y++) p.px(2, y, y < 14 ? mL : m);
+    p.px(3, 20, mD);
+    p.rect(0, 21, 5, 1, GOLDS[2]);
+    p.rect(1, 22, 3, 1, GOLDS[1]);
+    p.px(0, 22, GOLDS[0]);
+    p.px(4, 22, GOLDS[0]);
+    pole(p, 2, 23, 27, WRAPS, { wrap: true });
+    p.rect(1, 28, 3, 1, GOLDS[2]);
+    p.px(2, 29, GOLDS[0]);
+    return { canvas: p.canvas(), px: 2, py: 25, k: 1 };
+  }
   if (type === 'sword') {
     // гладиус средней длины: узкий клинок с острием, латунная гарда, рукоять с перехватом, шарик на конце
-    const p = new Pix(4, 19);
+    const p = new Pix(4, 23);
     p.px(1, 0, mL);
-    for (let y = 1; y <= 12; y++) {
-      p.px(1, y, y < 9 ? mL : m);
+    for (let y = 1; y <= 16; y++) {
+      p.px(1, y, y < 12 ? mL : m);
       p.px(2, y, mD);
     }
-    p.rect(0, 13, 4, 1, GOLDS[1]);
-    p.px(0, 13, GOLDS[2]);
-    pole(p, 1, 14, 16, WOODS, { wide: true, wrap: true });
-    p.rect(1, 17, 2, 1, GOLDS[2]);
-    p.rect(1, 18, 2, 1, GOLDS[0]);
-    return { canvas: p.canvas(), px: 1.5, py: 14.5, k: 1 };
+    p.rect(0, 17, 4, 1, GOLDS[1]);
+    p.px(0, 17, GOLDS[2]);
+    pole(p, 1, 18, 20, WOODS, { wide: true, wrap: true });
+    p.rect(1, 21, 2, 1, GOLDS[2]);
+    p.rect(1, 22, 2, 1, GOLDS[0]);
+    return { canvas: p.canvas(), px: 1.5, py: 18.5, k: 1 };
   }
   if (type === 'spear') {
     // копьё: листовидный наконечник, железная втулка, древко с обмоткой посередине
@@ -935,4 +950,4 @@ export function gladiatorSprite(look, pose, dead = false, flash = false) {
   });
 }
 
-export const weaponSprite = (type, tier) => remember('weapon3:' + type + ':' + tier, () => weaponArt(type, tier));
+export const weaponSprite = (type, tier) => remember('weapon4:' + type + ':' + tier, () => weaponArt(type, tier));

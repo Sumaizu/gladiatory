@@ -9,20 +9,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from browser import NO_NETWORK, ROOT, Browser, serve
 
-TYPES = ["greatsword", "sword", "spear", "trident", "hammer", "axe"]
+TYPES = ["greatsword", "sword", "spear", "trident", "hammer", "axe", "rapier"]
 NAMES = {"greatsword": "Двуручный меч", "sword": "Меч", "spear": "Копьё", "trident": "Трезубец", "hammer": "Молот",
-         "axe": "Секира"}
+         "axe": "Секира", "rapier": "Рапира"}
 SLOW = 3
 STEPS = 16
 # место на поле (920×644): ряд по центру арены
-X0, GAP, Y = 160, 120, 400
+X0, GAP, Y = 90, 112, 400
 SETUP = """(async () => {
   const api = window.gladiatory, game = api.game;
   const { makeItem, RARITIES } = await import('./js/gacha.js');
   api.start();
   const types = %s, names = %s;
   types.forEach((type, i) => {
-    game.feed('G' + i, 'трен', { login: 'g' + i, color: ['#ff6b5e', '#5fb4ff', '#7ee08a', '#ffc94d', '#c58cff', '#4fd6d6'][i] });
+    game.feed('G' + i, 'трен', { login: 'g' + i, color: ['#ff6b5e', '#5fb4ff', '#7ee08a', '#ffc94d', '#c58cff', '#4fd6d6', '#ff8fc8'][i] });
     const g = game.members.get('g' + i);
     g.weapon = makeItem(() => 0.5, 'weapon', RARITIES[2], type);
     g.name = names[type];
@@ -71,7 +71,7 @@ def main():
             length = b.evaluate("(async () => { const { WEAPON_TYPES, SPEAR } = await import('./js/balance.js');"
                                 " return Object.fromEntries(%s.map((t) => [t, WEAPON_TYPES[t].anim])); })()" % json.dumps(TYPES),
                                 wait_promise=True)
-            row = {"x": 330 + X0 - 70, "y": 62 + Y - 112, "width": GAP * 5 + 140, "height": 152, "scale": 1}
+            row = {"x": 330 + X0 - 70, "y": 62 + Y - 112, "width": GAP * (len(TYPES) - 1) + 140, "height": 152, "scale": 1}
 
             def shot():
                 time.sleep(0.07)

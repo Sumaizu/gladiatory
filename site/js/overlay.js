@@ -6,19 +6,10 @@ import { playAll, unlock } from './sound.js';
 import { playNote, reportPlay } from './stats.js';
 import { View } from './view.js';
 
-const CODE_FILES = ['overlay.html', 'css/overlay.css', 'js/overlay.js', 'js/view.js', 'js/draw.js', 'js/engine.js',
-  'js/balance.js', 'js/places.js', 'js/ludus.js', 'js/arena.js', 'js/chat.js', 'js/config.js', 'js/demo.js', 'js/sound.js', 'js/art.js', 'js/gacha.js',
-  'js/stars.js', 'js/stats.js'];
-const LOCAL = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
-const UPDATE_CHECK_SECONDS = LOCAL ? 5 : 300;
-const RELOAD_PAUSE_SECONDS = LOCAL ? 0 : 600;
 const STATS_EVERY_SECONDS = 600;
 const STEP_MS = 50;
-const RELOAD_CHECK_MS = 500;
 const FRAME_MAX = 0.1;
 const EMBEDDED = new URLSearchParams(location.search).get('embed') === '1';
-
-const fileUrl = (name) => new URL(name, location.href).href;
 
 function browserStorage() {
   try {
@@ -35,47 +26,6 @@ function watchVisibility(onShow, onHide) {
   document.addEventListener('visibilitychange', () => report(pageShown()));
   window.addEventListener('obsSourceVisibleChanged', (event) => report(Boolean(event.detail && event.detail.visible)));
   if (pageShown()) onShow();
-}
-
-async function filesFingerprint() {
-  const marks = await Promise.all(CODE_FILES.map(async (name) => {
-    const response = await fetch(fileUrl(name), { method: 'HEAD', cache: 'no-store' });
-    if (!response.ok) throw new Error(name);
-    return response.headers.get('etag') || response.headers.get('last-modified') || '';
-  }));
-  return marks.join('|');
-}
-
-// новая версия игры подхватывается сама, но только между боями
-function watchUpdates(canReload) {
-  let fingerprint = null, ready = false, fetching = false;
-  const prepare = () => {
-    if (fetching) return;
-    fetching = true;
-    const done = () => {
-      ready = true;
-    };
-    Promise.all(CODE_FILES.map((name) => fetch(fileUrl(name), { cache: 'reload' }))).then(done, done);
-  };
-  const reload = () => {
-    const storage = browserStorage();
-    const last = storage ? Number(storage.getItem('gladiatory.reloaded')) || 0 : 0;
-    if (!ready || !canReload() || Date.now() - last < RELOAD_PAUSE_SECONDS * 1000) return;
-    if (storage) storage.setItem('gladiatory.reloaded', String(Date.now()));
-    location.reload();
-  };
-  const check = async () => {
-    try {
-      const current = await filesFingerprint();
-      if (fingerprint === null) fingerprint = current;
-      if (current !== fingerprint) prepare();
-    } catch (error) {
-      return;
-    }
-  };
-  check();
-  setInterval(check, UPDATE_CHECK_SECONDS * 1000);
-  setInterval(reload, RELOAD_CHECK_MS);
 }
 
 function run(view) {
@@ -166,9 +116,9 @@ function run(view) {
   };
   if (EMBEDDED) return;
   chat.start();
+  // сам оверлей не перезагружается: перезапуск сбросил бы бой и выкинул всех гладиаторов из игры.
+  // Новую версию подхватит, когда стример сам обновит источник в OBS
   watchVisibility(show, hide);
-  watchUpdates(() => game.state === 'stopped' || game.state === 'results'
-    || game.state === 'ludus' && game.members.size === 0);
 }
 
 run(new View());

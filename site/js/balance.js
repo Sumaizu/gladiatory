@@ -18,7 +18,7 @@ export const HASTE_SOFT = 15;
 // ловкость ускоряет и бег: +RUN_PER_AGI к скорости за очко
 export const RUN_PER_AGI = 0.02;
 export const DODGE_BASE = 0.05;
-export const DODGE_PER_AGI = 0.014;
+export const DODGE_PER_AGI = 0.021;
 export const DODGE_MAX = 0.35;
 export const CRIT_BASE = 0.05;
 export const CRIT_PER_AGI = 0.007;
@@ -62,20 +62,24 @@ export function maxHp(g) {
 
 // виды оружия из гачи. rate — во сколько раз реже удар, dmg — множитель урона, reach — дальность,
 // hands: 2 — щит не работает, cleave — бьёт всех в секторе: arc градусов, на reach досягаемостей вперёд, pierce — какую долю брони копьё пробивает в ближнем бою, throwPierce — брошенное, throw — множитель урона броска,
-// shieldBreak — с каким шансом отбитый щитом удар раскалывает щит, miss — прибавка к промаху,
+// shieldBreak — с каким шансом отбитый щитом удар раскалывает щит, miss — прибавка к промаху, bleed — шанс пустить кровь
+// любым попаданием (не только критом),
 // stun — шанс оглушить при попадании на time секунд, disarm — шанс выбить у врага оружие из рук,
 // anim — сколько секунд длится замах на экране (тяжёлое — дольше; удар приходится примерно на треть замаха)
 export const WEAPON_TYPES = {
   fists: { name: 'кулаки', gender: 'p', rate: 0.85, dmg: 0.6, reach: 0.85, crit: 0, hands: 1, anim: 0.3 },
   sword: { name: 'меч', gender: 'm', rate: 0.9, dmg: 1.15, reach: 1, crit: 0, hands: 1, anim: 0.42 },
-  greatsword: { name: 'двуручный меч', gender: 'm', rate: 1.5, dmg: 2.1, reach: 1.1, crit: 0.1, hands: 2,
+  greatsword: { name: 'двуручный меч', gender: 'm', rate: 1.5, dmg: 2.2, reach: 1.1, crit: 0.1, hands: 2,
     cleave: { reach: 1.5, arc: 100 }, anim: 0.7 },
   claws: { name: 'когти', gender: 'p', rate: 0.95, dmg: 1.15, reach: 1.2, crit: 0.1, hands: 2, anim: 0.3 },
   spear: { name: 'копьё', gender: 'n', rate: 1.1, dmg: 1.3, reach: 1.5, crit: 0, hands: 1, pierce: 0.2, throw: 1.7, throwPierce: 0.5, anim: 0.42 },
-  axe: { name: 'секира', gender: 'f', rate: 1.5, dmg: 2.15, reach: 1.05, crit: 0.05, hands: 2, shieldBreak: 0.6, anim: 0.65 },
-  hammer: { name: 'молот', gender: 'm', rate: 1.5, dmg: 2.5, reach: 1, crit: 0, hands: 2, miss: 0.12,
+  axe: { name: 'секира', gender: 'f', rate: 1.5, dmg: 2.05, reach: 1.05, crit: 0.05, hands: 2, shieldBreak: 0.5, bleed: 0.25,
+    anim: 0.65 },
+  hammer: { name: 'молот', gender: 'm', rate: 1.5, dmg: 2.75, reach: 1, crit: 0, hands: 2, miss: 0.12,
     stun: { chance: 0.35, time: 1.5 }, anim: 0.75 },
   trident: { name: 'трезубец', gender: 'm', rate: 1.05, dmg: 1.2, reach: 1.4, crit: 0, hands: 1, disarm: 0.15, anim: 0.45 },
+  // рапира: тонкий длинный прямой клинок — бьёт слабо, но очень часто, и легко пускает кровь
+  rapier: { name: 'рапира', gender: 'f', rate: 0.65, dmg: 0.56, reach: 1.15, crit: 0.05, hands: 1, bleed: 0.12, anim: 0.3 },
 };
 // без оружия — кулаки
 export const typeOf = (g) => (g.weapon ? WEAPON_TYPES[g.weapon.type] || WEAPON_TYPES.sword : WEAPON_TYPES.fists);
@@ -87,31 +91,33 @@ export const sandUp = (g) => g.sand > 0 && !g.shield && !(g.nets > 0) && !twoHan
 // вторая рука: щит, сеть или мешок с песком. Занята или в руках двуручник — ничего из этого гача не даёт
 export const offhandFree = (g) => !g.shield && !(g.nets > 0) && !(g.sand > 0) && !twoHanded(g);
 // принял на щит удар, который был бы критом, — щит ломается в critBreaks раз чаще
-export const SHIELD = { block: 0.2, breaks: 0.1, critBreaks: 2 };
+export const SHIELD = { block: 0.5, breaks: 0.2, critBreaks: 2 };
 // сеть многоразовая: после броска reload секунд на то, чтобы её подобрать, и шанс tear, что она порвётся.
-// Бросают с range (шанс chance в секунду) — пока сближаются, почти всегда успевают; а вплотную тоже, но реже (close)
-export const NET = { stun: 2, range: [50, 170], chance: 2.5, close: 0.5, speed: 320, focus: 6, max: 1, reload: 7, tear: 0.15 };
+// Бросают с range (шанс chance в секунду) — пока сближаются, почти всегда успевают; а вплотную тоже, но реже (close).
+// Попал — держит stun секунд, а бросивший добивает эту цель и не убегает, пока она на ногах
+export const NET = { stun: 4, range: [50, 170], chance: 3.75, close: 0.75, speed: 320, focus: 6, max: 1, reload: 14, tear: 0.15 };
 // cool — сколько секунд после подбора копьё нельзя метнуть снова; копьё метают в израненного беглеца (low), а ещё —
 // в цель дальше far: каждую секунду с шансом farChance. Брошенное копьё критует в critMult раз чаще, но промахивается
 // на miss чаще (прибавка к увороту цели)
 // windup — сколько секунд замах перед броском (рука над головой), anim — весь бросок на экране вместе с доводкой
-export const SPEAR = { low: 0.4, range: [60, 300], speed: 420, cool: 5, far: 100, farChance: 2,
+export const SPEAR = { low: 1, range: [40, 360], speed: 420, cool: 5, far: 100, farChance: 2,
   critMult: 2, miss: 0.2, windup: 0.35, anim: 0.65 };
-// мешок с песком: одноразовый, во второй руке. Бросают, только когда у самого здоровья меньше low, — в цель с range,
-// когда рядом с ней ещё враги (шанс crowd в секунду) или реже в одиночку (alone); песок слепит всех врагов бросившего
-// в radius на time секунд — их удары и броски промахиваются на miss чаще
-export const SAND = { range: [40, 220], radius: 70, crowd: 1.5, alone: 0.5, speed: 300, time: 10, miss: 0.5, low: 0.5 };
+// мешок с песком: одноразовый, во второй руке. Бросают сразу, как только у самого здоровья меньше low, — в цель с range;
+// песок слепит всех врагов бросившего в radius на time секунд — их удары и броски промахиваются на miss чаще
+export const SAND = { range: [40, 220], radius: 70, speed: 300, time: 10, miss: 0.5, low: 0.5 };
 // оружие на песке: выпадает у упавших и убитых, выбитое трезубцем летит на fling пикселей, брошенное копьё лежит, где упало.
 // Подобрать может любой: шанс chance в секунду, если вещь лучше своей хотя бы в better раз и до неё хотя бы в closer раз
-// ближе, чем до ближайшего врага. Оставшийся без оружия бежит к ближайшему, что не хуже своего хотя бы в half раза,
+// ближе, чем до ближайшего врага. Щит, сеть или мешок при пустой второй руке ищут чаще (offhand в секунду) и идут за ними
+// смелее — если до вещи не дальше, чем до врага, или не дальше near. Оставшийся без оружия бежит к ближайшему, что не хуже своего хотя бы в half раза,
 // а нет такого — за своим. reach — с какого расстояния вещь поднимают
-export const GROUND = { chance: 0.6, better: 1.1, closer: 2, half: 0.5, reach: 14, fling: [120, 200], flingSpeed: 380 };
+export const GROUND = { chance: 0.6, better: 1.1, closer: 2, half: 0.5, reach: 14, fling: [120, 200], flingSpeed: 380,
+  offhand: 2.5, near: 160 };
 
 // урон оружия от редкости: простое из кузни ×1, божественное ×2,4; сверху заточка
 export const WEAPON_MULT = { plain: 1, common: 1.12, rare: 1.25, mythic: 1.42, epic: 1.62, legendary: 1.85, divine: 2.4 };
-// заточка в кузне: +1 … +max, каждая ступень +step к множителю урона (+10 — втрое); шанс успеха chance·fall^ступень,
+// заточка в кузне: +1 … +max, каждая ступень +step к множителю урона (+10 — вдвое); шанс успеха chance·fall^ступень,
 // при неудаче оружие ломается с шансом breaks
-export const SHARPEN = { price: 100, max: 10, step: 0.2, chance: 0.9, fall: 0.8, breaks: 0.25 };
+export const SHARPEN = { price: 100, max: 10, step: 0.1, chance: 0.9, fall: 0.8, breaks: 0.25 };
 export const weaponMult = (item) => (item ? (WEAPON_MULT[item.rarity] || 1) * (1 + SHARPEN.step * (item.sharp || 0)) : 1);
 
 // скрытая сила: у каждого с самого начала DAMAGE_BASE (характеристика «сила» при этом 0), каждое очко силы
@@ -164,10 +170,10 @@ export function deathChance(base, overkill, hpMax) {
 // добили критом — гибнет в CRIT_KILL раз чаще (как с кровотечением)
 export const CRIT_KILL = 1.5;
 
-// крит с шансом chance пускает кровь на time секунд: пока раненый бежит, теряет здоровье — за всё кровотечение
-// на бегу набегает share от максимума (около 15%), а двигается он на slow медленнее; свалили с кровотечением —
+// крит с шансом chance (а секира и рапира — и обычным попаданием) пускает кровь на time секунд: раненый всё это время
+// теряет здоровье — за всё кровотечение share от максимума, а двигается на slow медленнее; свалили с кровотечением —
 // гибнет в deathMult раз чаще
-export const BLEED = { chance: 0.5, time: 5, share: 0.15, slow: 0.25, deathMult: 1.5 };
+export const BLEED = { chance: 0.5, time: 5, share: 0.2, slow: 0.25, deathMult: 1.5 };
 
 // за каждый удар по врагу — к итогам боя
 export const HIT_REWARD = { xp: 5, coins: 3 };
@@ -180,11 +186,12 @@ export const SKULL = { rounds: 2, pull: 160 };
 export const FLAME = { streak: 3, reward: { xp: 80, coins: 60 } };
 // бой насмерть по вызову: answer секунд на ответ; павший гибнет всегда; победителю — base и perLevel за каждый уровень
 // поверженного (сверху к наградам дуэли)
-export const DEATHMATCH = { answer: 30, base: { xp: 120, coins: 100 }, perLevel: { xp: 40, coins: 30 } };
+export const DEATHMATCH = { answer: 30, level: 5, base: { xp: 120, coins: 100 }, perLevel: { xp: 40, coins: 30 } };
 // случайные события боя: лев из ворот (шанс на бой; выходит на at секунде боя, сила — might от среднего бойца);
-// камень с трибун ближе к концу (шанс на бой): когда на ногах few и меньше, а на дуэли — у кого-то половина здоровья
-// и меньше; оглушает как молот на stun секунд
-export const EVENTS = { lion: { chance: 0.15, at: [8, 20], might: 1.3 }, rock: { chance: 0.4, few: 3, stun: 1.5, speed: 420,
+// лев выходит, когда все уже ранены, — поэтому слабее (might от среднего бойца с его нынешним здоровьем), и бойцы бьют
+// его первым (для них он «ближе» на focus пикселей). Камень с трибун ближе к концу (шанс на бой): когда на ногах few
+// и меньше, а на дуэли — у кого-то половина здоровья и меньше; оглушает как молот на stun секунд
+export const EVENTS = { lion: { chance: 0.15, at: [8, 20], might: 0.6, focus: 400 }, rock: { chance: 0.4, few: 3, stun: 1.5, speed: 420,
   delay: [1, 3] } };
 
 
@@ -212,7 +219,7 @@ export function ratingOf(g) {
 // Сила стороны — (сумма урона в секунду) × (сумма живучести). Толпа бьёт слаженнее, поэтому доля растёт от strength[0]
 // при grow[0] бойцах до strength[1] при grow[1] и больше. Подобрано симуляцией: игроки побеждают ~9 боёв из 10, но с потерями
 export const PIT = {
-  chance: 0.11, deathMult: 2, per: 2.5, max: 6, strength: [0.45, 0.56], grow: [3, 8], might: [0.25, 12], tilt: [2.5, 1.07],
+  chance: 0.11, deathMult: 2, per: 2.5, max: 6, strength: [0.52, 0.64], grow: [3, 8], might: [0.25, 12], tilt: [2.5, 1.07],
   lion: { level: 5, str: 4, agi: 3, vit: 4 },
   reward: { standing: { xp: 100, coins: 80 }, beaten: { xp: 70, coins: 55 }, perKo: { xp: 20, coins: 15 } },
 };
@@ -239,8 +246,19 @@ export const TEAMS = {
 // Выжившим против него — много опыта.
 // Сам он после боя, как бы тот ни кончился, получает парагон и начинает заново: за каждый парагон
 // +points к стартовым очкам характеристик и +coins к стартовому золоту
-export const PARAGON = { level: 10, fights: 30, points: 1, coins: 10, boost: 2,
+// После red обычных парагонов идут красные: флажок красный, счёт с 1; на старте неизменно +redStart (очки и монеты),
+// а за каждый красный — ещё +redCoins монет
+export const PARAGON = { level: 10, fights: 30, points: 1, coins: 10, boost: 2, red: 10, redStart: { points: 10, coins: 100 },
+  redCoins: 10,
   reward: { standing: { xp: 160, coins: 40 }, beaten: { xp: 120, coins: 30 }, perKo: { xp: 20, coins: 10 } } };
+
+// стартовые очки и монеты за парагон: обычные — по points и coins за каждый, красные — redStart и redCoins за каждый
+export function paragonStart(paragon) {
+  if (paragon <= PARAGON.red) return { points: PARAGON.points * paragon, coins: PARAGON.coins * paragon };
+  return { points: PARAGON.redStart.points, coins: PARAGON.redStart.coins + PARAGON.redCoins * (paragon - PARAGON.red) };
+}
+// как показать парагон: красный ли и какая цифра на флажке
+export const paragonFlag = (paragon) => (paragon > PARAGON.red ? { red: true, n: paragon - PARAGON.red } : { red: false, n: paragon });
 
 export function pitStrength(n) {
   const [from, to] = PIT.grow, part = Math.max(0, Math.min(1, (n - from) / (to - from)));

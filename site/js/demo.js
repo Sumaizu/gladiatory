@@ -9,7 +9,7 @@ const ACTIONS = ['трен', 'трен', 'трен', 'отдых', 'гача', '
   'проф'];
 // в примере все уже обжились: оружие от редкого до легендарного, броня средняя и хорошая, кое-где заточка
 const GOOD = ['rare', 'mythic', 'mythic', 'epic', 'epic', 'legendary'];
-const TYPES = ['sword', 'greatsword', 'spear', 'axe', 'hammer', 'trident'];
+const TYPES = ['sword', 'greatsword', 'spear', 'axe', 'hammer', 'trident', 'rapier'];
 
 // пример на странице до запуска: выдуманные игроки и короткие фазы; крутят гачу, точат и перековывают оружие
 export function demoGame(settings) {
@@ -25,7 +25,7 @@ export function demoGame(settings) {
     for (const slot of ['head', 'body', 'legs', 'feet']) {
       g.gear[slot] = Math.random() < 0.8 ? makeItem(Math.random, 'armor', rarity(pick(GOOD.slice(0, 5))), slot) : null;
     }
-    const oneHand = ['sword', 'spear', 'trident'].includes(g.weapon.type);
+    const oneHand = ['sword', 'spear', 'trident', 'rapier'].includes(g.weapon.type);
     if (oneHand) [() => { g.shield = true; }, () => { g.nets = 1; }, () => { g.sand = 1; }, () => {}][i % 4]();
     g.amulet = i % 5 === 2;
     g.coins = 250 + Math.floor(Math.random() * 400);

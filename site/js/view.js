@@ -1,4 +1,4 @@
-import { ARMOR_SLOTS, SAND, SLOT_IDS, STATS, TEAMS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
+import { ARMOR_SLOTS, SAND, SLOT_IDS, paragonFlag, STATS, TEAMS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
 import { PLAIN, RARITIES, REFORGE, SHARPEN, TYPES, itemName, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
 import { COLUMNS, FIELD_H, FIELD_W, DUMMIES, LUDUS_TOP, PLACES } from './places.js';
 import { FONT, drawCrowd, drawDummy, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, paintArena, paintLudus } from './draw.js';
@@ -18,7 +18,7 @@ const BLOOD = ['#8f1414', '#a8191b', '#6e0d0f', '#c22a22'];
 const SAND_COLORS = ['#fff6d8', '#f3e2b3', '#d6b46e', '#a8804a', '#7a5a30'];
 // у каждого оружия свой звук удара; тяжёлое при промахе гудит ниже
 const HIT_SOUND = { fists: 'punch', sword: 'hit', greatsword: 'cleave', axe: 'chop', hammer: 'smash', spear: 'stab',
-  trident: 'pierce', claws: 'maul' };
+  trident: 'pierce', claws: 'maul', rapier: 'stab' };
 const HEAVY = new Set(['greatsword', 'axe', 'hammer']);
 // на какой доле замаха оружие доходит до цели (как в ключевых кадрах ANIMS в draw.js)
 const IMPACT = 0.3;
@@ -43,11 +43,15 @@ const COMMANDS = {
 // на итогах гача и кузня закрыты — их команд внизу нет
 COMMANDS.results = COMMANDS.ludus.filter(([word]) => !['гача', 'улучшить', 'реролл'].includes(word));
 
-// флажок парагона — как в Чатобороне: золотое полотнище на перекладине, цифра поверх
-const FLAG = { rod: '#8a5a12', rodLight: '#e6b54a', knob: '#ffe08a', edge: '#6b4106', top: '#ffe58a', mid: '#f5b82e',
+// флажок парагона — как в Чатобороне: золотое полотнище на перекладине, цифра поверх; после 10 парагонов — красный
+const FLAG_GOLD = { rod: '#8a5a12', rodLight: '#e6b54a', knob: '#ffe08a', edge: '#6b4106', top: '#ffe58a', mid: '#f5b82e',
   low: '#c98a12' };
-let flagUrl = null;
-function flagImage(width = 14, height = 19, scale = 3) {
+const RED_FLAG = { rod: '#6a1410', rodLight: '#e6b54a', knob: '#ffe08a', edge: '#4a0a08', top: '#ff7a6a', mid: '#d6281e',
+  low: '#8a1410' };
+const flagUrls = new Map();
+function flagImage(red = false, width = 14, height = 19, scale = 3) {
+  const FLAG = red ? RED_FLAG : FLAG_GOLD;
+  let flagUrl = flagUrls.get(red);
   if (!flagUrl) {
     const canvas = document.createElement('canvas');
     canvas.width = width * scale;
@@ -95,6 +99,7 @@ function flagImage(width = 14, height = 19, scale = 3) {
       g.fill();
     }
     flagUrl = canvas.toDataURL();
+    flagUrls.set(red, flagUrl);
   }
   const img = document.createElement('img');
   img.className = 'flag';
@@ -103,12 +108,20 @@ function flagImage(width = 14, height = 19, scale = 3) {
   return img;
 }
 
+// после 10 обычных парагонов — красный флажок, и счёт на нём снова с 1
+const nameOf = (game, login) => (game.members.get(login) || { name: login }).name;
+
 function paragonTag(paragon) {
-  const node = el('span', 'paragon-tag');
-  node.title = 'Парагон ' + paragon;
-  node.append(flagImage(), el('b', '', String(paragon)));
+  const flag = paragonFlag(paragon);
+  const node = el('span', 'paragon-tag' + (flag.red ? ' red' : ''));
+  node.title = (flag.red ? 'Красный парагон ' : 'Парагон ') + flag.n;
+  node.append(flagImage(flag.red), el('b', '', String(flag.n)));
   return node;
 }
+const paragonName = (paragon) => {
+  const flag = paragonFlag(paragon);
+  return (flag.red ? 'красный парагон ' : 'парагон ') + flag.n;
+};
 
 // иконки характеристик — фигуры в стиле сердца из Чатобороны: светлый край сверху-слева, тень снизу-справа, тёмная обводка.
 // # — заливка, k — складка, s — подошва
@@ -215,6 +228,7 @@ const ICONS = {
   spear: '<svg viewBox="0 0 16 16"><g transform="rotate(45 8 8)" fill="currentColor"><path d="M8 -2.5 10.2 2.6 8 7.2 5.8 2.6Z"/><rect x="7.2" y="7" width="1.6" height="1.2" fill="#1e140e"/><rect x="7.35" y="8.2" width="1.3" height="9.3"/></g></svg>',
   axe: '<svg viewBox="0 0 16 16"><g transform="rotate(45 8 8) translate(8 8) scale(0.88) translate(-8 -7.5)" fill="currentColor"><path d="M8 -3.2 9 -0.8H7Z"/><path d="M9 2.4 13.8 -1.6Q15.9 3.6 13.8 8.8L9 4.8Z"/><path d="M7 2.4 2.2 -1.6Q0.1 3.6 2.2 8.8L7 4.8Z"/><rect x="6.6" y="-0.8" width="2.8" height="8.6" rx=".4"/><rect x="7.3" y="7.8" width="1.4" height="9.6"/></g></svg>',
   hammer: '<svg viewBox="0 0 16 16"><g transform="rotate(45 8 8) translate(8 8) scale(0.74) translate(-8 -7.5)" fill="currentColor"><rect x="2.2" y="-2.4" width="3" height="7.6" rx=".5"/><rect x="10.8" y="-2.4" width="3" height="7.6" rx=".5"/><rect x="5" y="-1" width="6" height="4.8"/><rect x="7.2" y="5.2" width="1.6" height="11.6"/><rect x="6.6" y="16.4" width="2.8" height="1.3" rx=".5"/></g></svg>',
+  rapier: '<svg viewBox="0 0 16 16"><g transform="rotate(45 8 8)" fill="currentColor"><path d="M8 -3 8.6 -1.8V11.2H7.4V-1.8Z"/><path d="M5.4 11.2Q8 14.2 10.6 11.2Z"/><rect x="4.6" y="11" width="6.8" height="1" rx=".4"/><rect x="7.4" y="12.6" width="1.2" height="3.4"/><circle cx="8" cy="16.6" r="1"/></g></svg>',
   trident: '<svg viewBox="0 0 16 16"><g transform="rotate(45 8 8)" fill="currentColor"><path d="M8 -2.8 9.3 -0.6H8.7V7.5H7.3V-0.6H6.7Z"/><path d="M4.2 0.4 5.4 2.2H5V7.5H3.6V2.2H3Z"/><path d="M11.8 0.4 13 2.2H12.4V7.5H11V2.2H10.6Z"/><rect x="3.6" y="7.4" width="8.8" height="1.5" rx=".5"/><rect x="7.3" y="8.9" width="1.4" height="8.6"/></g></svg>',
   sand: '<svg viewBox="0 0 16 16"><path d="M6 1.5h4l-1 2.2h-2z" fill="currentColor"/><path d="M5.6 4.6h4.8c2.2 1.5 3.6 4 3.6 6.3 0 2.6-2.6 3.6-6 3.6s-6-1-6-3.6c0-2.3 1.4-4.8 3.6-6.3z" fill="currentColor"/><path d="M5.6 4.6h4.8" stroke="#1e140e" stroke-width="1.1"/></svg>',
   fists: '<svg viewBox="0 0 16 16"><path d="M4 6h8a2 2 0 0 1 2 2v3a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7zM4 3.5a1.5 1.5 0 0 1 3 0V6H4zM7.2 3a1.5 1.5 0 0 1 3 0V6h-3zM10.4 3.6a1.4 1.4 0 0 1 2.8 0V6h-2.8z" fill="currentColor"/></svg>',
@@ -958,13 +972,14 @@ export class View {
 
   _dom(game) {
     const state = game.state;
-    const fightName = game.duel ? (game.duel.betting ? 'Арена · Дуэль: ставки' : 'Арена · Дуэль')
+    const fightName = game.duel ? (game.duel.death ? (game.duel.betting ? 'Арена · Бой насмерть: ставки' : 'Арена · Бой насмерть')
+      : game.duel.betting ? 'Арена · Дуэль: ставки' : 'Арена · Дуэль')
       : game.mode === 'pit' ? 'Арена · Яма со львами' : game.boss ? 'Арена · Испытание парагона'
         : game.mode === 'teams' ? 'Арена · Стенка на стенку' : 'Арена · все против всех';
     const phase = { ludus: 'Лудус · подготовка', battle: fightName, results: 'Итоги боя' }[state] || '';
     this._set('phase', state + phase, (node) => {
       node.textContent = phase;
-      node.className = 'phase ' + state;
+      node.className = 'phase ' + state + (state === 'battle' && game.duel && game.duel.death ? ' death' : '');
     });
     const left = state === 'stopped' ? '' : clock(game.timer);
     this._set('clock', left + (state === 'battle' && game.timer < 15), (node) => {
@@ -987,7 +1002,7 @@ export class View {
 
   _status(game) {
     const duel = game.duel;
-    const key = game.state + '|' + game.mode + '|' + game.nextMode + '|' + (game.nextBoss ? game.nextBoss.login : '') + '|' + game.notice + '|' + (game.state === 'battle' ? game.waiting + ':' + game.watching : '')
+    const key = game.state + '|' + game.mode + '|' + game.nextMode + '|' + (game.deathmatch ? game.deathmatch.left + game.deathmatch.right : '') + '|' + (game.nextBoss ? game.nextBoss.login : '') + '|' + game.notice + '|' + (game.state === 'battle' ? game.waiting + ':' + game.watching : '')
       + '|' + (duel ? duel.betting : '');
     this._set('status', key, (node) => {
       node.replaceChildren();
@@ -996,6 +1011,8 @@ export class View {
       } else if (duel && duel.betting) {
         node.append(el('code', '', '1'), el('small', '', '— за ' + duel.left.name), el('code', '', '2'),
           el('small', '', '— за ' + duel.right.name + ' · угадавшим по 100 монет'));
+      } else if (duel && duel.death) {
+        node.append(el('b', 'death', 'Бой насмерть: ' + duel.left.name + ' против ' + duel.right.name + ' — павший погибнет'));
       } else if (duel) {
         node.append(el('small', '', 'Дуэль: ' + duel.left.name + ' против ' + duel.right.name + ' — никто не погибнет'));
       } else if (game.state === 'battle') {
@@ -1010,7 +1027,9 @@ export class View {
       } else if (game.state === 'ludus' && game.nextMode) {
         node.append(el('small', '', 'Дальше:'), el('b', 'next-mode ' + game.nextMode, MODE_NAMES[game.nextMode]),
           el('small', '', game.nextMode === 'paragon' && game.nextBoss ? '— ' + game.nextBoss.name + ' против всех'
-            : MODE_HINTS[game.nextMode]));
+            : game.nextMode === 'deathmatch' && game.deathmatch ? '— ' + nameOf(game, game.deathmatch.left) + ' против '
+              + nameOf(game, game.deathmatch.right) + ', павший погибнет'
+              : MODE_HINTS[game.nextMode]));
       } else {
         node.append(el('small', '', 'Напиши в чат что угодно — и ты гладиатор'));
       }
@@ -1336,7 +1355,7 @@ export class View {
         prize.style.color = outcomeOf(r.kind).color;
         prize.append('+' + r.coins + ' монет', el('small', '', outcomeOf(r.kind).name));
       } else if (now.done) {
-        prize.append('Пустота');
+        prize.append('Ничего');
       }
     }
     const waiting = game.spins.length;
@@ -1439,7 +1458,7 @@ export class View {
         const up = r.ascended;
         $('champion').append(up.stood ? '' : up.died ? 'Гладиаторы убили ' : 'Гладиаторы одолели ',
           nick('', up.name, up.login, 'b'), up.stood ? ' выстоял против всех и получает ' : ' — он всё равно получает ',
-          paragonTag(up.paragon), ' парагон ' + up.paragon + (up.died ? '' : ' и начинает заново')
+          paragonTag(up.paragon), ' ' + paragonName(up.paragon) + (up.died ? '' : ' и начинает заново')
           + (up.amulet ? ' с божественным амулетом' : ''));
       } else if (champ) {
         $('champion').append('Чемпион арены — ', nick('', champ.name, champ.login, 'b'));
@@ -1463,7 +1482,7 @@ export class View {
       const reward = (row) => {
         if (row.paragon) {
           const span = el('span', '', 'получает ');
-          span.append(paragonTag(row.paragon), ' парагон ' + row.paragon);
+          span.append(paragonTag(row.paragon), ' ' + paragonName(row.paragon));
           return span;
         }
         const span = el('span', '', '+' + row.xp + ' опыта · +' + row.coins + ' монет'

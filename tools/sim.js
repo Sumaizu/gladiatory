@@ -4,7 +4,7 @@ import { clean } from '../site/js/config.js';
 import { Game, Roster } from '../site/js/engine.js';
 import { RARITIES, makeItem } from '../site/js/gacha.js';
 
-const TYPES = ['sword', 'greatsword', 'spear', 'axe', 'hammer', 'trident'];
+const TYPES = ['sword', 'greatsword', 'spear', 'axe', 'hammer', 'trident', 'rapier'];
 const SLOTS = ['head', 'body', 'legs', 'feet'];
 
 function rng(seed) {
@@ -86,7 +86,7 @@ const EXPERIMENTS = {
     for (const people of [2, 12]) {
       let hits = 0, standing = 0;
       for (let i = 0; i < 20; i++) {
-        const specs = Array.from({ length: people }, (_, k) => ({ level: 5, weapon: TYPES[k % 6], rarity: 'rare' }));
+        const specs = Array.from({ length: people }, (_, k) => ({ level: 5, weapon: TYPES[k % TYPES.length], rarity: 'rare' }));
         const { rows, results } = battle(specs, { seed: 7 + i });
         hits += results ? results.rows.reduce((sum, r) => sum + r.hits, 0) : 0;
         standing += rows.filter((r) => r.fate === 'fight').length;
@@ -110,7 +110,7 @@ const EXPERIMENTS = {
   },
   // как в игре: у одноручного во второй руке щит, сеть или мешок (по очереди), у двуручного — ничего
   real() {
-    const out = [], ONE = ['sword', 'spear', 'trident'], HANDS = ['shield', 'net', 'sand'];
+    const out = [], ONE = ['sword', 'spear', 'trident', 'rapier'], HANDS = ['shield', 'net', 'sand'];
     const spec = (type, level, rare, armor, i) => ({ level, weapon: type, rarity: rare, armor,
       hand: ONE.includes(type) ? HANDS[i % 3] : 'none' });
     for (const [level, rare, armor] of [[3, 'common', null], [6, 'mythic', 'rare'], [12, 'legendary', 'epic']]) {
@@ -129,7 +129,7 @@ const EXPERIMENTS = {
     const champ = {}, n = 200;
     for (const t of TYPES) champ[t] = 0;
     for (let i = 0; i < n; i++) {
-      const specs = Array.from({ length: 12 }, (_, k) => spec(TYPES[(k + i) % 6], 6, 'mythic', 'rare', k + i));
+      const specs = Array.from({ length: 12 }, (_, k) => spec(TYPES[(k + i) % TYPES.length], 6, 'mythic', 'rare', k + i));
       const { results } = battle(specs, { seed: 7000 + i * 29 });
       specs.forEach((sp, k) => {
         if (results && results.champion === 'p' + k) champ[sp.weapon]++;
@@ -145,7 +145,7 @@ const EXPERIMENTS = {
     for (const t of TYPES) stand[t] = champ[t] = kos[t] = 0;
     const n = 150;
     for (let i = 0; i < n; i++) {
-      const specs = Array.from({ length: 12 }, (_, k) => ({ level: 6, weapon: TYPES[(k + i) % 6], rarity: 'mythic', armor: 'rare' }));
+      const specs = Array.from({ length: 12 }, (_, k) => ({ level: 6, weapon: TYPES[(k + i) % TYPES.length], rarity: 'mythic', armor: 'rare' }));
       const { rows, results } = battle(specs, { seed: 100 + i * 31 });
       rows.forEach((r, k) => {
         const t = specs[k].weapon;
@@ -213,9 +213,9 @@ const EXPERIMENTS = {
         const n = 120;
         for (let i = 0; i < n; i++) {
           const specs = Array.from({ length: people }, (_, k) => {
-            if (tier) return Object.assign({ weapon: TYPES[(k + i) % 6] }, tier, tier.weapon === null ? { weapon: null } : {});
-            const pick = [{ level: 1, weapon: null }, { level: 4, weapon: TYPES[k % 6], rarity: 'common' },
-              { level: 8, weapon: TYPES[(k + 2) % 6], rarity: 'epic', armor: 'rare' }][(k + i) % 3];
+            if (tier) return Object.assign({ weapon: TYPES[(k + i) % TYPES.length] }, tier, tier.weapon === null ? { weapon: null } : {});
+            const pick = [{ level: 1, weapon: null }, { level: 4, weapon: TYPES[k % TYPES.length], rarity: 'common' },
+              { level: 8, weapon: TYPES[(k + 2) % TYPES.length], rarity: 'epic', armor: 'rare' }][(k + i) % 3];
             return pick;
           });
           const { rows, results } = battle(specs, { mode: 'pit', seed: 900 + i * 17 + people, death: 10 });
@@ -237,8 +237,8 @@ const EXPERIMENTS = {
       let stood = 0;
       const n = 100;
       for (let i = 0; i < n; i++) {
-        const specs = [{ level: 10, weapon: TYPES[i % 6], rarity: 'epic', armor: 'rare' },
-          ...Array.from({ length: crowd }, (_, k) => Object.assign({ weapon: TYPES[(k + i) % 6] }, tier))];
+        const specs = [{ level: 10, weapon: TYPES[i % TYPES.length], rarity: 'epic', armor: 'rare' },
+          ...Array.from({ length: crowd }, (_, k) => Object.assign({ weapon: TYPES[(k + i) % TYPES.length] }, tier))];
         const { rows } = battle(specs, { mode: null, seed: 3000 + i * 11, boss: 0 });
         if (rows[0].fate === 'fight') stood++;
       }

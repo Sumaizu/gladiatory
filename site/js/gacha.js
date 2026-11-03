@@ -20,9 +20,12 @@ export const OUTCOMES = [
   { id: 'shield', name: 'Щит', color: '#d9a441', chance: 0.15, offhand: 4 / 3 },
   { id: 'net', name: 'Сеть', color: '#a8c4b0', chance: 0.15, offhand: 4 / 3 },
   { id: 'sand', name: 'Мешок с песком', color: '#d6b46e', chance: 0.15, offhand: 4 / 3 },
-  // спасает от смерти один раз и рассыпается; пока он есть, второй не выпадает
+  // спасает от смерти один раз и рассыпается; пока он есть, второй не выпадает. Шанс всегда ровно 3%
   { id: 'amulet', name: 'Божественный амулет', color: '#ff3b47', chance: 0.03 },
+  // выпадает, только если кроме амулета выпасть больше нечему
+  { id: 'nothing', name: 'Ничего', color: '#8a8478', chance: 0 },
 ];
+const AMULET = OUTCOMES.find((o) => o.id === 'amulet').chance;
 
 // armor — процент, на который режется входящий урон (урон оружия от редкости — WEAPON_MULT в balance.js)
 export const RARITIES = [
@@ -79,18 +82,22 @@ export function makeItem(random, kind, rarity, type = null) {
 // (выпадает редкость), доспех — в слоты, где ещё нет легендарного. Легендарное (или божественное) оружие и доспехи
 // больше не выпадают; если выпадать нечему — null
 export function spin(random, owner = null) {
-  const outcomes = OUTCOMES.filter((o) => !owner || (o.id === 'amulet' ? !owner.amulet
-    : !o.offhand || offhandFree(owner)));
+  const amulet = !owner || !owner.amulet;
+  const outcomes = OUTCOMES.filter((o) => o.chance > 0 && o.id !== 'amulet' && (!owner || !o.offhand || offhandFree(owner)));
   // одноручное оружие и пустая вторая рука — вещи для неё чаще
   const oneHand = owner && owner.weapon && (WEAPON_TYPES[owner.weapon.type] || WEAPON_TYPES.sword).hands === 1;
   const weights = outcomes.map((o) => o.chance * (oneHand && o.offhand ? o.offhand : 1));
   const weapon = !owner || Boolean(owner.weapon) && !maxedOut(owner.weapon);
   const slots = SLOT_IDS.filter((slot) => !owner || !maxedOut(owner.gear && owner.gear[slot]));
   // остаток после щита, сети, мешка и амулета — оружие и доспех поровну (что из них ещё может выпасть)
-  const items = weapon || slots.length ? Math.max(0, 1 - weights.reduce((sum, w) => sum + w, 0)) : 0;
-  const total = weights.reduce((sum, w) => sum + w, 0) + items;
-  if (total <= 0) return null;
-  let roll = random() * total;
+  const items = weapon || slots.length ? Math.max(0, 1 - AMULET - weights.reduce((sum, w) => sum + w, 0)) : 0;
+  const others = weights.reduce((sum, w) => sum + w, 0) + items;
+  if (others <= 0 && !amulet) return null;
+  // амулет — всегда ровно 3%, сколько бы другого ни осталось; кроме него выпасть нечему — остальное «ничего»
+  let roll = random();
+  if (amulet && roll < AMULET) return { kind: 'amulet' };
+  if (others <= 0) return { kind: 'nothing' };
+  roll = (roll - (amulet ? AMULET : 0)) / (1 - (amulet ? AMULET : 0)) * others;
   for (let i = 0; i < outcomes.length; i++) {
     roll -= weights[i];
     if (roll < 0) return { kind: outcomes[i].id };
