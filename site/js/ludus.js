@@ -519,6 +519,10 @@ function sideAt(x, y) {
   return { u: t * DEPTH, h: (sideBase(x) - y) / (1 + SIDE.grow * t), t };
 }
 
+// поломки на боковых стенах: выбитые камни [камень, ряд] и трещины [глубина, высота начала, длина вниз]
+const WALL_HOLES = { right: [[0, 15], [1, 15], [6, 9], [5, 18], [6, 1]], left: [[2, 5], [3, 5], [4, 13], [1, 18], [3, 1]] };
+const WALL_CRACKS = { right: [[20, 205, 60], [230, 120, 70]], left: [[90, 230, 80], [180, 110, 60], [40, 70, 50]] };
+
 function paintSideWall(ctx, right) {
   const u0 = GATE.from * DEPTH, u1 = GATE.to * DEPTH, r = (u1 - u0) / 2, cu = u0 + r, spring = GATE.height;
   const jamb = 16;
@@ -589,17 +593,47 @@ function paintSideWall(ctx, right) {
           // косяки ворот — светлые камни
           c = tone(rgb(Math.floor(h / 10) % 2 ? '#ddcdb0' : '#c4b294'), light * ((Math.floor(h) % 10) < 1.4 ? 0.8 : 1));
         } else {
-          // кладка: ряды по 12, камни по 40 вразбежку, у каждого свой тон; у самой колоннады — светлый угол
+          // кладка: ряды по 12, камни по 40 вразбежку, у каждого свой тон; у самой колоннады — светлый угол.
+          // Швы — там, где камень меняется по сравнению с соседним пикселем слева или сверху: так каждый шов ровно
+          // в один пиксель и не пропадает, как бы ни сжимал ракурс
           const row = Math.floor(h / 12), off = row % 2 ? 20 : 0, bu = Math.floor((u + off) / 40);
-          const joint = (h % 12) < 1.6 || ((u + off) % 40) < 3.2;
+          const up = sideAt(x + 1, y - 1), left = sideAt(x - 1, y + 1), up2 = sideAt(x + 1, y - 3);
+          const joint = Math.floor(up.h / 12) !== row || x > SIDE.x && Math.floor((left.u + off) / 40) !== bu;
           let k = light * (0.88 + 0.16 * hash(bu, row, 191) + 0.05 * noise(x, y, 14, 192));
-          if (joint) k *= 0.72;
+          if (joint) k *= 0.7;
+          else if (Math.floor(up2.h / 12) !== row) k *= 1.07;
           k *= 0.7 + 0.3 * smooth(262, 200, h);
           c = tone(rgb(u < 7 ? '#d6c4a4' : '#b5a284'), k);
+          // поломки: выбитые камни — тёмная ниша с тенью сверху и обломками снизу; трещины
+          const hole = (right ? WALL_HOLES.right : WALL_HOLES.left).some(([hb, hr]) => hb === bu && hr === row);
+          if (hole && !joint) {
+            const inRow = h - row * 12;
+            c = tone(rgb('#5e5246'), light * (inRow > 9 ? 0.55 : inRow < 3 ? 0.95 : 0.75) * (0.9 + 0.2 * hash(x, y, 193)));
+          }
+          for (const [cu, ch, len] of right ? WALL_CRACKS.right : WALL_CRACKS.left) {
+            const dh = ch - h;
+            if (dh < 0 || dh > len) continue;
+            const along = cu + dh * 0.5 + Math.sin(dh * 0.45) * 5 + (hash(Math.floor(dh / 4), cu, 194) - 0.5) * 4;
+            if (Math.abs(u - along) < 3) c = tone(rgb('#4e443a'), light * 0.9);
+          }
         }
       }
       ctx.fillStyle = 'rgb(' + c.map((v) => Math.round(v)).join(',') + ')';
       ctx.fillRect(sx(x), y, 2, 2);
+    }
+  }
+  // под нижними выбитыми камнями на песке лежат обломки
+  for (const [bu, row] of right ? WALL_HOLES.right : WALL_HOLES.left) {
+    if (row > 2) continue;
+    const u = (bu * 40 + 20 - (row % 2 ? 20 : 0)) / DEPTH, bx = Math.round(SIDE.x + u * (FIELD_W - SIDE.x));
+    const by = Math.round(sideBase(bx) / 2) * 2 + 4;
+    for (let i = 0; i < 9; i++) {
+      const rx = bx - 12 + Math.round(hash(i, bu, 195) * 12) * 2, ry = by + Math.round(hash(i, row, 196) * 4) * 2;
+      const big = hash(i, 7, 197) < 0.4;
+      ctx.fillStyle = hash(i, 8, 198) < 0.5 ? '#8a7c6a' : '#a69683';
+      ctx.fillRect(sx(rx), ry, big ? 4 : 2, big ? 4 : 2);
+      ctx.fillStyle = '#5e5246';
+      ctx.fillRect(sx(rx), ry + (big ? 4 : 2), big ? 4 : 2, 2);
     }
   }
   // угол стены у колоннады — тонкая тёмная грань

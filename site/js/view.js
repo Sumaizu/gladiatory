@@ -951,8 +951,10 @@ export class View {
         size = 20;
         color = '#ff5a64';
       }
-      ctx.font = Math.round(size * 0.8) + 'px "Press Start 2P", ' + FONT;
-      ctx.lineWidth = 4;
+      // всплывающие надписи — крупно и с толстым контуром, чтобы читались на трансляции
+      ctx.font = Math.round(size * 1.15) + 'px "Press Start 2P", ' + FONT;
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 6;
       ctx.strokeStyle = 'rgba(20,12,10,.85)';
       ctx.strokeText(f.text, x, y);
       ctx.fillStyle = color;
