@@ -1149,6 +1149,7 @@ test('ники стримеров узнаются по логину без уч
   eq(starOf('sumaizu'), 'rainbow');
   eq(starOf('SukoshiSSRB'), 'white');
   eq(starOf('higashi_vo'), 'snow');
+  eq(starOf('Renozis'), 'glare');
   eq(starOf('brutus'), null);
   eq(starOf(undefined), null);
 });

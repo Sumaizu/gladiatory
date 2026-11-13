@@ -2,7 +2,8 @@ import { FLAME, TEAMS, maxHp } from './balance.js';
 import { COLUMNS, DUMMIES, FORGE } from './places.js';
 import { drawCrowd, paintArenaArt } from './arena.js';
 import { tierOf } from './gacha.js';
-import { RAINBOW, RAINBOW_CYCLE, RAINBOW_W, SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
+import { GLARE_CYCLE, GLARE_GLOW, GLARE_SIZE, RAINBOW, RAINBOW_CYCLE, RAINBOW_W, SNOW_CYCLE, STAR_COLORS, starOf }
+  from './stars.js';
 import { LION, P, SPRITE, darker, lionSprite, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, sandSprite, shieldLookOf, shieldSprite, weaponSprite } from './art.js';
 import { drawDummyArt, paintLudusArt } from './ludus.js';
 
@@ -570,14 +571,20 @@ export function drawLabel(ctx, g, scene, highlight, mark = null) {
   // в стенке на стенку ник — цвета команды
   const team = fate && g.team ? TEAMS.colors[g.team] : null;
   const star = fate === 'dead' || g.lion || team ? null : starOf(g.login);
-  ctx.fillStyle = team || (star ? starPaint(ctx, star, x0, nameW) : fate === 'dead' ? '#c9c2b8' : g.color || '#fff');
+  ctx.fillStyle = team || (star ? starPaint(ctx, star, x0, nameW, top - 3)
+    : fate === 'dead' ? '#c9c2b8' : g.color || '#fff');
   if (highlight && fate !== 'dead') {
     // на жёлтой подложке выбранного светлые ники теряются — даём им тёмный контур
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(20,16,30,.85)';
     ctx.strokeText(g.name, cx, top + 1);
   }
+  if (star === 'glare') {
+    ctx.shadowColor = 'rgba(255,43,43,.9)';
+    ctx.shadowBlur = glareAt(GLARE_GLOW) * 2;
+  }
   ctx.fillText(g.name, cx, top + 1);
+  ctx.shadowBlur = 0;
   // красный череп (убил насмерть) — слева от плашки, огонёк (серия без падений) — справа
   if (!g.lion && g.skull > 0) drawSkull(ctx, left - 14, top - 11);
   if (!g.lion && (g.streak || 0) >= FLAME.streak) drawFlame(ctx, left + nameW + 10 + badge + 4, top - 12, Date.now() / 1000);
@@ -625,8 +632,17 @@ function hpBar(ctx, cx, y, w, part) {
   ctx.fill();
 }
 
-// ники стримеров на холсте — та же радуга и тот же снежный блик, что в CSS
-function starPaint(ctx, star, x, w) {
+// значение по ключевым точкам цикла блика Renozis, между точками — по прямой
+function glareAt(keys) {
+  const t = (Date.now() % GLARE_CYCLE) / GLARE_CYCLE;
+  let i = 1;
+  while (i < keys.length - 1 && keys[i][0] < t) i++;
+  const [t0, a] = keys[i - 1], [t1, b] = keys[i];
+  return a + (b - a) * Math.min(1, Math.max(0, (t - t0) / (t1 - t0)));
+}
+
+// ники стримеров на холсте — та же радуга, тот же снежный блик и раскалённая середина, что в CSS
+function starPaint(ctx, star, x, w, y) {
   const now = Date.now();
   if (star === 'rainbow') {
     const shift = (now % RAINBOW_CYCLE) / RAINBOW_CYCLE * RAINBOW_W;
@@ -644,6 +660,15 @@ function starPaint(ctx, star, x, w) {
     grad.addColorStop(0, STAR_COLORS.snow);
     grad.addColorStop(0.5, '#ffffff');
     grad.addColorStop(1, STAR_COLORS.snow);
+    return grad;
+  }
+  if (star === 'glare') {
+    // красный ник, середина то разгорается добела почти на весь ник, то сжимается
+    const r = Math.max(1, (w * glareAt(GLARE_SIZE)) / 2);
+    const grad = ctx.createRadialGradient(x + w / 2, y, 0, x + w / 2, y, r);
+    grad.addColorStop(0.3, '#ffffff');
+    grad.addColorStop(0.5, '#ffc2c2');
+    grad.addColorStop(0.9, STAR_COLORS.glare);
     return grad;
   }
   return STAR_COLORS[star] || '#fff';
