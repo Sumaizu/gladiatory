@@ -2,8 +2,8 @@ import { FLAME, TEAMS, maxHp } from './balance.js';
 import { COLUMNS, DUMMIES, FORGE } from './places.js';
 import { drawCrowd, paintArenaArt } from './arena.js';
 import { tierOf } from './gacha.js';
-import { GLARE_CYCLE, GLARE_GLOW, GLARE_SIZE, RAINBOW, RAINBOW_CYCLE, RAINBOW_W, SNOW_CYCLE, STAR_COLORS, starOf }
-  from './stars.js';
+import { GEM, GEM_CYCLE, GEM_GLOW, GEM_W, GLARE_CYCLE, GLARE_GLOW, GLARE_SIZE, RAINBOW, RAINBOW_CYCLE, RAINBOW_W,
+  SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
 import { LION, P, SPRITE, darker, lionSprite, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, sandSprite, shieldLookOf, shieldSprite, weaponSprite } from './art.js';
 import { drawDummyArt, paintLudusArt } from './ludus.js';
 
@@ -583,8 +583,22 @@ export function drawLabel(ctx, g, scene, highlight, mark = null) {
     ctx.shadowColor = 'rgba(255,43,43,.9)';
     ctx.shadowBlur = glareAt(GLARE_GLOW) * 2;
   }
+  if (star === 'gem') {
+    ctx.shadowColor = gemGlow();
+    ctx.shadowBlur = 6;
+  }
+  if (star === 'rainbow') {
+    // подсветка радуги — размытая копия ника под ним, каждая буква светится своим цветом
+    ctx.save();
+    ctx.filter = 'blur(1.2px)';
+    ctx.globalAlpha = 0.9;
+    ctx.fillText(g.name, cx, top + 1);
+    ctx.restore();
+  }
   ctx.fillText(g.name, cx, top + 1);
   ctx.shadowBlur = 0;
+  if (star === 'rainbow') drawGloss(ctx, g.name, cx, top + 1, GLOSS.rainbow);
+  if (star === 'gem') gemShine(ctx, g.name, cx, top + 1, x0, nameW);
   // красный череп (убил насмерть) — слева от плашки, огонёк (серия без падений) — справа
   if (!g.lion && g.skull > 0) drawSkull(ctx, left - 14, top - 11);
   if (!g.lion && (g.streak || 0) >= FLAME.streak) drawFlame(ctx, left + nameW + 10 + badge + 4, top - 12, Date.now() / 1000);
@@ -641,7 +655,46 @@ function glareAt(keys) {
   return a + (b - a) * Math.min(1, Math.max(0, (t - t0) / (t1 - t0)));
 }
 
-// ники стримеров на холсте — та же радуга, тот же снежный блик и раскалённая середина, что в CSS
+// свечение переливов sulffur_ — цветом, который сейчас на нике
+function gemGlow() {
+  const t = (Date.now() % GEM_CYCLE) / GEM_CYCLE;
+  let i = 1;
+  while (i < GEM_GLOW.length - 1 && GEM_GLOW[i][0] < t) i++;
+  const [t0, a] = GEM_GLOW[i - 1], [t1, b] = GEM_GLOW[i], k = (t - t0) / (t1 - t0);
+  const mix = a.map((v, j) => v + (b[j] - v) * k);
+  return 'rgba(' + mix.slice(0, 3).map(Math.round).join(',') + ',' + mix[3].toFixed(2) + ')';
+}
+
+// глянец поверх ника: светлый верх букв, резкая граница чуть ниже середины, глубокий низ — как в CSS
+const GLOSS = {
+  rainbow: ['rgba(255,255,255,.35)', 'rgba(255,255,255,.12)', 'rgba(0,0,0,.05)', 'rgba(0,0,0,.3)'],
+  gem: ['rgba(255,255,255,.7)', 'rgba(255,255,255,.35)', 'rgba(0,0,0,.05)', 'rgba(0,0,0,.4)'],
+};
+
+function drawGloss(ctx, name, cx, baseline, [top, upper, lower, bottom]) {
+  const gloss = ctx.createLinearGradient(0, baseline - 12, 0, baseline + 4);
+  gloss.addColorStop(0, top);
+  gloss.addColorStop(0.54, upper);
+  gloss.addColorStop(0.56, lower);
+  gloss.addColorStop(1, bottom);
+  ctx.fillStyle = gloss;
+  ctx.fillText(name, cx, baseline);
+}
+
+// поверх переливов sulffur_ — глянец и белый блик, что раз за цикл проходит по нику
+function gemShine(ctx, name, cx, baseline, x, w) {
+  drawGloss(ctx, name, cx, baseline, GLOSS.gem);
+  const at = x - 150 + 600 * ((Date.now() % GEM_CYCLE) / GEM_CYCLE);
+  if (at < x - 20 || at > x + w + 20) return;
+  const shine = ctx.createLinearGradient(at - 18, 0, at + 18, 0);
+  shine.addColorStop(0, 'rgba(255,255,255,0)');
+  shine.addColorStop(0.5, 'rgba(255,255,255,.95)');
+  shine.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = shine;
+  ctx.fillText(name, cx, baseline);
+}
+
+// ники стримеров на холсте — та же радуга, тот же снежный блик, раскалённая середина и переливы, что в CSS
 function starPaint(ctx, star, x, w, y) {
   const now = Date.now();
   if (star === 'rainbow') {
@@ -660,6 +713,12 @@ function starPaint(ctx, star, x, w, y) {
     grad.addColorStop(0, STAR_COLORS.snow);
     grad.addColorStop(0.5, '#ffffff');
     grad.addColorStop(1, STAR_COLORS.snow);
+    return grad;
+  }
+  if (star === 'gem') {
+    const from = x - GEM_W + ((now % GEM_CYCLE) / GEM_CYCLE) * GEM_W, bands = Math.ceil(w / GEM_W) + 1;
+    const grad = ctx.createLinearGradient(from, 0, from + GEM_W * bands, 0);
+    for (let b = 0; b < bands; b++) GEM.forEach(([at, color]) => grad.addColorStop((b + at) / bands, color));
     return grad;
   }
   if (star === 'glare') {
