@@ -2,12 +2,16 @@
 export const STARS = new Map([['sumaizu', 'rainbow'], ['sukoshissrb', 'white'], ['fra3a', 'thyme'],
   ['welovegames', 'heart'], ['higashi_vo', 'snow'], ['renozis', 'glare'],
   ['sulffur_', 'gem']]);
-export const STAR_COLORS = { white: '#ffffff', thyme: '#5edc1f', heart: '#d42426', snow: '#a6d6ff', glare: '#ff2b2b' };
+export const STAR_COLORS = { white: '#ffffff', thyme: '#5edc1f', snow: '#a6d6ff', glare: '#ff2b2b' };
 export const RAINBOW = ['#ff2b2b', '#ff8a00', '#ffe100', '#1ee35a', '#00b2ff', '#7b3cff', '#ff2bd2', '#ff2b2b'];
 // одна полоса радуги и время её прохода — как в CSS-анимации
 export const RAINBOW_W = 120;
 export const RAINBOW_CYCLE = 2400;
 export const SNOW_CYCLE = 6000;
+// ник WELOVEGAMES: оттенки красного с логотипа медленно плывут по нику — как в CSS
+export const HEART_REDS = ['#e3333d', '#ff5560', '#c81e2b', '#f2414b', '#b8162a', '#e3333d'];
+export const HEART_W = 240;
+export const HEART_CYCLE = 8000;
 // блик Renozis: размер раскалённой середины (доля ширины ника) по долям цикла — как в CSS
 export const GLARE_CYCLE = 3000;
 export const GLARE_SIZE = [[0, 0.7], [0.09, 0.25], [0.13, 1.2], [0.31, 0.55], [0.35, 1], [0.52, 0.3], [0.56, 0.95],

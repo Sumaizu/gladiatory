@@ -5,7 +5,7 @@ import { FONT, drawCrowd, drawDummy, drawGladiator, drawThrown, drawLabel, drawL
 import { plural } from './engine.js';
 import { ambience, play, setSound } from './sound.js';
 import { P, Pix } from './art.js';
-import { GEM_CYCLE, GLARE_CYCLE, RAINBOW_CYCLE, SNOW_CYCLE, starOf } from './stars.js';
+import { GEM_CYCLE, GLARE_CYCLE, HEART_CYCLE, RAINBOW_CYCLE, SNOW_CYCLE, starOf } from './stars.js';
 
 const STAGE_WIDTH = 1280;
 const STAGE_HEIGHT = 720;
@@ -218,7 +218,7 @@ function nick(className, name, login, tag = 'span') {
   return node;
 }
 
-const STAR_CYCLES = { rainbow: RAINBOW_CYCLE, snow: SNOW_CYCLE, glare: GLARE_CYCLE, gem: GEM_CYCLE };
+const STAR_CYCLES = { rainbow: RAINBOW_CYCLE, heart: HEART_CYCLE, snow: SNOW_CYCLE, glare: GLARE_CYCLE, gem: GEM_CYCLE };
 
 const ICONS = {
   weapon: '<svg viewBox="0 0 16 16"><g transform="rotate(45 8 8)" fill="currentColor"><path d="M8 -1.5 9.1 0.6V11.6H6.9V0.6Z"/><rect x="4.9" y="11.6" width="6.2" height="1.5" rx=".5"/><rect x="7.25" y="13.1" width="1.5" height="2.9"/><circle cx="8" cy="16.9" r="1.2"/></g></svg>',

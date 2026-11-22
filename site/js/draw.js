@@ -2,7 +2,8 @@ import { FLAME, TEAMS, maxHp } from './balance.js';
 import { COLUMNS, DUMMIES, FORGE } from './places.js';
 import { drawCrowd, paintArenaArt } from './arena.js';
 import { tierOf } from './gacha.js';
-import { GEM, GEM_CYCLE, GEM_W, GLARE_CYCLE, GLARE_SIZE, RAINBOW, RAINBOW_CYCLE, RAINBOW_W,
+import { GEM, GEM_CYCLE, GEM_W, GLARE_CYCLE, GLARE_SIZE, HEART_CYCLE, HEART_REDS, HEART_W, RAINBOW, RAINBOW_CYCLE,
+  RAINBOW_W,
   SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
 import { LION, P, SPRITE, darker, lionSprite, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, sandSprite, shieldLookOf, shieldSprite, weaponSprite } from './art.js';
 import { drawDummyArt, paintLudusArt } from './ludus.js';
@@ -579,7 +580,7 @@ export function drawLabel(ctx, g, scene, highlight, mark = null) {
     ctx.strokeStyle = 'rgba(20,16,30,.85)';
     ctx.strokeText(g.name, cx, top + 1);
   }
-  if (star === 'rainbow' || star === 'gem' || star === 'glare') {
+  if (star === 'rainbow' || star === 'gem' || star === 'glare' || star === 'heart') {
     // подсветка — размытая копия ника под ним, каждая буква светится своим цветом
     ctx.save();
     ctx.filter = 'blur(1.2px)';
@@ -588,7 +589,7 @@ export function drawLabel(ctx, g, scene, highlight, mark = null) {
     ctx.restore();
   }
   ctx.fillText(g.name, cx, top + 1);
-  if (star === 'rainbow' || star === 'glare') drawGloss(ctx, g.name, cx, top + 1, GLOSS.rainbow);
+  if (star === 'rainbow' || star === 'glare' || star === 'heart') drawGloss(ctx, g.name, cx, top + 1, GLOSS.rainbow);
   if (star === 'gem') gemShine(ctx, g.name, cx, top + 1, x0, nameW);
   // красный череп (убил насмерть) — слева от плашки, огонёк (серия без падений) — справа
   if (!g.lion && g.skull > 0) drawSkull(ctx, left - 14, top - 11);
@@ -694,6 +695,12 @@ function starPaint(ctx, star, x, w, y) {
     grad.addColorStop(0, STAR_COLORS.snow);
     grad.addColorStop(0.5, '#ffffff');
     grad.addColorStop(1, STAR_COLORS.snow);
+    return grad;
+  }
+  if (star === 'heart') {
+    const from = x - HEART_W + ((now % HEART_CYCLE) / HEART_CYCLE) * HEART_W, bands = Math.ceil(w / HEART_W) + 1;
+    const last = HEART_REDS.length - 1, grad = ctx.createLinearGradient(from, 0, from + HEART_W * bands, 0);
+    for (let b = 0; b < bands; b++) HEART_REDS.forEach((color, i) => grad.addColorStop((b + i / last) / bands, color));
     return grad;
   }
   if (star === 'gem') {
