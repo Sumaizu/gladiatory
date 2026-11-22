@@ -2,7 +2,7 @@ import { FLAME, TEAMS, maxHp } from './balance.js';
 import { COLUMNS, DUMMIES, FORGE } from './places.js';
 import { drawCrowd, paintArenaArt } from './arena.js';
 import { tierOf } from './gacha.js';
-import { GEM, GEM_CYCLE, GEM_GLOW, GEM_W, GLARE_CYCLE, GLARE_GLOW, GLARE_SIZE, RAINBOW, RAINBOW_CYCLE, RAINBOW_W,
+import { GEM, GEM_CYCLE, GEM_W, GLARE_CYCLE, GLARE_GLOW, GLARE_SIZE, RAINBOW, RAINBOW_CYCLE, RAINBOW_W,
   SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
 import { LION, P, SPRITE, darker, lionSprite, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, sandSprite, shieldLookOf, shieldSprite, weaponSprite } from './art.js';
 import { drawDummyArt, paintLudusArt } from './ludus.js';
@@ -583,12 +583,8 @@ export function drawLabel(ctx, g, scene, highlight, mark = null) {
     ctx.shadowColor = 'rgba(255,43,43,.9)';
     ctx.shadowBlur = glareAt(GLARE_GLOW) * 2;
   }
-  if (star === 'gem') {
-    ctx.shadowColor = gemGlow();
-    ctx.shadowBlur = 6;
-  }
-  if (star === 'rainbow') {
-    // подсветка радуги — размытая копия ника под ним, каждая буква светится своим цветом
+  if (star === 'rainbow' || star === 'gem') {
+    // подсветка — размытая копия ника под ним, каждая буква светится своим цветом
     ctx.save();
     ctx.filter = 'blur(1.2px)';
     ctx.globalAlpha = 0.9;
@@ -655,20 +651,10 @@ function glareAt(keys) {
   return a + (b - a) * Math.min(1, Math.max(0, (t - t0) / (t1 - t0)));
 }
 
-// свечение переливов sulffur_ — цветом, который сейчас на нике
-function gemGlow() {
-  const t = (Date.now() % GEM_CYCLE) / GEM_CYCLE;
-  let i = 1;
-  while (i < GEM_GLOW.length - 1 && GEM_GLOW[i][0] < t) i++;
-  const [t0, a] = GEM_GLOW[i - 1], [t1, b] = GEM_GLOW[i], k = (t - t0) / (t1 - t0);
-  const mix = a.map((v, j) => v + (b[j] - v) * k);
-  return 'rgba(' + mix.slice(0, 3).map(Math.round).join(',') + ',' + mix[3].toFixed(2) + ')';
-}
-
 // глянец поверх ника: светлый верх букв, резкая граница чуть ниже середины, глубокий низ — как в CSS
 const GLOSS = {
   rainbow: ['rgba(255,255,255,.35)', 'rgba(255,255,255,.12)', 'rgba(0,0,0,.05)', 'rgba(0,0,0,.3)'],
-  gem: ['rgba(255,255,255,.7)', 'rgba(255,255,255,.35)', 'rgba(0,0,0,.05)', 'rgba(0,0,0,.4)'],
+  gem: ['rgba(255,255,255,.45)', 'rgba(255,255,255,.18)', 'rgba(0,0,0,.05)', 'rgba(0,0,0,.3)'],
 };
 
 function drawGloss(ctx, name, cx, baseline, [top, upper, lower, bottom]) {
