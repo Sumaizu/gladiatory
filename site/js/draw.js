@@ -2,7 +2,7 @@ import { FLAME, TEAMS, maxHp } from './balance.js';
 import { COLUMNS, DUMMIES, FORGE } from './places.js';
 import { drawCrowd, paintArenaArt } from './arena.js';
 import { tierOf } from './gacha.js';
-import { GEM, GEM_CYCLE, GEM_W, GLARE_CYCLE, GLARE_GLOW, GLARE_SIZE, RAINBOW, RAINBOW_CYCLE, RAINBOW_W,
+import { GEM, GEM_CYCLE, GEM_W, GLARE_CYCLE, GLARE_SIZE, RAINBOW, RAINBOW_CYCLE, RAINBOW_W,
   SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
 import { LION, P, SPRITE, darker, lionSprite, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, sandSprite, shieldLookOf, shieldSprite, weaponSprite } from './art.js';
 import { drawDummyArt, paintLudusArt } from './ludus.js';
@@ -579,11 +579,7 @@ export function drawLabel(ctx, g, scene, highlight, mark = null) {
     ctx.strokeStyle = 'rgba(20,16,30,.85)';
     ctx.strokeText(g.name, cx, top + 1);
   }
-  if (star === 'glare') {
-    ctx.shadowColor = 'rgba(255,43,43,.9)';
-    ctx.shadowBlur = glareAt(GLARE_GLOW) * 2;
-  }
-  if (star === 'rainbow' || star === 'gem') {
+  if (star === 'rainbow' || star === 'gem' || star === 'glare') {
     // подсветка — размытая копия ника под ним, каждая буква светится своим цветом
     ctx.save();
     ctx.filter = 'blur(1.2px)';
@@ -592,8 +588,7 @@ export function drawLabel(ctx, g, scene, highlight, mark = null) {
     ctx.restore();
   }
   ctx.fillText(g.name, cx, top + 1);
-  ctx.shadowBlur = 0;
-  if (star === 'rainbow') drawGloss(ctx, g.name, cx, top + 1, GLOSS.rainbow);
+  if (star === 'rainbow' || star === 'glare') drawGloss(ctx, g.name, cx, top + 1, GLOSS.rainbow);
   if (star === 'gem') gemShine(ctx, g.name, cx, top + 1, x0, nameW);
   // красный череп (убил насмерть) — слева от плашки, огонёк (серия без падений) — справа
   if (!g.lion && g.skull > 0) drawSkull(ctx, left - 14, top - 11);
