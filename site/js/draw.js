@@ -472,8 +472,8 @@ function drawAmuletSparks(ctx, x, y, t, seed) {
   ctx.restore();
 }
 
-// что лежит на песке: оружие плашмя, щиты, сети и мешки; что летит: копья, сети, мешки, выбитое оружие
-export function drawThrown(ctx, game) {
+// что лежит на песке: оружие плашмя, щиты, сети и мешки — рисуется до бойцов, под ногами у всех
+export function drawGround(ctx, game) {
   for (const it of game.ground || []) {
     ctx.save();
     ctx.translate(Math.round(it.x / P) * P, Math.round(it.y / P) * P);
@@ -500,6 +500,10 @@ export function drawThrown(ctx, game) {
     }
     ctx.restore();
   }
+}
+
+// что летит: копья, сети, мешки, выбитое оружие, камни — поверх бойцов
+export function drawThrown(ctx, game) {
   for (const p of game.projectiles || []) {
     ctx.save();
     ctx.translate(p.x, p.y);

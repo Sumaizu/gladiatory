@@ -1,7 +1,7 @@
 import { ARMOR_SLOTS, SAND, SLOT_IDS, paragonFlag, STATS, TEAMS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
 import { PLAIN, RARITIES, REFORGE, SHARPEN, TYPES, itemName, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
 import { COLUMNS, FIELD_H, FIELD_W, DUMMIES, LUDUS_TOP, PLACES } from './places.js';
-import { FONT, drawCrowd, drawDummy, drawGladiator, drawThrown, drawLabel, drawLudusLife, drawSigns, paintArena, paintLudus } from './draw.js';
+import { FONT, drawCrowd, drawDummy, drawGladiator, drawGround, drawThrown, drawLabel, drawLudusLife, drawSigns, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
 import { ambience, play, setSound } from './sound.js';
 import { P, Pix } from './art.js';
@@ -741,6 +741,7 @@ export class View {
         else drawDummy(w, it.i, this.dummyHits[it.i]);
       }
     } else {
+      drawGround(w, game);
       for (const g of figures) drawGladiator(w, g, t, scene);
     }
     if (scene === 'arena') {

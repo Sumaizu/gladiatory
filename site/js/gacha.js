@@ -4,7 +4,7 @@ import { ARMOR_SLOTS, SHARPEN, SLOT_IDS, WEAPON_TYPES, offhandFree } from './bal
 export const PRICE = 30;
 export { SHARPEN };
 // кузня: перековка — новый вид оружия той же редкости
-export const REFORGE = { price: 300 };
+export const REFORGE = { price: 100 };
 export const sharpChance = (level) => SHARPEN.chance * Math.pow(SHARPEN.fall, level);
 // крутка вдвое быстрее прежней — лудус теперь минута
 export const SPIN_TIME = 1.1;
