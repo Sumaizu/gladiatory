@@ -4,7 +4,7 @@ import { COLUMNS, FIELD_H, FIELD_W, DUMMIES, LUDUS_TOP, PLACES } from './places.
 import { FONT, drawCrowd, drawDummy, drawGladiator, drawGround, drawThrown, drawLabel, drawLudusLife, drawSigns, paintArena, paintLudus } from './draw.js';
 import { plural } from './engine.js';
 import { ambience, play, setSound } from './sound.js';
-import { P, Pix } from './art.js';
+import { OWN_SKINS, P, Pix } from './art.js';
 import { GEM_CYCLE, GLARE_CYCLE, HEART_CYCLE, RAINBOW_CYCLE, SNOW_CYCLE, starOf } from './stars.js';
 
 const STAGE_WIDTH = 1280;
@@ -423,7 +423,8 @@ export class View {
         life: FLOAT_TIME, kind: 'hit' });
       this.roar = Math.min(1, this.roar + (e.crit ? 0.25 : 0.05));
       sound(HIT_SOUND[e.weapon] || 'hit');
-      if (e.crit) sound('crit');
+      // крит особым мечом качка — стонет сам меч, у кого бы он ни был
+      if (e.crit) sound(e.skin === 'jock' && !e.ranged ? 'ahhh' : 'crit');
     } else if (e.type === 'miss') {
       this.floats.push({ x: e.x, y: e.y - 46, text: 'мимо', life: FLOAT_TIME * 0.8, kind: 'miss' });
       sound(HEAVY.has(e.weapon) ? 'swoosh' : 'miss');
@@ -459,7 +460,7 @@ export class View {
     } else if (e.type === 'buy') {
       sound('coin');
     } else if (e.type === 'join') {
-      sound('join');
+      sound(OWN_SKINS[e.login] === 'jock' ? 'welcome' : 'join');
     } else if (e.type === 'block') {
       this.floats.push({ x: e.x, y: e.y - 60, text: 'блок!', life: 1.1, kind: 'block' });
       sound('block');

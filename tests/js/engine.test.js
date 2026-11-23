@@ -6,7 +6,7 @@ import { AGI_CAP, WEAPON_TYPES, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_A
 import { starOf } from '../../site/js/stars.js';
 import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, newGladiator, plural, readableColor } from '../../site/js/engine.js';
 import { PLACES, POST_SPOTS, WARM_SPOTS, inArena } from '../../site/js/places.js';
-import { DIVINE, OUTCOMES, PRICE, RARITIES, REFORGE, SHARPEN, TYPES, forgeSpin, rarityOf, sharpChance, SHOW_TIME, SPIN_TIME,
+import { DIVINE, OUTCOMES, PRICE, RARITIES, REFORGE, SHARPEN, TYPES, cleanItem, forgeSpin, rarityOf, sharpChance, SHOW_TIME, SPIN_TIME,
   spin } from '../../site/js/gacha.js';
 
 const SETTINGS = clean({ ludus: 60, battle: 90, death: 0 });
@@ -1320,6 +1320,32 @@ test('досрочное испытание парагона: всё божес�
   Object.assign(x, { level: PARAGON.level, fights: PARAGON.fights });
   h._planNext();
   eq([h.nextBoss, h.nextEarly], [x, false]);
+});
+
+test('меч качка: двуручник в руках promiskuitet86 особый и остаётся особым у того, кто его подберёт', () => {
+  const g = game({ settings: { death: 0 } });
+  const [j, b] = join(g, 'promiskuitet86', 'B');
+  j.weapon = weapon('greatsword');
+  g._skinWeapon(j);
+  eq(j.weapon.skin, 'jock');
+  // у других двуручник обычный, другое оружие качка — тоже
+  b.weapon = weapon('greatsword');
+  g._skinWeapon(b);
+  eq(b.weapon.skin, undefined);
+  const sword = weapon('sword');
+  g._skinWeapon(Object.assign({}, j, { weapon: sword }));
+  eq(sword.skin, undefined);
+  // подобрал с песка — меч так и остался особым, и сохраняется
+  const special = j.weapon;
+  g.ground = [{ kind: 'weapon', item: special, owner: j.login, x: b.x, y: b.y }];
+  g._pick(b, g.ground[0]);
+  eq([b.weapon, b.weapon.skin], [special, 'jock']);
+  eq(cleanItem(JSON.parse(JSON.stringify(special)), 'weapon').skin, 'jock');
+  // удар им — в событии видно, что меч особый (по нему стонет крит)
+  g.random = () => 0.5;
+  g._attack(b, j);
+  const hit = g.events.filter((e) => e.type === 'hit').pop();
+  eq([hit.from, hit.skin], ['b', 'jock']);
 });
 
 test('парагон: после боя получает парагон и начинает с нуля, выжившие — много опыта', () => {

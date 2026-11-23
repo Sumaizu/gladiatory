@@ -156,9 +156,10 @@ const HALF_PI = Math.PI / 2;
 export const ANIMS = {
   // гладиус: правой рукой чуть перед собой; удар — с правого плеча наискось вперёд-вниз
   sword: { hit: [[0, [16, 21], 0.55], [0.14, [12, 13], -0.7], [0.3, [22, 20], 2.05], [0.55, [21, 21], 2.2], [1, [16, 21], 0.55]] },
-  // двуручный меч: обеими руками у груди, клинок лежит на правом плече; удар — с плеча через верх наискось вниз перед собой
-  greatsword: { two: 4, hit: [[0, [15, 22], -0.62], [0.15, [13, 15], -1.05], [0.3, [21, 23], 2.15], [0.6, [21, 24], 2.4],
-    [1, [15, 22], -0.62]] },
+  // двуручный меч: обеими руками перед собой, остриём вперёд-вверх; удар — завести за правое плечо и через верх
+  // наискось вниз перед собой
+  greatsword: { two: 4, hit: [[0, [18, 23], 0.38], [0.15, [13, 14], -1.15], [0.3, [21, 23], 2.15], [0.6, [21, 24], 2.4],
+    [1, [18, 23], 0.38]] },
   // секира: на правом плече; удар — поднять над головой и рубануть сверху вниз
   axe: { two: 4, hit: [[0, [15, 22], -0.78], [0.16, [14, 10], -0.12], [0.3, [21, 22], 1.95], [0.6, [21, 23], 2.1],
     [1, [15, 22], -0.78]] },
@@ -196,12 +197,13 @@ export function pose(keys, phase) {
 }
 
 // guard — наруч у плеча, wrist — цвет обмотки у запястья
-function limb(ctx, from, to, color, guard = null, wrist = null) {
+// bulk — бицепс: у плеча рука на пиксель толще
+function limb(ctx, from, to, color, guard = null, wrist = null, bulk = false) {
   const n = Math.max(2, Math.ceil(Math.hypot(to[0] - from[0], to[1] - from[1]) * 1.5));
   for (let i = 0; i <= n; i++) {
-    const k = i / n;
+    const k = i / n, big = bulk && k > 0.1 && k < 0.5;
     ctx.fillStyle = wrist && k > 0.6 && k < 0.9 ? wrist : guard && k < (wrist ? 0.4 : 0.55) ? guard : color;
-    ctx.fillRect(Math.round(lerp(from[0], to[0], k)) - 1, Math.round(lerp(from[1], to[1], k)) - 1, 2, 2);
+    ctx.fillRect(Math.round(lerp(from[0], to[0], k)) - 1, Math.round(lerp(from[1], to[1], k)) - 1, big ? 3 : 2, big ? 3 : 2);
   }
 }
 
@@ -216,7 +218,9 @@ function fist(ctx, p, color) {
 function drawArms(ctx, g, look, bob, drill = null) {
   const skin = look.skin, skinD = darker(skin, 0.8), guard = '#3f3833';
   // у черепахи на обеих руках у запястья — светлые обмотки, наручи у плеча — только с доспехом от 3 редкости
-  const arm = (from, to, color, cover = null) => limb(ctx, from, to, color, look.wraps ? look.armGuard : cover, look.wraps);
+  // у качка руки голые и с бицепсами, с доспехом от 3 редкости — наручи цвета брони на предплечьях
+  const arm = look.kind === 'jock' ? (from, to, color) => limb(ctx, from, to, color, null, look.armGuard, true)
+    : (from, to, color, cover = null) => limb(ctx, from, to, color, look.wraps ? look.armGuard : cover, look.wraps);
   const length = g.swingMax || 0.3, phase = g.swing > 0 ? 1 - g.swing / length : 0;
   ctx.save();
   ctx.translate(-SPRITE.x, -SPRITE.foot - bob);
@@ -248,7 +252,7 @@ function drawArms(ctx, g, look, bob, drill = null) {
   const { hand, turn } = pose(keys, g.swing > 0 && keys !== anim.hit || g.anim === 'hit' ? phase : 0);
   const weaponAt = () => {
     if (!g.weapon) return;
-    const art = weaponSprite(type, tierOf(g.weapon));
+    const art = weaponSprite(type, tierOf(g.weapon), g.weapon.skin);
     ctx.save();
     ctx.translate(Math.round(hand[0]), Math.round(hand[1]));
     ctx.rotate(turn);
@@ -483,7 +487,7 @@ export function drawGround(ctx, game) {
     ctx.scale(P, P);
     ctx.fillStyle = 'rgba(30,15,8,.25)';
     if (it.kind === 'weapon') {
-      const art = weaponSprite(it.item.type, tierOf(it.item)), h = art.canvas.height * art.k;
+      const art = weaponSprite(it.item.type, tierOf(it.item), it.item.skin), h = art.canvas.height * art.k;
       ctx.fillRect(-Math.round(h / 2), 0, Math.round(h), 2);
       ctx.rotate(Math.PI / 2);
       ctx.scale(art.k, art.k);
@@ -518,7 +522,7 @@ export function drawThrown(ctx, game) {
       ctx.drawImage(art.canvas, -art.px, -art.canvas.height / 2);
     } else if (p.kind === 'fling') {
       // выбитое оружие кувыркается в полёте
-      const art = weaponSprite(p.item.type, tierOf(p.item));
+      const art = weaponSprite(p.item.type, tierOf(p.item), p.item.skin);
       ctx.rotate(p.x * 0.08);
       ctx.scale(art.k, art.k);
       ctx.drawImage(art.canvas, -art.px, -art.canvas.height / 2);

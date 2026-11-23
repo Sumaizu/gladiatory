@@ -140,7 +140,10 @@ export function cleanItem(raw, kind) {
   if (kind === 'weapon') {
     // у старых сохранений у оружия было число урона — теперь только вид, редкость и заточка
     const sharp = Math.max(0, Math.min(SHARPEN.max, Math.trunc(Number(raw.sharp)) || 0));
-    return { kind, rarity: raw.rarity, type: TYPES.includes(raw.type) ? raw.type : 'sword', sharp };
+    const item = { kind, rarity: raw.rarity, type: TYPES.includes(raw.type) ? raw.type : 'sword', sharp };
+    // особый вид от личного скина (меч качка) остаётся с вещью навсегда
+    if (typeof raw.skin === 'string' && /^[a-z]{1,16}$/.test(raw.skin)) item.skin = raw.skin;
+    return item;
   }
   const power = Math.trunc(Number(raw.power));
   if (!(power > 0) || raw.rarity === PLAIN.id) return null;

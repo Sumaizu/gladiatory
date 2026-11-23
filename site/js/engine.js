@@ -5,6 +5,10 @@ import { AFK_ROUNDS, paragonFlag, paragonStart, CRIT_KILL, DEATHMATCH, EVENTS, F
 import { ARENA, ARENA_WALL, DUMMIES, ENTRANCE, PLACES, POST_SPOTS, WARM_SPOTS, arenaEdge, clampToArena, pointIn } from './places.js';
 import { DIVINE, PLAIN, PRICE, QUEUE_CAP, REFORGE, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, forgeSpin, itemName, rankOf, sharpChance,
   spin } from './gacha.js';
+import { OWN_SKINS } from './art.js';
+
+// у какого личного скина какое оружие особое
+const SKIN_WEAPONS = { jock: 'greatsword' };
 
 export const COMMANDS = new Map([
   ['!гладиаторы-пауза', 'pause'],
@@ -388,8 +392,16 @@ export class Game {
     this.members.set(login, g);
     // только что написал — значит, в деле: сразу на тренировку
     this._arrive(g, 'train');
+    this._skinWeapon(g);
     this._emit('join', { login });
     return g;
+  }
+
+  // личный скин: оружие своего вида в руках хозяина становится особым (меч качка) — и остаётся таким у любого,
+  // кто его подберёт. Перековка даёт новое оружие — уже обычное, если его взял не хозяин
+  _skinWeapon(g) {
+    const kind = OWN_SKINS[g.login], w = g.weapon;
+    if (w && kind && SKIN_WEAPONS[kind] === w.type) w.skin = kind;
   }
 
   _command(g, word, arg) {
@@ -599,7 +611,10 @@ export class Game {
     s.t += dt;
     if (!s.done && s.t >= s.spin) {
       s.done = true;
-      if (g) this._prize(g, s.result);
+      if (g) {
+        this._prize(g, s.result);
+        this._skinWeapon(g);
+      }
     }
     if (s.t < s.spin + s.show) return;
     this._closeStation(key, nowKey);
@@ -1736,6 +1751,7 @@ export class Game {
       if (g.weapon) this._lay({ kind: 'weapon', item: g.weapon, owner: g.weaponOf || g.login }, g.x, g.y + 8, 10);
       g.weapon = it.item;
       g.weaponOf = it.owner;
+      this._skinWeapon(g);
       g.lost = null;
       if (it.item.type === 'spear') g.spearCool = SPEAR.cool;
     } else if (it.kind === 'shield') {
@@ -1839,7 +1855,8 @@ export class Game {
     d.flash = 0.18;
     a.dealt += dmg;
     if (!a.lion) a.hitsNow = (a.hitsNow || 0) + 1;
-    this._emit('hit', { x: d.x, y: d.y, amount: dmg, crit, login: d.login, from: a.login, ranged, weapon: hand });
+    this._emit('hit', { x: d.x, y: d.y, amount: dmg, crit, login: d.login, from: a.login, ranged, weapon: hand,
+      skin: w.weapon && w.weapon.skin || null });
     if (d.hp <= 0) {
       this._knockOut(d, a, crit, weapon ? { item: weapon, owner: weaponOf } : null);
       return;

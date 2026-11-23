@@ -1,7 +1,35 @@
-// все звуки синтезируются на лету — файлов нет
+// звуки синтезируются на лету; файлы — только у личных скинов зрителей (SAMPLES)
 const GAP = { punch: 0.06, cleave: 0.08, chop: 0.08, smash: 0.12, stab: 0.06, pierce: 0.07, maul: 0.08, swoosh: 0.15,
   daze: 0.3, disarm: 0.3, shatter: 0.4, sandburst: 0.3, blind: 0.4, pickup: 0.2, hit: 0.07, crit: 0.1, miss: 0.12, down: 0.15, death: 0.4, horn: 1, level: 0.3, coin: 0.15, join: 0.2,
-  cheer: 1.5, champion: 2, reel: 0.5, jackpot: 1, boo: 0.8, roar: 1.5, growl: 0.6, block: 0.1, crack: 0.5, net: 0.4, whoosh: 0.2, thwack: 0.09, fanfare: 2, anvil: 0.3, grind: 0.6, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5 };
+  cheer: 1.5, champion: 2, reel: 0.5, jackpot: 1, boo: 0.8, roar: 1.5, growl: 0.6, block: 0.1, crack: 0.5, net: 0.4, whoosh: 0.2, thwack: 0.09, fanfare: 2, anvil: 0.3, grind: 0.6, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5,
+  welcome: 1.2, ahhh: 1 };
+
+// записанные звуки: грузятся при первом включении звука, играют через ту же громкость
+const SAMPLES = { welcome: 'welcome.mp3', ahhh: 'ahhh.mp3' };
+const buffers = new Map();
+
+function loadSamples(ac) {
+  for (const [name, file] of Object.entries(SAMPLES)) {
+    if (buffers.has(name)) continue;
+    buffers.set(name, fetch(new URL('../sounds/' + file, import.meta.url))
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+      .then((data) => ac.decodeAudioData(data))
+      .catch(() => null));
+  }
+}
+
+// ещё грузится — сыграет, как загрузится, если это было недавно
+function sample(ac, name) {
+  const asked = ac.currentTime;
+  buffers.get(name).then((buffer) => {
+    if (!buffer || ac.currentTime - asked > 2) return;
+    const src = ac.createBufferSource(), amp = ac.createGain();
+    src.buffer = buffer;
+    amp.gain.value = 1.1;
+    src.connect(amp).connect(master);
+    src.start();
+  });
+}
 
 let audio = null;
 let master = null;
@@ -22,6 +50,7 @@ function context() {
     noiseBuffer = audio.createBuffer(1, audio.sampleRate, audio.sampleRate);
     const data = noiseBuffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    loadSamples(audio);
   }
   if (audio.state === 'suspended') audio.resume().catch(() => {});
   master.gain.value = volume * 0.5;
@@ -273,13 +302,14 @@ export function setSound(on, level) {
 }
 
 export function play(name) {
-  if (!enabled || volume <= 0 || !SOUNDS[name]) return;
+  if (!enabled || volume <= 0 || !SOUNDS[name] && !SAMPLES[name]) return;
   const ac = context();
   if (!ac) return;
   const now = ac.currentTime;
   if (now - (lastPlayed.get(name) || -10) < (GAP[name] || 0.1)) return;
   lastPlayed.set(name, now);
-  SOUNDS[name](ac);
+  if (SAMPLES[name]) sample(ac, name);
+  else SOUNDS[name](ac);
 }
 
 export function playAll(level) {
