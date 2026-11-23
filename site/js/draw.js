@@ -195,11 +195,12 @@ export function pose(keys, phase) {
   return { hand: at(h0, h1, k), turn: r0 === undefined ? 0 : lerp(r0, r1, k) };
 }
 
-function limb(ctx, from, to, color, guard = null) {
+// guard — наруч у плеча, wrist — цвет обмотки у запястья
+function limb(ctx, from, to, color, guard = null, wrist = null) {
   const n = Math.max(2, Math.ceil(Math.hypot(to[0] - from[0], to[1] - from[1]) * 1.5));
   for (let i = 0; i <= n; i++) {
     const k = i / n;
-    ctx.fillStyle = guard && k < 0.55 ? guard : color;
+    ctx.fillStyle = wrist && k > 0.6 && k < 0.9 ? wrist : guard && k < (wrist ? 0.4 : 0.55) ? guard : color;
     ctx.fillRect(Math.round(lerp(from[0], to[0], k)) - 1, Math.round(lerp(from[1], to[1], k)) - 1, 2, 2);
   }
 }
@@ -214,13 +215,15 @@ function fist(ctx, p, color) {
 // drill — руки на разминке: [дальняя кисть, ближняя кисть], оружие отложено
 function drawArms(ctx, g, look, bob, drill = null) {
   const skin = look.skin, skinD = darker(skin, 0.8), guard = '#3f3833';
+  // у черепахи на обеих руках у запястья — светлые обмотки, наручи у плеча — только с доспехом от 3 редкости
+  const arm = (from, to, color, cover = null) => limb(ctx, from, to, color, look.wraps ? look.armGuard : cover, look.wraps);
   const length = g.swingMax || 0.3, phase = g.swing > 0 ? 1 - g.swing / length : 0;
   ctx.save();
   ctx.translate(-SPRITE.x, -SPRITE.foot - bob);
   if (drill) {
-    limb(ctx, SHOULDER.far, drill[0], skinD);
+    arm(SHOULDER.far, drill[0], skinD);
     fist(ctx, drill[0], skinD);
-    limb(ctx, SHOULDER.near, drill[1], skin);
+    arm(SHOULDER.near, drill[1], skin);
     fist(ctx, drill[1], skin);
     ctx.restore();
     return;
@@ -233,9 +236,9 @@ function drawArms(ctx, g, look, bob, drill = null) {
     const jab = (g.jab || 0) % 2;
     const far = jab === 0 ? at([16, 14], [23, 13], swing) : [16, 14];
     const near = jab === 1 ? at([18, 17], [24, 15], swing) : [18, 17];
-    limb(ctx, SHOULDER.far, far, skinD);
+    arm(SHOULDER.far, far, skinD);
     fist(ctx, far, skinD);
-    limb(ctx, SHOULDER.near, near, skin);
+    arm(SHOULDER.near, near, skin);
     fist(ctx, near, skin);
     ctx.restore();
     return;
@@ -256,15 +259,15 @@ function drawArms(ctx, g, look, bob, drill = null) {
   if (anim.two) {
     // двуручное — обеими руками: правая у гарды, левая ниже по рукояти
     const low = [hand[0] - Math.sin(turn) * anim.two, hand[1] + Math.cos(turn) * anim.two];
-    limb(ctx, SHOULDER.far, hand, skinD, guard);
+    arm(SHOULDER.far, hand, skinD, guard);
     fist(ctx, hand, skinD);
     weaponAt();
-    limb(ctx, SHOULDER.near, low, skin);
+    arm(SHOULDER.near, low, skin);
     fist(ctx, low, skin);
     ctx.restore();
     return;
   }
-  limb(ctx, SHOULDER.far, hand, skinD, guard);
+  arm(SHOULDER.far, hand, skinD, guard);
   weaponAt();
   fist(ctx, hand, skinD);
   // левая рука: щит, моток сети, мешок или пустая у груди; бросая сеть или мешок — замах вперёд
@@ -272,22 +275,22 @@ function drawArms(ctx, g, look, bob, drill = null) {
   const rest = tossing ? pose(TOSS, phase).hand : null;
   if (look.shield !== 'none') {
     const pos = [17 + (g.swing > 0 && g.anim === 'hit' ? Math.sin(phase * Math.PI) : 0), 17];
-    limb(ctx, SHOULDER.near, pos, skin);
+    arm(SHOULDER.near, pos, skin);
     const art = shieldSprite(look.shield, look.design, look.color);
     ctx.drawImage(art, Math.round(pos[0] - art.width / 2 + 1), Math.round(pos[1] - art.height / 2));
   } else if (look.net && !tossing) {
     const pos = [17, 16];
-    limb(ctx, SHOULDER.near, pos, skin);
+    arm(SHOULDER.near, pos, skin);
     ctx.drawImage(netHandSprite(), Math.round(pos[0]) - 4, Math.round(pos[1]) - 1);
     fist(ctx, pos, skin);
   } else if (look.sand && !tossing) {
     const pos = [17, 18];
-    limb(ctx, SHOULDER.near, pos, skin);
+    arm(SHOULDER.near, pos, skin);
     ctx.drawImage(sandSprite(), Math.round(pos[0]) - 4, Math.round(pos[1]) - 1);
     fist(ctx, pos, skin);
   } else {
     const pos = rest || [17, 17];
-    limb(ctx, SHOULDER.near, pos, skin);
+    arm(SHOULDER.near, pos, skin);
     fist(ctx, pos, skin);
   }
   ctx.restore();

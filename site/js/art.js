@@ -143,6 +143,13 @@ const GUARD = '#3f3833';
 export const HELMETS = ['murmillo', 'thraex', 'secutor', 'hoplo', 'bare'];
 export const SPRITE = { w: 24, h: 40, x: 12, foot: 39, hand: [6, 19] };
 
+// личные скины зрителей — навсегда за логином: форма фигурки и движения те же, другой только рисунок
+export const OWN_SKINS = { nord2673: 'turtle' };
+// черепаха: зелёная кожа, красная повязка на глазах с хвостами, панцирь за спиной, на груди пластрон, обмотки на руках
+const TURTLE = { skin: '#6f9a3c', mask: '#e0262a', maskL: '#ff5a4a', maskD: '#97161a', eye: '#f6f2e8',
+  shell: '#7a6434', shellD: '#4b3b1c', shellL: '#a88c4e', rim: '#c9a964', plastron: '#d4ab5e', plastronD: '#a07c3a',
+  wraps: '#d9cfb4', leather: '#6e4c30', leatherD: '#4e3420' };
+
 // цвет игрока приглушаем, чтобы щит и гребень не кричали на фоне мягкого лудуса
 function muted(color) {
   const [r, g, b] = rgb(color), l = (r + g + b) / 3;
@@ -154,11 +161,17 @@ export function lookOf(g, seed) {
   const style = HELMETS[seed % (HELMETS.length - 1)];
   const gear = g.gear || {};
   const head = tierOf(gear.head);
+  const kind = OWN_SKINS[g.login] || null, turtle = kind === 'turtle';
   return {
+    kind,
     color: muted(g.color), head, body: tierOf(gear.body), legs: tierOf(gear.legs), feet: tierOf(gear.feet),
     helmet: head ? style : 'bare',
-    skin: SKINS[(seed >>> 3) % SKINS.length], hair: HAIR[(seed >>> 6) % HAIR.length],
-    shield: !shieldUp(g) ? 'none' : SHIELD_SHAPES[(seed >>> 11) % SHIELD_SHAPES.length],
+    skin: turtle ? TURTLE.skin : SKINS[(seed >>> 3) % SKINS.length], hair: HAIR[(seed >>> 6) % HAIR.length],
+    // у черепахи щит — панцирь: взяла в руку — со спины он снимается
+    shield: !shieldUp(g) ? 'none' : turtle ? 'shell' : SHIELD_SHAPES[(seed >>> 11) % SHIELD_SHAPES.length],
+    wraps: turtle ? TURTLE.wraps : null,
+    // у черепахи доспех от 3 редкости — ещё и наручи на плечах цвета брони
+    armGuard: turtle && tierOf(gear.body) >= 3 ? METALS[tierOf(gear.body)] : null,
     design: (seed >>> 9) % 3,
     net: netUp(g) && !(g.netCool > 0),
     sand: sandUp(g),
@@ -168,7 +181,8 @@ export function lookOf(g, seed) {
 
 // щит, лежащий на песке, — того же вида, что у владельца
 export function shieldLookOf(g, seed) {
-  return { shape: SHIELD_SHAPES[(seed >>> 11) % SHIELD_SHAPES.length], design: (seed >>> 9) % 3, color: muted(g.color) };
+  const shape = OWN_SKINS[g.login] === 'turtle' ? 'shell' : SHIELD_SHAPES[(seed >>> 11) % SHIELD_SHAPES.length];
+  return { shape, design: (seed >>> 9) % 3, color: muted(g.color) };
 }
 
 const gearKey = (look) => [look.head, look.body, look.legs, look.feet].join('');
@@ -184,6 +198,8 @@ function gladiatorArt(look, pose, dead) {
   const [legM, legD, legL] = shade3(look.legs);
   const color = look.color, colorD = darker(color, 0.68), colorL = darker(color, 1.15);
   const dy = pose === 'sit' ? 11 : pose === 'kneel' ? 7 : 0;
+  const turtle = look.kind === 'turtle', T = TURTLE;
+  const cloth = turtle ? T.leather : CLOTH, clothD = turtle ? T.leatherD : CLOTH_D;
   // обувь по редкости: сандалии с ремнями до голени, кожаные ботинки, высокие сапоги с пластиной, золото
   const boot = look.feet, bootM = METALS[Math.max(1, boot)];
   const foot = (x, y) => {
@@ -207,6 +223,11 @@ function gladiatorArt(look, pose, dead) {
       p.rect(x + 2, y - 1, 1, 1, '#55382a');
       p.rect(x - 1, y, 4, 1, boot >= 6 ? '#b8954a' : '#2e1c12');
       if (boot >= 6) p.rect(x - 1, y - 6, 3, 1, '#e8c35a');
+      return;
+    }
+    if (turtle) {
+      p.rect(x - 1, y, 4, 1, skinD);
+      p.rect(x - 1, y - 1, 3, 1, TURTLE.wraps);
       return;
     }
     p.rect(x - 1, y, 4, 1, BELT);
@@ -283,7 +304,7 @@ function gladiatorArt(look, pose, dead) {
   // набедренная повязка и пояс
   for (let y = 21; y < 25; y++) for (let x = 10; x < 16; x++) {
     if (y === 24 && (x === 10 || x === 15)) continue;
-    p.px(x, y + dy, x === 10 || (x * 2 + y) % 5 === 0 ? CLOTH_D : CLOTH);
+    p.px(x, y + dy, x === 10 || (x * 2 + y) % 5 === 0 ? clothD : cloth);
   }
   if (look.body >= 3) {
     // птеруги — кожаные полосы поверх повязки
@@ -297,6 +318,8 @@ function gladiatorArt(look, pose, dead) {
   }
   p.rect(10, 20 + dy, 6, 1, look.body >= 4 ? '#b8954a' : BELT);
   if (look.body >= 1) p.px(13, 20 + dy, '#d8b46a');
+  // у черепахи на поясе красная пряжка
+  if (turtle) p.px(13, 20 + dy, look.body >= 1 ? T.mask : T.maskD);
   // торс, чуть подан вперёд
   for (let y = 11; y < 20; y++) {
     const lean = y < 14 ? 1 : 0;
@@ -306,6 +329,30 @@ function gladiatorArt(look, pose, dead) {
   }
   p.rect(13, 14 + dy, 2, 1, skinD);
   p.px(13, 17 + dy, skinD);
+  // у черепахи спереди — пластрон: светлые щитки с тёмными швами. С доспехом от 3 редкости — нагрудник на весь
+  // торс: выпуклая грудь, воротник у шеи, щитки как у пластрона, кант сверху и снизу (у красного — золотой)
+  if (turtle && look.body < 3) {
+    const [c, cD, cL] = [T.plastron, T.plastronD, darker(T.plastron, 1.12)];
+    for (let y = 11; y < 20; y++) {
+      const lean = y < 14 ? 1 : 0, seam = y === 13 || y === 16 || y === 18;
+      for (let x = 13 + lean; x < 16 + lean; x++) p.px(x, y + dy, seam || x === 13 + lean ? cD : x === 15 + lean ? cL : c);
+    }
+  } else if (turtle) {
+    const trim = look.body >= 6 ? '#e8c35a' : look.body >= 5 ? '#d8b46a' : bodyL;
+    for (let y = 11; y < 20; y++) {
+      const x0 = y < 14 ? 11 : 10, x1 = x0 + 5 + (y >= 12 && y <= 15 ? 1 : 0);
+      for (let x = x0; x <= x1; x++) {
+        const front = x >= x0 + 3, band = look.body === 4 && y % 2 === 0;
+        const seam = front && (y === 14 || y === 17) || x === x0 + 3 && y > 11 && y < 19;
+        p.px(x, y + dy, y === 11 || y === 19 ? trim : seam ? bodyD : x === x0 ? bodyD : x === x1 || band ? bodyL : bodyM);
+      }
+    }
+    // воротник и блик на груди
+    p.rect(12, 10 + dy, 4, 1, bodyD);
+    p.px(15, 12 + dy, darker(bodyL, 1.2));
+    p.px(16, 13 + dy, bodyL);
+    if (look.body >= 6) p.px(15, 16 + dy, '#fff2c0');
+  }
   // броня по редкости: кожаная перевязь, + наплечник, бронзовая кираса, сегментата, золотая кираса с плащом
   const tier = look.body, leather = '#6b4a33', leatherL = '#8a6246', rivet = '#d8b46a';
   const torsoX = (y) => (y < 14 ? 11 : 10);
@@ -315,13 +362,13 @@ function gladiatorArt(look, pose, dead) {
     p.px(12, 12 + dy, leatherL);
     p.px(13, 15 + dy, rivet);
   }
-  if (tier === 2 || tier === 4) {
+  if (tier === 2 || tier === 4 || turtle && tier >= 3) {
     // наплечник на ближнем плече — сегменты
     p.rect(14, 9 + dy, 3, 1, bodyL);
     p.rect(14, 10 + dy, 4, 1, bodyM);
     p.rect(15, 11 + dy, 3, 1, bodyD);
   }
-  if (tier === 3 || tier >= 6) {
+  if (!turtle && (tier === 3 || tier >= 6)) {
     // мускульная кираса
     for (let y = 11; y < 20; y++) {
       const x0 = torsoX(y) + 1;
@@ -334,7 +381,7 @@ function gladiatorArt(look, pose, dead) {
     p.px(14, 18 + dy, bodyD);
     p.px(12, 17 + dy, bodyL);
   }
-  if (tier === 4) {
+  if (!turtle && tier === 4) {
     // лорика сегментата — полосы
     for (let y = 11; y < 20; y++) {
       const x0 = torsoX(y) + 1;
@@ -343,15 +390,74 @@ function gladiatorArt(look, pose, dead) {
     }
     for (let y = 12; y < 20; y += 2) p.px(15, y + dy, rivet);
   }
-  if (tier >= 6) {
+  if (!turtle && tier >= 6) {
     p.rect(8, 11 + dy, 2, 12, '#8e2c28');
     p.rect(8, 11 + dy, 1, 12, '#6e1f1c');
     p.px(13, 15 + dy, '#fff2c0');
   }
+  // панцирь за спиной — поверх доспеха; взяла щит (он и есть панцирь) — на спине его нет
+  if (turtle && look.shield === 'none') {
+    const shellAt = (x, y) => ((x + 0.5 - 8.4) / 2.7) ** 2 + ((y + 0.5 - 16) / 6.3) ** 2 <= 1;
+    for (let y = 9; y < 23; y++) for (let x = 5; x < 13; x++) {
+      if (!shellAt(x, y)) continue;
+      const rim = !shellAt(x + 1, y), edge = !shellAt(x - 1, y) || !shellAt(x, y - 1) || !shellAt(x, y + 1);
+      p.px(x, y + dy, rim ? T.rim : edge ? T.shellD : y === 13 || y === 17 || x === 8 && y > 13 && y < 17 ? T.shellD
+        : x + y < 20 ? T.shellL : T.shell);
+    }
+    // ремень через грудь держит панцирь (поверх нагрудника не нужен)
+    if (look.body < 3) p.line(15, 11 + dy, 12, 19 + dy, T.leather);
+  }
   // шлем с гребнем, отброшенным назад
   const H = 4 + dy;
   p.rect(12, 10 + dy, 3, 1, skinD);
-  if (look.helmet === 'bare') {
+  if (turtle) {
+    // голова черепахи: круглая, без волос, с коротким носом и чертой рта
+    p.rect(12, H, 3, 1, skinL);
+    p.rect(11, H + 1, 5, 5, skin);
+    p.rect(11, H + 1, 1, 5, skinD);
+    p.rect(16, H + 3, 1, 2, skin);
+    p.rect(14, H + 4, 3, 1, skinD);
+    p.rect(12, H + 5, 3, 1, skinD);
+    if (look.helmet !== 'bare') {
+      // шлем — только шапка над повязкой и защита затылка: маску видно всегда
+      for (let y = 0; y < 2; y++) for (let x = 11; x < 16; x++) {
+        if (y === 0 && (x === 11 || x === 15)) continue;
+        p.px(x, H + y, x === 11 ? metalD : y === 0 || x === 12 ? metalL : metal);
+      }
+      // обод шлема отделяет его от повязки (у красного шлема — золотой, иначе красное сливается)
+      p.rect(10, H + 1, 7, 1, look.head >= 6 ? '#e8c35a' : metalD);
+      p.rect(11, H + 2, 1, 3, metalD);
+      if (look.helmet === 'secutor') {
+        p.rect(12, H - 1, 3, 1, metal);
+        p.px(13, H - 2, color);
+      } else if (look.helmet === 'murmillo' || look.helmet === 'thraex') {
+        const tall = look.helmet === 'murmillo' ? 3 : 2;
+        for (let i = 0; i < 6; i++) p.rect(14 - i, H - tall + Math.floor(i / 2), 1, tall, i < 2 ? colorL : i < 4 ? color : colorD);
+        p.px(8, H + 1, colorD);
+        if (look.helmet === 'thraex') p.line(14, H - 1, 16, H - 2, metal);
+      } else if (look.helmet === 'hoplo') {
+        p.line(12, H, 10, H - 4, color);
+        p.line(14, H, 15, H - 4, colorL);
+      }
+    }
+    // красная повязка на глазах — поверх всего, с узлом на затылке и двумя хвостами, что вьются на ходу
+    if (look.helmet === 'bare') p.rect(13, H + 1, 3, 1, T.maskL);
+    p.rect(11, H + 2, 5, 1, T.mask);
+    p.rect(11, H + 3, 5, 1, T.maskD);
+    p.px(16, H + 2, T.mask);
+    p.rect(14, H + 2, 2, 1, T.eye);
+    p.px(10, H + 2, T.mask);
+    p.px(10, H + 3, T.maskD);
+    const TAILS = {
+      walk1: [[[9, 2], [8, 2], [7, 2], [6, 3], [5, 3]], [[9, 3], [8, 3], [7, 4], [6, 4]]],
+      walk2: [[[9, 2], [8, 3], [7, 3], [6, 2], [5, 2]], [[9, 3], [8, 4], [7, 4], [6, 5]]],
+      sit: [[[10, 4], [9, 5], [9, 6], [9, 7]], [[10, 5], [10, 6]]],
+      kneel: [[[9, 3], [9, 4], [8, 5], [8, 6]], [[10, 4], [10, 5], [9, 6]]],
+    };
+    const [one, two] = TAILS[pose] || [[[9, 2], [8, 3], [7, 3], [6, 4]], [[9, 3], [8, 4], [7, 5]]];
+    for (const [x, y] of one) p.px(x, H + y, T.mask);
+    for (const [x, y] of two) p.px(x, H + y, T.maskD);
+  } else if (look.helmet === 'bare') {
     p.rect(11, H + 1, 5, 5, skin);
     p.rect(11, H + 1, 1, 5, skinD);
     p.rect(11, H, 5, 2, look.hair);
@@ -406,6 +512,7 @@ function gladiatorArt(look, pose, dead) {
 // снаряжения по редкости, что у стоящей фигурки. 24×9 пикселей
 function lyingArt(look, dead) {
   const p = new Pix(24, 9);
+  const turtle = look.kind === 'turtle', T = TURTLE;
   const skin = look.skin, skinD = darker(skin, 0.8), skinL = darker(skin, 1.08);
   const shade3 = (tier) => [METALS[tier], darker(METALS[tier], 0.68), darker(METALS[tier], 1.3)];
   // ноги: ближняя сверху светлее, дальняя ниже в тени; колени чуть согнуты
@@ -431,6 +538,14 @@ function lyingArt(look, dead) {
   p.rect(13, 4, 3, 1, look.color);
   // торс: грудь вверх; доспех по редкости
   for (let x = 6; x < 12; x++) for (let y = 3; y < 8; y++) p.px(x, y, y === 3 ? skinL : y === 7 ? skinD : skin);
+  if (turtle) {
+    // лежит на панцире: его край снизу, на груди пластрон
+    p.rect(5, 8, 9, 1, T.shellD);
+    p.rect(6, 7, 7, 1, T.shell);
+    p.rect(6, 3, 6, 2, T.plastron);
+    p.px(8, 3, T.plastronD);
+    p.px(10, 4, T.plastronD);
+  }
   if (look.body) {
     const [m, mD, mL] = shade3(look.body);
     p.rect(6, 3, 6, 3, m);
@@ -445,7 +560,7 @@ function lyingArt(look, dead) {
   p.rect(5, 4, 1, 3, skinD);
   if (look.helmet === 'bare') {
     p.ellipse(2.5, 5, 2.4, 2.6, skin, skinD, skinL);
-    p.rect(0, 5, 2, 3, look.hair);
+    if (!turtle) p.rect(0, 5, 2, 3, look.hair);
     p.px(3, 2, skin);
     p.px(2, 4, '#3a2a20');
   } else {
@@ -455,6 +570,13 @@ function lyingArt(look, dead) {
     p.px(4, 4, '#2a2420');
     p.rect(0, 3, 1, 3, look.color);
   }
+  if (turtle) {
+    // повязка через глаза — и на шлеме видна; хвосты лежат на песке
+    for (let y = 2; y < 9; y++) for (const x of [2, 3]) if (p.get(x, y)) p.px(x, y, x === 2 ? T.mask : T.maskD);
+    p.px(3, 3, T.eye);
+    p.px(1, 8, T.mask);
+    p.px(0, 8, T.maskD);
+  }
   if (!dead) return p.canvas();
   return p.canvas((c) => {
     const [r, g, b] = rgb(c), l = (r + g + b) / 3;
@@ -463,7 +585,7 @@ function lyingArt(look, dead) {
 }
 
 export function lyingSprite(look, dead) {
-  return remember(['lie5', look.color, gearKey(look), look.helmet, look.skin, look.hair, dead].join(':'),
+  return remember(['lie5', look.kind, look.color, gearKey(look), look.helmet, look.skin, look.hair, dead].join(':'),
     () => lyingArt(look, dead));
 }
 
@@ -746,8 +868,29 @@ function shieldArt(shape, design, color) {
   return p.canvas();
 }
 
+// щит черепахи — её панцирь: выпуклый, щитки с тёмными швами, светлый обод из краевых пластин
+function shellArt() {
+  const T = TURTLE, w = 11, h = 14, p = new Pix(w, h), base = rgb(T.shell);
+  const inside = (x, y) => x >= 0 && y >= 0 && x < w && y < h && ((x + 0.5 - 5.5) / 5.5) ** 2 + ((y + 0.5 - 7) / 7) ** 2 <= 1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!inside(x, y)) continue;
+    const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
+    if (edge) {
+      p.px(x, y, x + y < 9 ? '#e2c788' : x + y > 15 ? '#8a6c38' : T.rim);
+      continue;
+    }
+    // щитки: средний ряд крупнее, боковые со сдвигом; швы тёмные
+    const seam = y === 4 || y === 7 || y === 10 || (x === 3 || x === 7) && y > 1 && y < 12;
+    const k = 1.22 - 0.4 * ((x - 1) / (w - 3)) - 0.14 * ((y - 1) / (h - 3));
+    p.px(x, y, seam ? T.shellD : hex(tone(base, k)));
+  }
+  p.px(4, 2, '#d8c088');
+  p.px(5, 5, '#c4a868');
+  return p.canvas();
+}
+
 export const shieldSprite = (shape, design, color) => remember(['shield2', shape, design, color].join(':'),
-  () => shieldArt(shape, design, color));
+  () => (shape === 'shell' ? shellArt() : shieldArt(shape, design, color)));
 export const netOverSprite = () => remember('net-over2', netOverArt);
 export const netHandSprite = () => remember('net-hand2', netHandArt);
 export const netSprite = () => remember('net2', netArt);
@@ -942,7 +1085,7 @@ function silhouette(canvas) {
 }
 
 export function gladiatorSprite(look, pose, dead = false, flash = false) {
-  const key = ['g7', look.color, gearKey(look), look.helmet, look.shield, look.net, look.amulet, look.skin, look.hair, pose, dead,
+  const key = ['g7', look.kind, look.armGuard, look.color, gearKey(look), look.helmet, look.shield, look.net, look.amulet, look.skin, look.hair, pose, dead,
     flash].join(':');
   return remember(key, () => {
     const art = remember(key.replace(/:(true|false)$/, ':false'), () => gladiatorArt(look, pose, dead));
