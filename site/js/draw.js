@@ -219,7 +219,8 @@ function drawArms(ctx, g, look, bob, drill = null) {
   const skin = look.skin, skinD = darker(skin, 0.8), guard = '#3f3833';
   // у черепахи на обеих руках у запястья — светлые обмотки, наручи у плеча — только с доспехом от 3 редкости
   // у качка руки голые и с бицепсами, с доспехом от 3 редкости — наручи цвета брони на предплечьях
-  const arm = look.kind === 'jock' ? (from, to, color) => limb(ctx, from, to, color, null, look.armGuard, true)
+  const arm = look.kind === 'jock' || look.kind === 'samurai'
+    ? (from, to, color) => limb(ctx, from, to, color, null, look.armGuard, look.kind === 'jock')
     : (from, to, color, cover = null) => limb(ctx, from, to, color, look.wraps ? look.armGuard : cover, look.wraps);
   const length = g.swingMax || 0.3, phase = g.swing > 0 ? 1 - g.swing / length : 0;
   ctx.save();

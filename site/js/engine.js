@@ -7,8 +7,8 @@ import { DIVINE, PLAIN, PRICE, QUEUE_CAP, REFORGE, RUSH, SHOW_TIME, SPIN_TIME, c
   spin } from './gacha.js';
 import { OWN_SKINS } from './art.js';
 
-// у какого личного скина какое оружие особое
-const SKIN_WEAPONS = { jock: 'greatsword' };
+// у какого личного скина какое оружие особое (меч качка; катана и одачи самурая)
+const SKIN_WEAPONS = { jock: ['greatsword'], samurai: ['sword', 'greatsword'] };
 
 export const COMMANDS = new Map([
   ['!гладиаторы-пауза', 'pause'],
@@ -401,7 +401,7 @@ export class Game {
   // кто его подберёт. Перековка даёт новое оружие — уже обычное, если его взял не хозяин
   _skinWeapon(g) {
     const kind = OWN_SKINS[g.login], w = g.weapon;
-    if (w && kind && SKIN_WEAPONS[kind] === w.type) w.skin = kind;
+    if (w && kind && SKIN_WEAPONS[kind] && SKIN_WEAPONS[kind].includes(w.type)) w.skin = kind;
   }
 
   _command(g, word, arg) {

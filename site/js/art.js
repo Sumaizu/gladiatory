@@ -144,13 +144,18 @@ export const HELMETS = ['murmillo', 'thraex', 'secutor', 'hoplo', 'bare'];
 export const SPRITE = { w: 24, h: 40, x: 12, foot: 39, hand: [6, 19] };
 
 // личные скины зрителей — навсегда за логином: форма фигурки и движения те же, другой только рисунок
-export const OWN_SKINS = { nord2673: 'turtle', promiskuitet86: 'jock' };
+export const OWN_SKINS = { nord2673: 'turtle', promiskuitet86: 'jock', sumaizu: 'samurai' };
 // черепаха: зелёная кожа, красная повязка на глазах с хвостами, панцирь за спиной, на груди пластрон, обмотки на руках
 const TURTLE = { skin: '#6f9a3c', mask: '#e0262a', maskL: '#ff5a4a', maskD: '#97161a', eye: '#f6f2e8',
   shell: '#7a6434', shellD: '#4b3b1c', shellL: '#a88c4e', rim: '#c9a964', plastron: '#d4ab5e', plastronD: '#a07c3a',
   wraps: '#d9cfb4', leather: '#6e4c30', leatherD: '#4e3420' };
 // качок: загорелый, лысый с бликом на макушке, щетина, рельеф груди и пресса, бицепсы, трусы-боксеры. Доспех не
 // прячет тело: вместо кирасы — перевязь, наплечник и наручи; шлем — только обруч, лысину видно всегда
+// самурай: чёрные кимоно, хакама, перчатки и маска с прорезью для глаз, красный шарф с хвостами по ветру и красный
+// пояс с узлом. Шлем — широкая конусная шляпа, доспех — пластинчатый (до, наплечники-соде, юбка-кусадзури), всё — цвета
+// редкости, как обычная броня; одноручный меч у него — катана, двуручный — одачи
+const SAMURAI = { skin: '#2c2b33', red: '#c8202a', redL: '#ef4a44', redD: '#7e1218', eye: '#ece6d6', sole: '#8a6f40',
+  lace: '#c8202a', gold: '#e8c35a' };
 const JOCK = { skin: '#d49a72', shine: '#fbe0c8', stubble: '#93705c', stubbleL: '#b48466', eye: '#2b3a4c', boxers: '#26262e', boxersD: '#17171c',
   boxersL: '#3a3a46', band: '#e8e8ec', bandD: '#b4b4be' };
 
@@ -165,17 +170,17 @@ export function lookOf(g, seed) {
   const style = HELMETS[seed % (HELMETS.length - 1)];
   const gear = g.gear || {};
   const head = tierOf(gear.head);
-  const kind = OWN_SKINS[g.login] || null, turtle = kind === 'turtle', jock = kind === 'jock';
+  const kind = OWN_SKINS[g.login] || null, turtle = kind === 'turtle', jock = kind === 'jock', samurai = kind === 'samurai';
   return {
     kind,
     color: muted(g.color), head, body: tierOf(gear.body), legs: tierOf(gear.legs), feet: tierOf(gear.feet),
     helmet: head ? style : 'bare',
-    skin: turtle ? TURTLE.skin : jock ? JOCK.skin : SKINS[(seed >>> 3) % SKINS.length], hair: HAIR[(seed >>> 6) % HAIR.length],
+    skin: turtle ? TURTLE.skin : jock ? JOCK.skin : samurai ? SAMURAI.skin : SKINS[(seed >>> 3) % SKINS.length], hair: HAIR[(seed >>> 6) % HAIR.length],
     // у черепахи щит — панцирь: взяла в руку — со спины он снимается
     shield: !shieldUp(g) ? 'none' : turtle ? 'shell' : SHIELD_SHAPES[(seed >>> 11) % SHIELD_SHAPES.length],
     wraps: turtle ? TURTLE.wraps : null,
     // у черепахи доспех от 3 редкости — ещё и наручи на плечах цвета брони
-    armGuard: (turtle || jock) && tierOf(gear.body) >= 3 ? METALS[tierOf(gear.body)] : null,
+    armGuard: (turtle || jock || samurai) && tierOf(gear.body) >= 3 ? METALS[tierOf(gear.body)] : null,
     design: (seed >>> 9) % 3,
     net: netUp(g) && !(g.netCool > 0),
     sand: sandUp(g),
@@ -204,7 +209,7 @@ function gladiatorArt(look, pose, dead) {
   const dy = pose === 'sit' ? 11 : pose === 'kneel' ? 7 : 0;
   const turtle = look.kind === 'turtle', T = TURTLE;
   const cloth = turtle ? T.leather : CLOTH, clothD = turtle ? T.leatherD : CLOTH_D;
-  const jock = look.kind === 'jock', J = JOCK;
+  const jock = look.kind === 'jock', J = JOCK, samurai = look.kind === 'samurai', SM = SAMURAI;
   // обувь по редкости: сандалии с ремнями до голени, кожаные ботинки, высокие сапоги с пластиной, золото
   const boot = look.feet, bootM = METALS[Math.max(1, boot)];
   const foot = (x, y) => {
@@ -239,6 +244,12 @@ function gladiatorArt(look, pose, dead) {
       p.rect(x - 1, y, 4, 1, skinD);
       return;
     }
+    if (samurai) {
+      // чёрные таби на соломенных сандалиях
+      p.rect(x - 1, y - 1, 3, 1, skinD);
+      p.rect(x - 1, y, 4, 1, SM.sole);
+      return;
+    }
     p.rect(x - 1, y, 4, 1, BELT);
     p.px(x - 1, y - 1, BELT);
   };
@@ -267,7 +278,7 @@ function gladiatorArt(look, pose, dead) {
     p.line(14, 24, knee[0], knee[1], skin, 3);
     p.line(knee[0], knee[1], front, 38, skin, 3);
     foot(front + 1, 39);
-    if (!jock) for (const y of [26, 28]) p.rect(13 + (knee[0] - 14) * (y - 24) / 7, y, 3, 1, '#d6cab5');
+    if (!jock && !samurai) for (const y of [26, 28]) p.rect(13 + (knee[0] - 14) * (y - 24) / 7, y, 3, 1, '#d6cab5');
     // поножи по редкости: обмотки, бронзовая поножа спереди, поножи на обеих ногах с наколенником
     const shinX = (k, f, y) => Math.round(k + (f - k) * (y - 31) / 7);
     const backKnee = Math.round((11 + back) / 2);
@@ -328,11 +339,32 @@ function gladiatorArt(look, pose, dead) {
     p.px(10, 20 + dy, J.bandD);
     p.px(12, 20 + dy, color);
     p.px(13, 20 + dy, color);
+  } else if (samurai) {
+    // верх хакамы со складками, красный пояс с узлом спереди и свисающими концами
+    p.rect(10, 21 + dy, 6, 4, skin);
+    for (const x of [11, 13]) p.rect(x, 21 + dy, 1, 4, skinD);
+    p.rect(15, 21 + dy, 1, 4, skinL);
+    p.rect(10, 20 + dy, 6, 1, SM.red);
+    p.px(10, 20 + dy, SM.redD);
+    p.px(15, 20 + dy, SM.redL);
+    p.px(16, 20 + dy, SM.red);
+    p.px(15, 21 + dy, SM.red);
+    p.px(16, 22 + dy, SM.redD);
+    p.px(15, 23 + dy, SM.redD);
+    // кусадзури — пластинчатая юбка поверх хакамы (доспех от 3 редкости): три полосы с красной шнуровкой
+    if (look.body >= 3) {
+      const lace = look.body >= 7 ? SM.gold : SM.lace;
+      for (const x0 of [10, 12, 14]) for (let y = 21; y <= 25; y++) {
+        p.px(x0, y + dy, y % 2 ? bodyM : bodyD);
+        p.px(x0 + 1, y + dy, y === 21 ? bodyL : y % 2 ? bodyL : bodyM);
+      }
+      for (const y of [22, 24]) for (const x of [10, 12, 14]) p.px(x + 1, y + dy, lace);
+    }
   } else for (let y = 21; y < 25; y++) for (let x = 10; x < 16; x++) {
     if (y === 24 && (x === 10 || x === 15)) continue;
     p.px(x, y + dy, x === 10 || (x * 2 + y) % 5 === 0 ? clothD : cloth);
   }
-  if (jock) {
+  if (jock || samurai) {
     // без пояса и птеруг: резинка трусов и есть пояс
   } else if (look.body >= 3) {
     // птеруги — кожаные полосы поверх повязки
@@ -344,8 +376,8 @@ function gladiatorArt(look, pose, dead) {
   } else {
     p.rect(14, 21 + dy, 1, 3, color);
   }
-  if (!jock) p.rect(10, 20 + dy, 6, 1, look.body >= 4 ? '#b8954a' : BELT);
-  if (!jock && look.body >= 1) p.px(13, 20 + dy, '#d8b46a');
+  if (!jock && !samurai) p.rect(10, 20 + dy, 6, 1, look.body >= 4 ? '#b8954a' : BELT);
+  if (!jock && !samurai && look.body >= 1) p.px(13, 20 + dy, '#d8b46a');
   // у черепахи на поясе красная пряжка
   if (turtle) p.px(13, 20 + dy, look.body >= 1 ? T.mask : T.maskD);
   // торс, чуть подан вперёд
@@ -375,9 +407,31 @@ function gladiatorArt(look, pose, dead) {
     p.px(15, 17 + dy, skinD);
     p.px(12, 19 + dy, skinD);
     p.px(11, 16 + dy, skinD);
+  } else if (samurai) {
+    // запах кимоно: светлая кромка ворота от шеи наискось к поясу
+    p.line(15, 11 + dy, 13, 16 + dy, skinL);
+    p.px(14, 11 + dy, skinD);
   } else {
     p.rect(13, 14 + dy, 2, 1, skinD);
     p.px(13, 17 + dy, skinD);
+  }
+  if (samurai && look.body >= 1) {
+    // до — пластинчатый доспех: ряды пластин с красной шнуровкой. Простой — только пояс-харамаки на животе,
+    // с 2 редкости — на весь торс, с 4 — ещё и пластина на горле; у красного шнуровка золотая
+    const lace = look.body >= 7 ? SM.gold : SM.lace, top = look.body >= 2 ? 11 : 15;
+    for (let y = top; y < 20; y++) {
+      const x0 = y < 14 ? 11 : 10, x1 = x0 + 5 + (y >= 12 && y <= 15 ? 1 : 0);
+      for (let x = x0; x <= x1; x++) {
+        const row = (y - top) % 2 === 0;
+        p.px(x, y + dy, y === top ? bodyL : x === x0 ? bodyD : x === x1 ? (row ? bodyL : bodyM) : row ? bodyM : bodyD);
+      }
+      if ((y - top) % 2 === 1) for (const x of [x0 + 2, x0 + 4]) p.px(x, y + dy, lace);
+    }
+    if (look.body >= 4) {
+      p.rect(12, 10 + dy, 4, 1, bodyM);
+      p.px(15, 10 + dy, bodyL);
+    }
+    if (look.body >= 6) p.px(15, 13 + dy, '#fff2c0');
   }
   // у черепахи спереди — пластрон: светлые щитки с тёмными швами. С доспехом от 3 редкости — нагрудник на весь
   // торс: выпуклая грудь, воротник у шеи, щитки как у пластрона, кант сверху и снизу (у красного — золотой)
@@ -406,13 +460,22 @@ function gladiatorArt(look, pose, dead) {
   // броня по редкости: кожаная перевязь, + наплечник, бронзовая кираса, сегментата, золотая кираса с плащом
   const tier = look.body, leather = '#6b4a33', leatherL = '#8a6246', rivet = '#d8b46a';
   const torsoX = (y) => (y < 14 ? 11 : 10);
-  if (tier === 1 || tier === 2) {
+  if (!samurai && (tier === 1 || tier === 2)) {
     p.line(11, 11 + dy, 15, 19 + dy, leather);
     p.line(15, 11 + dy, 11, 19 + dy, leather);
     p.px(12, 12 + dy, leatherL);
     p.px(13, 15 + dy, rivet);
   }
-  if (tier === 2 || tier === 4 || (turtle || jock) && tier >= 3) {
+  if (samurai && tier >= 3) {
+    // соде — большие наплечные пластины ступеньками, с 4 редкости — в три ряда
+    const lace = tier >= 7 ? SM.gold : SM.lace, rows = tier >= 4 ? 3 : 2;
+    for (let i = 0; i < rows; i++) {
+      p.rect(14, 10 + i * 2 + dy, 4, 1, bodyL);
+      p.rect(14, 11 + i * 2 + dy, 4, 1, bodyM);
+      p.px(17, 11 + i * 2 + dy, bodyD);
+      p.px(15, 11 + i * 2 + dy, lace);
+    }
+  } else if (tier === 2 || tier === 4 || (turtle || jock) && tier >= 3) {
     // наплечник на ближнем плече — сегменты
     p.rect(14, 9 + dy, 3, 1, bodyL);
     p.rect(14, 10 + dy, 4, 1, bodyM);
@@ -429,7 +492,7 @@ function gladiatorArt(look, pose, dead) {
     p.px(14, 15 + dy, bodyD);
     if (look.body >= 6) p.px(13, 14 + dy, '#fff2c0');
   }
-  if (!turtle && !jock && (tier === 3 || tier >= 6)) {
+  if (!turtle && !jock && !samurai && (tier === 3 || tier >= 6)) {
     // мускульная кираса
     for (let y = 11; y < 20; y++) {
       const x0 = torsoX(y) + 1;
@@ -442,7 +505,7 @@ function gladiatorArt(look, pose, dead) {
     p.px(14, 18 + dy, bodyD);
     p.px(12, 17 + dy, bodyL);
   }
-  if (!turtle && !jock && tier === 4) {
+  if (!turtle && !jock && !samurai && tier === 4) {
     // лорика сегментата — полосы
     for (let y = 11; y < 20; y++) {
       const x0 = torsoX(y) + 1;
@@ -451,7 +514,7 @@ function gladiatorArt(look, pose, dead) {
     }
     for (let y = 12; y < 20; y += 2) p.px(15, y + dy, rivet);
   }
-  if (!turtle && tier >= 6) {
+  if (!turtle && !samurai && tier >= 6) {
     p.rect(8, 11 + dy, 2, 12, '#8e2c28');
     p.rect(8, 11 + dy, 1, 12, '#6e1f1c');
     if (!jock) p.px(13, 15 + dy, '#fff2c0');
@@ -518,6 +581,53 @@ function gladiatorArt(look, pose, dead) {
     const [one, two] = TAILS[pose] || [[[9, 2], [8, 3], [7, 3], [6, 4]], [[9, 3], [8, 4], [7, 5]]];
     for (const [x, y] of one) p.px(x, H + y, T.mask);
     for (const [x, y] of two) p.px(x, H + y, T.maskD);
+  } else if (samurai) {
+    // голова в чёрном капюшоне и маске: видна только прорезь со светлым глазом
+    p.rect(12, H, 3, 1, skin);
+    p.rect(11, H + 1, 5, 5, skin);
+    p.rect(11, H + 1, 1, 5, skinD);
+    p.px(12, H, skinL);
+    p.rect(13, H + 3, 3, 1, darker(skin, 0.6));
+    p.px(15, H + 3, SM.eye);
+    p.px(16, H + 4, skin);
+    p.px(16, H + 5, skinD);
+    if (look.helmet !== 'bare') {
+      // шлем — широкая конусная шляпа цвета редкости: свет слева, полосы плетения, тень под полями
+      const brimD = darker(metal, 0.55);
+      p.px(13, H - 2, metalL);
+      p.rect(12, H - 1, 3, 1, metalL);
+      p.px(14, H - 1, metal);
+      p.rect(10, H, 7, 1, metal);
+      p.rect(10, H, 2, 1, metalL);
+      p.rect(8, H + 1, 11, 1, metal);
+      p.rect(8, H + 1, 3, 1, metalL);
+      for (const x of [11, 14, 17]) p.px(x, H + 1, metalD);
+      p.px(16, H, metalD);
+      p.rect(7, H + 2, 13, 1, metalD);
+      p.px(7, H + 2, metal);
+      p.rect(11, H + 3, 5, 1, brimD);
+      p.px(15, H + 3, SM.eye);
+      if (look.head >= 6) p.rect(10, H + 1, 7, 1, look.head >= 7 ? SM.gold : SM.red);
+      // завязки шляпы под подбородком
+      p.px(12, H + 4, SM.redD);
+      p.px(12, H + 5, SM.redD);
+    }
+    // красный шарф: на шее, узел спереди и два длинных хвоста, что вьются за спиной
+    p.rect(11, 10 + dy, 5, 1, SM.red);
+    p.px(12, 10 + dy, SM.redL);
+    p.px(16, 10 + dy, SM.red);
+    p.px(16, 11 + dy, SM.redD);
+    p.px(17, 12 + dy, SM.redD);
+    const N = 10 + dy;
+    const SCARF = {
+      walk1: [[[10, 0], [9, -1], [8, -1], [7, -1], [6, 0], [5, 0], [4, -1]], [[10, 1], [9, 1], [8, 2], [7, 2], [6, 2]]],
+      walk2: [[[10, 0], [9, 0], [8, -1], [7, -1], [6, -2], [5, -2], [4, -2]], [[10, 1], [9, 2], [8, 2], [7, 3], [6, 3]]],
+      sit: [[[10, 0], [9, 1], [9, 2], [9, 3], [8, 4]], [[10, 1], [10, 2], [10, 3]]],
+      kneel: [[[10, 0], [9, 1], [8, 1], [7, 2], [7, 3]], [[10, 1], [9, 2], [9, 3]]],
+    };
+    const [one, two] = SCARF[pose] || [[[10, 0], [9, 0], [8, 1], [7, 1], [6, 2], [5, 2]], [[10, 1], [9, 2], [8, 3], [7, 3]]];
+    for (const [x, y] of one) p.px(x, N + y, SM.red);
+    for (const [x, y] of two) p.px(x, N + y, SM.redD);
   } else if (jock) {
     // лысая голова: гладкая макушка с бликом, ухо, бровь, голубой глаз, нос и щетина по челюсти
     p.rect(12, H, 3, 1, skin);
@@ -613,6 +723,7 @@ function gladiatorArt(look, pose, dead) {
 function lyingArt(look, dead) {
   const p = new Pix(24, 9);
   const turtle = look.kind === 'turtle', T = TURTLE, jock = look.kind === 'jock', J = JOCK;
+  const samurai = look.kind === 'samurai', SM = SAMURAI;
   const skin = look.skin, skinD = darker(skin, 0.8), skinL = darker(skin, 1.08);
   const shade3 = (tier) => [METALS[tier], darker(METALS[tier], 0.68), darker(METALS[tier], 1.3)];
   // ноги: ближняя сверху светлее, дальняя ниже в тени; колени чуть согнуты
@@ -639,6 +750,12 @@ function lyingArt(look, dead) {
     p.rect(13, 3, 4, 1, J.boxersL);
     p.rect(12, 3, 1, 5, J.band);
     p.px(12, 5, look.color);
+  } else if (samurai) {
+    // хакама и красный пояс с концами на песке
+    p.rect(13, 3, 3, 5, skin);
+    p.rect(13, 7, 3, 1, skinD);
+    p.rect(12, 3, 1, 5, SM.red);
+    p.px(12, 8, SM.redD);
   } else {
     p.rect(13, 3, 3, 5, CLOTH);
     p.rect(13, 7, 3, 1, CLOTH_D);
@@ -666,6 +783,13 @@ function lyingArt(look, dead) {
       for (let x = 6; x < 12; x++) p.px(x, 3 + Math.floor((x - 6) / 2), x % 2 ? m : mL);
       p.px(9, 5, mD);
     } else if (look.body) p.line(6, 3, 11, 6, '#6b4a33');
+  } else if (samurai && look.body) {
+    // до — ряды пластин с красной шнуровкой
+    const [m, mD, mL] = shade3(look.body);
+    p.rect(6, 3, 6, 3, m);
+    p.rect(6, 3, 6, 1, mL);
+    p.rect(6, 5, 6, 1, mD);
+    for (const x of [7, 9, 11]) p.px(x, 4, look.body >= 7 ? SM.gold : SM.lace);
   } else if (look.body) {
     const [m, mD, mL] = shade3(look.body);
     p.rect(6, 3, 6, 3, m);
@@ -680,7 +804,7 @@ function lyingArt(look, dead) {
   p.rect(5, 4, 1, 3, skinD);
   if (look.helmet === 'bare') {
     p.ellipse(2.5, 5, 2.4, 2.6, skin, skinD, skinL);
-    if (!turtle && !jock) p.rect(0, 5, 2, 3, look.hair);
+    if (!turtle && !jock && !samurai) p.rect(0, 5, 2, 3, look.hair);
     p.px(3, 2, skin);
     p.px(2, 4, jock ? J.eye : '#3a2a20');
     if (jock) {
@@ -697,6 +821,21 @@ function lyingArt(look, dead) {
     p.px(3, 3, '#2a2420');
     p.px(4, 4, '#2a2420');
     p.rect(0, 3, 1, 3, look.color);
+  }
+  if (samurai) {
+    // маска с прорезью, красный шарф на шее; шляпа слетела и лежит у головы
+    if (look.helmet !== 'bare') {
+      const [m, mD, mL] = shade3(look.head);
+      p.ellipse(2.5, 5, 2.4, 2.6, look.skin, skinD, skinL);
+      p.rect(0, 0, 6, 1, mD);
+      p.rect(1, 0, 4, 1, m);
+      p.px(2, 0, mL);
+    }
+    p.px(3, 3, SM.eye);
+    p.px(2, 4, skinD);
+    p.rect(5, 3, 1, 4, SM.red);
+    p.px(4, 8, SM.red);
+    p.px(5, 8, SM.redD);
   }
   if (turtle) {
     // повязка через глаза — и на шлеме видна; хвосты лежат на песке
@@ -768,9 +907,39 @@ function jockSword(tier) {
   return { canvas: p.canvas(), px: 2.5, py: 24.5, k: 1 };
 }
 
+// катана и одачи самурая: узкий изогнутый клинок цвета редкости (остриём чуть назад), латунная хабаки, круглая
+// цуба, длинная рукоять в чёрной оплётке с ромбами. Одачи — та же катана, но длиннее, с рукоятью на две руки
+function katana(tier, long) {
+  const m = BLADES[Math.min(BLADES.length - 1, tier)], mL = darker(m, 1.25), mD = darker(m, 0.72);
+  const blade = long ? 23 : 17, grip = long ? 7 : 5, h = blade + 3 + grip + 1;
+  // плавный изгиб по всей длине: от рукояти клинок прямой, к острию всё сильнее уходит назад
+  const bx = long ? 4 : 3, curve = long ? 4 : 3, w = bx + 3;
+  const p = new Pix(w, h);
+  const xAt = (y) => bx - Math.round(curve * ((blade - y) / blade) ** 2);
+  p.px(xAt(0), 0, mL);
+  for (let y = 1; y < blade; y++) {
+    const x = xAt(y);
+    p.px(x, y, mL);
+    p.px(x + 1, y, mD);
+  }
+  p.px(bx, blade, GOLDS[2]);
+  p.px(bx + 1, blade, GOLDS[1]);
+  p.rect(bx - 2, blade + 1, 5, 1, tier >= 6 ? GOLDS[1] : IRONS[0]);
+  p.px(bx - 2, blade + 1, tier >= 6 ? GOLDS[2] : IRONS[1]);
+  p.rect(bx - 1, blade + 2, 3, 1, IRONS[0]);
+  for (let y = blade + 3; y < blade + 3 + grip; y++) {
+    p.px(bx, y, y % 2 ? '#1c1a20' : '#d8d2c2');
+    p.px(bx + 1, y, y % 2 ? '#d8d2c2' : '#1c1a20');
+  }
+  p.rect(bx, h - 1, 2, 1, IRONS[1]);
+  return { canvas: p.canvas(), px: bx + 0.5, py: blade + 3.5, k: 1 };
+}
+
 function weaponArt(type, tier, kind = null) {
   const m = BLADES[Math.min(BLADES.length - 1, tier)], mL = darker(m, 1.25), mD = darker(m, 0.72), mDD = darker(m, 0.56);
   if (type === 'greatsword' && kind === 'jock') return jockSword(tier);
+  if (type === 'sword' && kind === 'samurai') return katana(tier, false);
+  if (type === 'greatsword' && kind === 'samurai') return katana(tier, true);
   if (type === 'greatsword') {
     // огромный тяжёлый меч, как у Гатса: широкий длинный клинок-плита, грубая гарда, длинная рукоять на две руки
     const p = new Pix(6, 31);

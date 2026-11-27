@@ -1348,6 +1348,30 @@ test('меч качка: двуручник в руках promiskuitet86 осо�
   eq([hit.from, hit.skin], ['b', 'jock']);
 });
 
+test('катана и одачи самурая: одноручный и двуручный меч Sumaizu особые, падают и подбираются особыми', () => {
+  const g = game({ settings: { death: 0 } });
+  const [sam, b, c] = join(g, 'Sumaizu', 'B', 'C');
+  for (const type of ['sword', 'greatsword']) {
+    sam.weapon = weapon(type);
+    g._skinWeapon(sam);
+    eq(sam.weapon.skin, 'samurai');
+  }
+  const axe = weapon('axe');
+  g._skinWeapon(Object.assign({}, sam, { weapon: axe }));
+  eq(axe.skin, undefined);
+  // упал — одачи на песке, другой подобрал: так и осталось одачи, и крит им звенит
+  const odachi = sam.weapon;
+  g.ground = [];
+  g._dropAll(sam);
+  const it = g.ground.find((x) => x.kind === 'weapon');
+  eq(it.item, odachi);
+  g._pick(b, it);
+  eq([b.weapon, b.weapon.skin], [odachi, 'samurai']);
+  g.random = () => 0.5;
+  g._attack(b, c);
+  eq(g.events.filter((e) => e.type === 'hit').pop().skin, 'samurai');
+});
+
 test('парагон: после боя получает парагон и начинает с нуля, выжившие — много опыта', () => {
   const g = game({ settings: { death: 0 }, mode: null });
   const [a, b, c] = join(g, 'A', 'B', 'C');
