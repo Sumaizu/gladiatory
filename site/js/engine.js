@@ -7,8 +7,8 @@ import { DIVINE, PLAIN, PRICE, QUEUE_CAP, REFORGE, RUSH, SHOW_TIME, SPIN_TIME, c
   spin } from './gacha.js';
 import { OWN_SKINS } from './art.js';
 
-// у какого личного скина какое оружие особое (меч качка; катана и одачи самурая)
-const SKIN_WEAPONS = { jock: ['greatsword'], samurai: ['sword', 'greatsword'] };
+// у какого личного скина какое оружие особое (меч качка; катана и одачи самурая; световые мечи тёмного лорда)
+const SKIN_WEAPONS = { jock: ['greatsword'], samurai: ['sword', 'greatsword'], darklord: ['sword', 'greatsword'] };
 
 export const COMMANDS = new Map([
   ['!гладиаторы-пауза', 'pause'],

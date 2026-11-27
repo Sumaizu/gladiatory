@@ -216,10 +216,12 @@ function fist(ctx, p, color) {
 
 // drill — руки на разминке: [дальняя кисть, ближняя кисть], оружие отложено
 function drawArms(ctx, g, look, bob, drill = null) {
-  const skin = look.skin, skinD = darker(skin, 0.8), guard = '#3f3833';
+  // у тёмного лорда руки — рукава, кисти — перчатки (look.arm, look.handFar, look.handNear)
+  const skin = look.arm || look.skin, skinD = darker(skin, 0.8), guard = '#3f3833';
+  const glove = (c) => (c === skinD ? look.handFar : look.handNear) || c;
   // у черепахи на обеих руках у запястья — светлые обмотки, наручи у плеча — только с доспехом от 3 редкости
   // у качка руки голые и с бицепсами, с доспехом от 3 редкости — наручи цвета брони на предплечьях
-  const arm = look.kind === 'jock' || look.kind === 'samurai'
+  const arm = look.kind === 'jock' || look.kind === 'samurai' || look.kind === 'darklord'
     ? (from, to, color) => limb(ctx, from, to, color, null, look.armGuard, look.kind === 'jock')
     : (from, to, color, cover = null) => limb(ctx, from, to, color, look.wraps ? look.armGuard : cover, look.wraps);
   const length = g.swingMax || 0.3, phase = g.swing > 0 ? 1 - g.swing / length : 0;
@@ -227,9 +229,9 @@ function drawArms(ctx, g, look, bob, drill = null) {
   ctx.translate(-SPRITE.x, -SPRITE.foot - bob);
   if (drill) {
     arm(SHOULDER.far, drill[0], skinD);
-    fist(ctx, drill[0], skinD);
+    fist(ctx, drill[0], glove(skinD));
     arm(SHOULDER.near, drill[1], skin);
-    fist(ctx, drill[1], skin);
+    fist(ctx, drill[1], glove(skin));
     ctx.restore();
     return;
   }
@@ -242,9 +244,9 @@ function drawArms(ctx, g, look, bob, drill = null) {
     const far = jab === 0 ? at([16, 14], [23, 13], swing) : [16, 14];
     const near = jab === 1 ? at([18, 17], [24, 15], swing) : [18, 17];
     arm(SHOULDER.far, far, skinD);
-    fist(ctx, far, skinD);
+    fist(ctx, far, glove(skinD));
     arm(SHOULDER.near, near, skin);
-    fist(ctx, near, skin);
+    fist(ctx, near, glove(skin));
     ctx.restore();
     return;
   }
@@ -258,6 +260,11 @@ function drawArms(ctx, g, look, bob, drill = null) {
     ctx.translate(Math.round(hand[0]), Math.round(hand[1]));
     ctx.rotate(turn);
     ctx.scale(art.k, art.k);
+    // световой меч сияет своим цветом
+    if (art.glow) {
+      ctx.shadowColor = art.glow;
+      ctx.shadowBlur = 9;
+    }
     ctx.drawImage(art.canvas, -art.px, -art.py);
     ctx.restore();
   };
@@ -265,16 +272,16 @@ function drawArms(ctx, g, look, bob, drill = null) {
     // двуручное — обеими руками: правая у гарды, левая ниже по рукояти
     const low = [hand[0] - Math.sin(turn) * anim.two, hand[1] + Math.cos(turn) * anim.two];
     arm(SHOULDER.far, hand, skinD, guard);
-    fist(ctx, hand, skinD);
+    fist(ctx, hand, glove(skinD));
     weaponAt();
     arm(SHOULDER.near, low, skin);
-    fist(ctx, low, skin);
+    fist(ctx, low, glove(skin));
     ctx.restore();
     return;
   }
   arm(SHOULDER.far, hand, skinD, guard);
   weaponAt();
-  fist(ctx, hand, skinD);
+  fist(ctx, hand, glove(skinD));
   // левая рука: щит, моток сети, мешок или пустая у груди; бросая сеть или мешок — замах вперёд
   const tossing = g.swing > 0 && g.anim === 'toss';
   const rest = tossing ? pose(TOSS, phase).hand : null;
@@ -287,16 +294,16 @@ function drawArms(ctx, g, look, bob, drill = null) {
     const pos = [17, 16];
     arm(SHOULDER.near, pos, skin);
     ctx.drawImage(netHandSprite(), Math.round(pos[0]) - 4, Math.round(pos[1]) - 1);
-    fist(ctx, pos, skin);
+    fist(ctx, pos, glove(skin));
   } else if (look.sand && !tossing) {
     const pos = [17, 18];
     arm(SHOULDER.near, pos, skin);
     ctx.drawImage(sandSprite(), Math.round(pos[0]) - 4, Math.round(pos[1]) - 1);
-    fist(ctx, pos, skin);
+    fist(ctx, pos, glove(skin));
   } else {
     const pos = rest || [17, 17];
     arm(SHOULDER.near, pos, skin);
-    fist(ctx, pos, skin);
+    fist(ctx, pos, glove(skin));
   }
   ctx.restore();
 }
@@ -488,11 +495,13 @@ export function drawGround(ctx, game) {
     ctx.scale(P, P);
     ctx.fillStyle = 'rgba(30,15,8,.25)';
     if (it.kind === 'weapon') {
-      const art = weaponSprite(it.item.type, tierOf(it.item), it.item.skin), h = art.canvas.height * art.k;
+      // световой меч на песке выключен — лежит одна рукоять
+      const art = weaponSprite(it.item.type, tierOf(it.item), it.item.skin), img = art.hilt || art.canvas;
+      const h = img.height * art.k;
       ctx.fillRect(-Math.round(h / 2), 0, Math.round(h), 2);
       ctx.rotate(Math.PI / 2);
       ctx.scale(art.k, art.k);
-      ctx.drawImage(art.canvas, -art.canvas.width / 2, -art.canvas.height / 2 - 4);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2 - (art.hilt ? 1 : 4));
     } else if (it.kind === 'shield') {
       const owner = game.members.get(it.owner) || { login: it.owner, color: '#8a7a66' };
       const look = shieldLookOf(owner, hashOf(owner.login)), art = shieldSprite(look.shape, look.design, look.color);
@@ -526,6 +535,10 @@ export function drawThrown(ctx, game) {
       const art = weaponSprite(p.item.type, tierOf(p.item), p.item.skin);
       ctx.rotate(p.x * 0.08);
       ctx.scale(art.k, art.k);
+      if (art.glow) {
+        ctx.shadowColor = art.glow;
+        ctx.shadowBlur = 9;
+      }
       ctx.drawImage(art.canvas, -art.px, -art.canvas.height / 2);
     } else if (p.kind === 'sand') {
       ctx.rotate(p.x * 0.06);

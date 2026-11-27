@@ -2,10 +2,10 @@
 const GAP = { punch: 0.06, cleave: 0.08, chop: 0.08, smash: 0.12, stab: 0.06, pierce: 0.07, maul: 0.08, swoosh: 0.15,
   daze: 0.3, disarm: 0.3, shatter: 0.4, sandburst: 0.3, blind: 0.4, pickup: 0.2, hit: 0.07, crit: 0.1, miss: 0.12, down: 0.15, death: 0.4, horn: 1, level: 0.3, coin: 0.15, join: 0.2,
   cheer: 1.5, champion: 2, reel: 0.5, jackpot: 1, boo: 0.8, roar: 1.5, growl: 0.6, block: 0.1, crack: 0.5, net: 0.4, whoosh: 0.2, thwack: 0.09, fanfare: 2, anvil: 0.3, grind: 0.6, train: 0.3, step: 0.2, tick: 0.5, tickLast: 0.5,
-  welcome: 1.2, ahhh: 1, katana: 0.6, kabuki: 1.2 };
+  welcome: 1.2, ahhh: 1, katana: 0.6, kabuki: 1.2, saber: 0.6, darkjoin: 2.5 };
 
 // записанные звуки: грузятся при первом включении звука, играют через ту же громкость
-const SAMPLES = { welcome: 'welcome.mp3', ahhh: 'ahhh.mp3', katana: 'katana.mp3', kabuki: 'kabuki.mp3' };
+const SAMPLES = { welcome: 'welcome.mp3', ahhh: 'ahhh.mp3', katana: 'katana.mp3', kabuki: 'kabuki.mp3', saber: 'saber.mp3', darkjoin: 'darkjoin.mp3' };
 const buffers = new Map();
 
 function loadSamples(ac) {

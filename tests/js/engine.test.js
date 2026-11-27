@@ -1372,6 +1372,21 @@ test('катана и одачи самурая: одноручный и дву�
   eq(g.events.filter((e) => e.type === 'hit').pop().skin, 'samurai');
 });
 
+test('световые мечи sulffur_: одноручный и двуручный особые и остаются особыми у подобравшего', () => {
+  const g = game({ settings: { death: 0 } });
+  const [d, b] = join(g, 'sulffur_', 'B');
+  for (const type of ['sword', 'greatsword']) {
+    d.weapon = weapon(type);
+    g._skinWeapon(d);
+    eq(d.weapon.skin, 'darklord');
+  }
+  const saber = d.weapon;
+  g.ground = [];
+  g._dropAll(d);
+  g._pick(b, g.ground.find((x) => x.kind === 'weapon'));
+  eq([b.weapon, b.weapon.skin], [saber, 'darklord']);
+});
+
 test('парагон: после боя получает парагон и начинает с нуля, выжившие — много опыта', () => {
   const g = game({ settings: { death: 0 }, mode: null });
   const [a, b, c] = join(g, 'A', 'B', 'C');

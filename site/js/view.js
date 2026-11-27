@@ -17,7 +17,8 @@ const PIXEL = 1;
 const BLOOD = ['#8f1414', '#a8191b', '#6e0d0f', '#c22a22'];
 const SAND_COLORS = ['#fff6d8', '#f3e2b3', '#d6b46e', '#a8804a', '#7a5a30'];
 // у каждого оружия свой звук удара; тяжёлое при промахе гудит ниже
-const JOIN_SOUND = { jock: 'welcome', samurai: 'kabuki' };
+const JOIN_SOUND = { jock: 'welcome', samurai: 'kabuki', darklord: 'darkjoin' };
+const CRIT_SOUND = { jock: 'ahhh', samurai: 'katana', darklord: 'saber' };
 const HIT_SOUND = { fists: 'punch', sword: 'hit', greatsword: 'cleave', axe: 'chop', hammer: 'smash', spear: 'stab',
   trident: 'pierce', claws: 'maul', rapier: 'stab' };
 const HEAVY = new Set(['greatsword', 'axe', 'hammer']);
@@ -424,8 +425,9 @@ export class View {
         life: FLOAT_TIME, kind: 'hit' });
       this.roar = Math.min(1, this.roar + (e.crit ? 0.25 : 0.05));
       sound(HIT_SOUND[e.weapon] || 'hit');
-      // крит особым оружием — свой звук у кого бы оно ни было: меч качка стонет, катана и одачи самурая звенят
-      if (e.crit) sound(e.ranged ? 'crit' : e.skin === 'jock' ? 'ahhh' : e.skin === 'samurai' ? 'katana' : 'crit');
+      // крит особым оружием — свой звук у кого бы оно ни было: меч качка стонет, катана и одачи самурая звенят,
+      // световой меч гудит
+      if (e.crit) sound(!e.ranged && CRIT_SOUND[e.skin] || 'crit');
     } else if (e.type === 'miss') {
       this.floats.push({ x: e.x, y: e.y - 46, text: 'мимо', life: FLOAT_TIME * 0.8, kind: 'miss' });
       sound(HEAVY.has(e.weapon) ? 'swoosh' : 'miss');
