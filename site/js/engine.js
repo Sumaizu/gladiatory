@@ -4,11 +4,13 @@ import { AFK_ROUNDS, paragonFlag, paragonStart, CRIT_KILL, DEATHMATCH, EVENTS, F
   CRIT_HIT, SHARPEN, SPREAD, WEAPON_TYPES } from './balance.js';
 import { ARENA, ARENA_WALL, DUMMIES, ENTRANCE, PLACES, POST_SPOTS, WARM_SPOTS, arenaEdge, clampToArena, pointIn } from './places.js';
 import { DIVINE, PLAIN, PRICE, QUEUE_CAP, REFORGE, RUSH, SHOW_TIME, SPIN_TIME, cleanItem, forgeSpin, itemName, rankOf, sharpChance,
-  spin } from './gacha.js';
+  spin, TYPES } from './gacha.js';
 import { OWN_SKINS } from './art.js';
 
-// у какого личного скина какое оружие особое (меч качка; катана и одачи самурая; световые мечи тёмного лорда)
-const SKIN_WEAPONS = { jock: ['greatsword'], samurai: ['sword', 'greatsword'], darklord: ['sword', 'greatsword', 'rapier'] };
+// у какого личного скина какое оружие особое (одноручный и двуручный меч качка; катана, одачи и яри самурая; световые мечи тёмного лорда).
+// Кузня и перековка дают им только эти виды — другое оружие можно лишь подобрать в бою
+export const SKIN_WEAPONS = { jock: ['sword', 'greatsword'], samurai: ['sword', 'greatsword', 'spear'], darklord: ['sword', 'greatsword', 'rapier'] };
+export const forgeTypes = (login) => SKIN_WEAPONS[OWN_SKINS[login]] || TYPES;
 
 export const COMMANDS = new Map([
   ['!гладиаторы-пауза', 'pause'],
@@ -131,6 +133,8 @@ export class Roster {
         }
         g.level = Math.max(1, Math.min(LEVEL_MAX, g.level));
         g.weapon = cleanItem(entry.weapon, 'weapon');
+        // особый вид — только у оружия хозяина скина (раньше подобранный в бою меч мог остаться помеченным)
+        if (g.weapon && g.weapon.skin && OWN_SKINS[login] !== g.weapon.skin) delete g.weapon.skin;
         g.gear = emptyGear();
         for (const slot of SLOT_IDS) g.gear[slot] = cleanItem(entry.gear && entry.gear[slot], 'armor');
         // старые сохранения: один доспех — в слот «тело»
@@ -399,9 +403,13 @@ export class Game {
 
   // личный скин: оружие своего вида в руках хозяина становится особым (меч качка) — и остаётся таким у любого,
   // кто его подберёт. Перековка даёт новое оружие — уже обычное, если его взял не хозяин
+  // Особым становится только своё оружие (из кузни, перековки, с которым пришёл), а не подобранное в бою: вещь одна и та
+  // же, после боя она вернулась бы хозяину особой. Пометку чужого скина на своём оружии снимаем (так уже случилось)
   _skinWeapon(g) {
     const kind = OWN_SKINS[g.login], w = g.weapon;
-    if (w && kind && SKIN_WEAPONS[kind] && SKIN_WEAPONS[kind].includes(w.type)) w.skin = kind;
+    if (!w || (g.weaponOf || g.login) !== g.login || g.home && g.home.weapon !== w) return;
+    if (w.skin && w.skin !== kind) delete w.skin;
+    if (kind && SKIN_WEAPONS[kind] && SKIN_WEAPONS[kind].includes(w.type)) w.skin = kind;
   }
 
   _command(g, word, arg) {
@@ -536,7 +544,11 @@ export class Game {
   }
 
   _reforge(g) {
-    if (g.weapon || this._forgingWeapon(g)) this._queue(g, 'reroll', '1', 1);
+    if (!g.weapon && !this._forgingWeapon(g)) return;
+    // у личного скина с одним видом оружия перековывать не во что (если в руках не подобранное чужое)
+    const types = forgeTypes(g.login);
+    if (types.length === 1 && (!g.weapon || g.weapon.type === types[0])) return;
+    this._queue(g, 'reroll', '1', 1);
   }
 
   _forgingWeapon(g) {
@@ -623,7 +635,7 @@ export class Game {
   // что выпадет: гача — вещь или редкость своего оружия, кузня — вид оружия, заточка — удалась ли и не сломалось ли
   _roll(g, s) {
     if (s.kind === 'weapon' || s.kind === 'reroll') {
-      return { kind: s.kind, type: forgeSpin(this.random, s.kind === 'reroll' ? g.weapon.type : null),
+      return { kind: s.kind, type: forgeSpin(this.random, s.kind === 'reroll' ? g.weapon.type : null, forgeTypes(g.login)),
         rarity: s.kind === 'reroll' ? g.weapon.rarity : PLAIN.id };
     }
     if (s.kind === 'sharpen') {
@@ -1692,11 +1704,14 @@ export class Game {
   _seekGround(g, standing, dt) {
     if (g.goFor && !this.ground.includes(g.goFor)) g.goFor = null;
     if (!g.goFor && !g.weapon && g.lost) {
+      // своё брошенное копьё ещё в полёте — ждём, пока упадёт, а не хватаем что попало рядом. На песке своё
+      // ценится в GROUND.own раз ближе: чужое берут, только если оно намного ближе
+      const flying = this.projectiles.some((p) => p.item === g.lost.item);
       let best = null, bestD = Infinity;
-      for (const it of this.ground) {
+      for (const it of flying ? [] : this.ground) {
         if (it.kind !== 'weapon') continue;
         if (it.item !== g.lost.item && this._ratingWith(g, it.item) < g.lost.rating * GROUND.half) continue;
-        const d = Math.hypot(it.x - g.x, it.y - g.y);
+        const d = Math.hypot(it.x - g.x, it.y - g.y) / (it.item === g.lost.item ? GROUND.own : 1);
         if (d < bestD) {
           best = it;
           bestD = d;
@@ -1751,7 +1766,6 @@ export class Game {
       if (g.weapon) this._lay({ kind: 'weapon', item: g.weapon, owner: g.weaponOf || g.login }, g.x, g.y + 8, 10);
       g.weapon = it.item;
       g.weaponOf = it.owner;
-      this._skinWeapon(g);
       g.lost = null;
       if (it.item.type === 'spear') g.spearCool = SPEAR.cool;
     } else if (it.kind === 'shield') {

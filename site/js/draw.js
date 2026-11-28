@@ -225,9 +225,13 @@ function drawArms(ctx, g, look, bob, drill = null) {
     ? (from, to, color) => limb(ctx, from, to, color, look.armUpper || null, look.armGuard, look.kind === 'jock')
     : (from, to, color, cover = null) => limb(ctx, from, to, color, look.wraps ? look.armGuard : cover, look.wraps);
   const length = g.swingMax || 0.3, phase = g.swing > 0 ? 1 - g.swing / length : 0;
-  // наплечник самурая висит с ближнего плеча поверх руки
+  // наплечник самурая висит с ближнего плеча поверх руки, но под оружием: оружие и кисти, что его держат, —
+  // поверх наплечника (front — что перерисовать сверху)
+  let front = null;
   const sode = () => {
-    if (look.sode) ctx.drawImage(sodeSprite(look.sode), 13, 10);
+    if (!look.sode) return;
+    ctx.drawImage(sodeSprite(look.sode), 13, 10);
+    if (front) front();
   };
   ctx.save();
   ctx.translate(-SPRITE.x, -SPRITE.foot - bob);
@@ -285,6 +289,11 @@ function drawArms(ctx, g, look, bob, drill = null) {
     weaponAt();
     arm(SHOULDER.near, low, skin);
     fist(ctx, low, glove(skin));
+    front = () => {
+      weaponAt();
+      fist(ctx, hand, glove(skinD));
+      fist(ctx, low, glove(skin));
+    };
     sode();
     ctx.restore();
     return;
@@ -292,6 +301,10 @@ function drawArms(ctx, g, look, bob, drill = null) {
   arm(SHOULDER.far, hand, skinD, guard);
   weaponAt();
   fist(ctx, hand, glove(skinD));
+  front = () => {
+    weaponAt();
+    fist(ctx, hand, glove(skinD));
+  };
   // левая рука: щит, моток сети, мешок или пустая у груди; бросая сеть или мешок — замах вперёд
   const tossing = g.swing > 0 && g.anim === 'toss';
   const rest = tossing ? pose(TOSS, phase).hand : null;
@@ -537,7 +550,7 @@ export function drawThrown(ctx, game) {
     ctx.translate(p.x, p.y);
     ctx.scale(P, P);
     if (p.kind === 'spear') {
-      const art = weaponSprite(p.item ? p.item.type : 'spear', tierOf(p.item));
+      const art = weaponSprite(p.item ? p.item.type : 'spear', tierOf(p.item), p.item && p.item.skin);
       ctx.rotate(p.angle + Math.PI / 2);
       ctx.scale(art.k, art.k);
       ctx.drawImage(art.canvas, -art.px, -art.canvas.height / 2);

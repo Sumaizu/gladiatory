@@ -111,7 +111,7 @@ export const SAND = { range: [40, 220], radius: 70, speed: 300, time: 10, miss: 
 // смелее — если до вещи не дальше, чем до врага, или не дальше near. Оставшийся без оружия бежит к ближайшему, что не хуже своего хотя бы в half раза,
 // а нет такого — за своим. reach — с какого расстояния вещь поднимают
 export const GROUND = { chance: 0.6, better: 1.1, closer: 2, half: 0.5, reach: 14, fling: [120, 200], flingSpeed: 380,
-  offhand: 2.5, near: 160 };
+  offhand: 2.5, near: 160, own: 3 };
 
 // урон оружия от редкости: простое из кузни ×1, божественное ×2,4; сверху заточка
 export const WEAPON_MULT = { plain: 1, common: 1.12, rare: 1.25, mythic: 1.42, epic: 1.62, legendary: 1.85, divine: 2.4 };

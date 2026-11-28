@@ -4,7 +4,7 @@ import { clean, fromQuery, toQuery } from '../../site/js/config.js';
 import { AGI_CAP, WEAPON_TYPES, CRIT_KILL, BLEED, dodgeOf, HP_PER_VIT, RUN_PER_AGI, runOf, TEAMS, DUEL, HIT_REWARD, KILL_REWARD, SKULL, FLAME, DEATHMATCH, EVENTS, paragonFlag, WEAPON_MULT, forceOf, weaponMult, PIT, POINTS_PER_LEVEL, PARAGON, NET, SAND, SHIELD, SPEAR, armorOf, ratingOf, attackEvery, critOf, damageOf, reachOf, REWARD, START_COINS, START_POINTS, deathChance, maxHp,
   xpNeed } from '../../site/js/balance.js';
 import { starOf } from '../../site/js/stars.js';
-import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, newGladiator, plural, readableColor } from '../../site/js/engine.js';
+import { AFK_ROUNDS, END_DELAY, Game, MIN_FIGHTERS, RESULTS_TIME, Roster, SKIN_WEAPONS, newGladiator, plural, readableColor } from '../../site/js/engine.js';
 import { PLACES, POST_SPOTS, WARM_SPOTS, inArena } from '../../site/js/places.js';
 import { DIVINE, OUTCOMES, PRICE, RARITIES, REFORGE, SHARPEN, TYPES, cleanItem, forgeSpin, rarityOf, sharpChance, SHOW_TIME, SPIN_TIME,
   spin } from '../../site/js/gacha.js';
@@ -1322,7 +1322,7 @@ test('досрочное испытание парагона: всё божес�
   eq([h.nextBoss, h.nextEarly], [x, false]);
 });
 
-test('меч качка: двуручник в руках promiskuitet86 особый и остаётся особым у того, кто его подберёт', () => {
+test('меч качка: двуручник (и одноручный) в руках promiskuitet86 особый и остаётся особым у того, кто его подберёт', () => {
   const g = game({ settings: { death: 0 } });
   const [j, b] = join(g, 'promiskuitet86', 'B');
   j.weapon = weapon('greatsword');
@@ -1332,9 +1332,12 @@ test('меч качка: двуручник в руках promiskuitet86 осо�
   b.weapon = weapon('greatsword');
   g._skinWeapon(b);
   eq(b.weapon.skin, undefined);
+  const axe = weapon('axe');
+  g._skinWeapon(Object.assign({}, j, { weapon: axe }));
+  eq(axe.skin, undefined);
   const sword = weapon('sword');
   g._skinWeapon(Object.assign({}, j, { weapon: sword }));
-  eq(sword.skin, undefined);
+  eq(sword.skin, 'jock', 'одноручный у качка тоже его');
   // подобрал с песка — меч так и остался особым, и сохраняется
   const special = j.weapon;
   g.ground = [{ kind: 'weapon', item: special, owner: j.login, x: b.x, y: b.y }];
@@ -1351,7 +1354,7 @@ test('меч качка: двуручник в руках promiskuitet86 осо�
 test('катана и одачи самурая: одноручный и двуручный меч Sumaizu особые, падают и подбираются особыми', () => {
   const g = game({ settings: { death: 0 } });
   const [sam, b, c] = join(g, 'Sumaizu', 'B', 'C');
-  for (const type of ['sword', 'greatsword']) {
+  for (const type of ['spear', 'sword', 'greatsword']) {
     sam.weapon = weapon(type);
     g._skinWeapon(sam);
     eq(sam.weapon.skin, 'samurai');
@@ -1936,10 +1939,22 @@ test('без оружия: бежит к ближайшему, что не ху�
   g._seekGround(a, g._standing(), 0.05);
   eq(a.goFor.item, mine, 'слабое рядом — бежит за своим');
   a.goFor = null;
+  // своё ценится втрое ближе: чужое не хуже вдвое в 60 шагах против своего в 150 — всё равно за своим
   const fair = Object.assign(weapon('spear'), { rarity: 'epic', sharp: 3 });
   g._lay({ kind: 'weapon', item: fair, owner: 'x' }, 360, 300, 0);
   g._seekGround(a, g._standing(), 0.05);
-  eq(a.goFor.item, fair, 'не хуже вдвое — ближайшее');
+  eq(a.goFor.item, mine, 'своё дальше, но не втрое — за своим');
+  a.goFor = null;
+  const near = Object.assign(weapon('spear'), { rarity: 'epic', sharp: 3 });
+  g._lay({ kind: 'weapon', item: near, owner: 'x' }, 335, 300, 0);
+  g._seekGround(a, g._standing(), 0.05);
+  eq(a.goFor.item, near, 'чужое намного ближе — его');
+  // своё копьё ещё летит — чужое не хватает, ждёт
+  a.goFor = null;
+  g.ground = g.ground.filter((it) => it.item !== mine);
+  g.projectiles.push({ kind: 'spear', item: mine, owner: 'a', x: 400, y: 300, tx: 450, ty: 300 });
+  g._seekGround(a, g._standing(), 0.05);
+  eq(a.goFor, null, 'ждёт своё');
 });
 
 test('упавший роняет оружие и вещи; после боя всё возвращается владельцам, кроме сломанного и брошенного', () => {
@@ -2109,6 +2124,70 @@ test('перековка: «реролл» за 300 — другой вид, т�
   ok(a.weapon.type !== 'sword' && TYPES.includes(a.weapon.type), a.weapon.type);
   eq([a.weapon.rarity, a.weapon.sharp, a.coins, a.place], ['epic', 0, 10, 'train']);
   for (let i = 0; i < 300; i++) ok(forgeSpin(Math.random, 'axe') !== 'axe');
+});
+
+test('личные скины: подобранное в бою чужое оружие не становится особым и возвращается хозяину прежним', () => {
+  const g = game({ settings: { death: 0 } });
+  const [d, b] = join(g, 'sulffur_', 'B');
+  d.weapon = weapon('sword');
+  g._skinWeapon(d);
+  b.weapon = weapon('greatsword');
+  const own = b.weapon;
+  g.next();
+  // тёмный лорд подобрал чужой двуручник — в руках обычный меч, не световой
+  g.ground = [];
+  g._dropAll(b);
+  g._pick(d, g.ground.find((x) => x.kind === 'weapon'));
+  eq(d.weapon, own);
+  g._skinWeapon(d);
+  eq(own.skin, undefined);
+  g._endBattle();
+  eq([b.weapon, b.weapon.skin], [own, undefined]);
+  // уже испорченные сохранения: чужая пометка снимается при загрузке и при входе
+  const store = new Map(), storage = { getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v) };
+  store.set('k', JSON.stringify({ alive: { c: { name: 'C', color: '#ff0000', weapon: { kind: 'weapon', type: 'greatsword',
+    rarity: 'rare', sharp: 0, skin: 'darklord' } } } }));
+  eq(new Roster(storage, 'k').get('c').weapon.skin, undefined);
+  const x = Object.assign({}, b, { login: 'x', weaponOf: 'x', home: null, weapon: { kind: 'weapon', type: 'sword', rarity: 'rare', skin: 'samurai' } });
+  g._skinWeapon(x);
+  eq(x.weapon.skin, undefined);
+});
+
+test('личные скины: кузня и перековка дают только своё оружие, перековывать единственный вид нельзя', () => {
+  const g = game({ settings: { ludus: 900 } });
+  const [d, j, sam] = join(g, 'sulffur_', 'promiskuitet86', 'Sumaizu');
+  // первое оружие из кузни — только свои виды
+  for (let i = 0; i < 200; i++) {
+    ok(['sword', 'greatsword', 'rapier'].includes(g._roll(d, { kind: 'weapon' }).type));
+    ok(['sword', 'greatsword'].includes(g._roll(j, { kind: 'weapon' }).type));
+    ok(['sword', 'greatsword', 'spear'].includes(g._roll(sam, { kind: 'weapon' }).type));
+  }
+  // перековка тёмного лорда — другой свой вид, особый
+  d.weapon = { kind: 'weapon', type: 'sword', rarity: 'epic', sharp: 0 };
+  d.coins = REFORGE.price;
+  g.feed('sulffur_', 'реролл', { login: 'sulffur_' });
+  until(g, () => idle(g));
+  ok(['greatsword', 'rapier'].includes(d.weapon.type), d.weapon.type);
+  eq([d.weapon.skin, d.weapon.rarity], ['darklord', 'epic']);
+  // у качка два вида: двуручник перековывается в его одноручный, тоже особый
+  j.weapon = { kind: 'weapon', type: 'greatsword', rarity: 'rare', sharp: 0 };
+  j.coins = REFORGE.price * 2;
+  g.feed('promiskuitet86', 'реролл', { login: 'promiskuitet86' });
+  until(g, () => idle(g));
+  eq([j.weapon.type, j.weapon.skin], ['sword', 'jock']);
+  // подобрал в бою секиру — перековка даст один из его мечей
+  j.weapon = { kind: 'weapon', type: 'axe', rarity: 'rare', sharp: 0 };
+  g.feed('promiskuitet86', 'реролл', { login: 'promiskuitet86' });
+  until(g, () => idle(g));
+  ok(['sword', 'greatsword'].includes(j.weapon.type));
+  eq([j.weapon.skin, j.coins], ['jock', 0]);
+  // скин с одним видом оружия — перековать его нельзя, монеты целы (проверяем на временном наборе)
+  SKIN_WEAPONS.jock = ['greatsword'];
+  j.weapon = { kind: 'weapon', type: 'greatsword', rarity: 'rare', sharp: 0 };
+  j.coins = REFORGE.price;
+  g.feed('promiskuitet86', 'реролл', { login: 'promiskuitet86' });
+  SKIN_WEAPONS.jock = ['sword', 'greatsword'];
+  eq([g.forging.length, j.coins], [0, REFORGE.price]);
 });
 
 test('мешок с песком бросают, только когда у самого меньше половины здоровья; слепота — на ' + SAND.time + ' с', () => {

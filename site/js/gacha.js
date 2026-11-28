@@ -109,9 +109,10 @@ export function spin(random, owner = null) {
   return { kind: 'item', item: makeItem(random, 'armor', rarity, slots[Math.floor(random() * slots.length)]) };
 }
 
-// кузня: какой вид оружия выкуется (первое оружие или перековка) — любой, кроме нынешнего
-export function forgeSpin(random, except = null) {
-  const types = TYPES.filter((type) => type !== except);
+// кузня: какой вид оружия выкуется (первое оружие или перековка) — любой из allowed, кроме нынешнего
+// (если другого нет — тот же)
+export function forgeSpin(random, except = null, allowed = TYPES) {
+  const other = allowed.filter((type) => type !== except), types = other.length ? other : allowed;
   return types[Math.floor(random() * types.length)];
 }
 

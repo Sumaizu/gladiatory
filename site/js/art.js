@@ -1103,6 +1103,45 @@ function pole(p, x, y0, y1, pal, { wide = false, wrap = false } = {}) {
 
 // двуручный меч качка: клинок со скруглённой головкой и рельефом, утолщение-гарда у рукояти, ребристая рукоять и
 // круглый набалдашник. Цвет клинка — от редкости, как у остального оружия
+// одноручный меч качка — та же форма, но короче и тоньше, размером с гладиус
+function jockShort(tier) {
+  const m = BLADES[Math.min(BLADES.length - 1, tier)], l = darker(m, 1.25), d = darker(m, 0.72), dd = darker(m, 0.56);
+  const p = new Pix(5, 23);
+  // головка — на пиксель шире ствола и выступает вперёд, как у двуручного
+  p.px(1, 0, l);
+  p.px(2, 0, m);
+  p.rect(1, 1, 3, 2, m);
+  p.px(1, 1, l);
+  p.px(1, 2, l);
+  p.px(3, 2, d);
+  p.rect(1, 3, 3, 1, dd);
+  for (let y = 4; y <= 13; y++) {
+    p.px(1, y, l);
+    p.px(2, y, d);
+  }
+  for (const [x, y] of [[1, 7], [2, 10]]) p.px(x, y, dd);
+  // у рукояти — шар шире ствола: свет слева сверху, тень справа снизу
+  p.rect(1, 14, 3, 1, m);
+  p.px(1, 14, l);
+  p.rect(0, 15, 5, 2, m);
+  p.px(0, 15, l);
+  p.px(1, 15, l);
+  p.px(4, 15, d);
+  p.px(4, 16, dd);
+  p.px(3, 16, d);
+  p.rect(1, 17, 3, 1, d);
+  p.px(3, 17, dd);
+  for (let y = 18; y <= 20; y++) {
+    p.px(1, y, y % 2 ? WRAPS[1] : WRAPS[2]);
+    p.px(2, y, y % 2 ? WRAPS[0] : WRAPS[1]);
+  }
+  p.rect(1, 21, 2, 1, IRONS[1]);
+  p.px(1, 22, IRONS[0]);
+  p.px(2, 22, IRONS[0]);
+  // хват ниже шара — кулак его не закрывает
+  return { canvas: p.canvas(), px: 1.5, py: 19.5, k: 1 };
+}
+
 function jockSword(tier) {
   const m = BLADES[Math.min(BLADES.length - 1, tier)], l = darker(m, 1.25), d = darker(m, 0.72), dd = darker(m, 0.56);
   const p = new Pix(6, 31);
@@ -1216,13 +1255,37 @@ function katana(tier, long) {
   return { canvas: p.canvas(), px: bx + 0.5, py: blade + 3.5, k: 1 };
 }
 
+// яри самурая: длинный прямой клинок с ребром посередине цвета редкости, латунная муфта и чёрная гарда-кольцо,
+// чёрное лакированное древко с золотым кольцом посередине, железный подток
+function yari(tier) {
+  const m = BLADES[Math.min(BLADES.length - 1, tier)], mL = darker(m, 1.25), mD = darker(m, 0.72);
+  // клинок длинный и узкий — в два пикселя: светлое ребро и тёмная кромка, остриё в пиксель
+  const blade = 15, p = new Pix(3, blade + 27);
+  p.px(1, 0, mL);
+  for (let y = 1; y < blade; y++) {
+    p.px(1, y, y < blade - 3 ? mix(mL, '#ffffff', 0.25) : mL);
+    p.px(2, y, y === 1 ? m : mD);
+  }
+  p.rect(0, blade, 3, 1, GOLDS[1]);
+  p.px(0, blade, GOLDS[2]);
+  p.rect(0, blade + 1, 3, 1, '#1c1a20');
+  for (let y = blade + 2; y <= blade + 25; y++) {
+    const ring = y - blade - 13;
+    p.px(1, y, ring === 0 ? GOLDS[2] : ring === 1 ? GOLDS[1] : y % 3 ? '#1c1a20' : '#34303a');
+  }
+  p.px(1, blade + 26, IRONS[1]);
+  return { canvas: p.canvas(), px: 1.5, py: blade + 10, k: 1 };
+}
+
 function weaponArt(type, tier, kind = null) {
   const m = BLADES[Math.min(BLADES.length - 1, tier)], mL = darker(m, 1.25), mD = darker(m, 0.72), mDD = darker(m, 0.56);
   if (type === 'greatsword' && kind === 'jock') return jockSword(tier);
+  if (type === 'sword' && kind === 'jock') return jockShort(tier);
   if (type === 'sword' && kind === 'samurai') return katana(tier, false);
   if ((type === 'sword' || type === 'greatsword') && kind === 'darklord') return saber(tier, type === 'greatsword');
   if (type === 'rapier' && kind === 'darklord') return thinSaber(tier);
   if (type === 'greatsword' && kind === 'samurai') return katana(tier, true);
+  if (type === 'spear' && kind === 'samurai') return yari(tier);
   if (type === 'greatsword') {
     // огромный тяжёлый меч, как у Гатса: широкий длинный клинок-плита, грубая гарда, длинная рукоять на две руки
     const p = new Pix(6, 31);

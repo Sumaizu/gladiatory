@@ -1,8 +1,8 @@
 import { ARMOR_SLOTS, SAND, SLOT_IDS, paragonFlag, STATS, TEAMS, armorOf, critOf, damageOf, maxHp, twoHanded, xpNeed } from './balance.js';
-import { PLAIN, RARITIES, REFORGE, SHARPEN, TYPES, itemName, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
+import { PLAIN, RARITIES, REFORGE, SHARPEN, itemName, itemText, outcomeOf, rarityOf, spin } from './gacha.js';
 import { COLUMNS, FIELD_H, FIELD_W, DUMMIES, LUDUS_TOP, PLACES } from './places.js';
 import { FONT, drawCrowd, drawDummy, drawGladiator, drawGround, drawThrown, drawLabel, drawLudusLife, drawSigns, paintArena, paintLudus } from './draw.js';
-import { plural } from './engine.js';
+import { forgeTypes, plural } from './engine.js';
 import { ambience, play, setSound } from './sound.js';
 import { OWN_SKINS, P, Pix } from './art.js';
 import { GEM_CYCLE, GLARE_CYCLE, HEART_CYCLE, RAINBOW_CYCLE, SNOW_CYCLE, starOf } from './stars.js';
@@ -1403,7 +1403,7 @@ export class View {
       // заточка — над точилом, первое оружие и перековка — над горном
       const width = placeBox(box, sharpen ? 3 : 4);
       $('forge-reel').hidden = sharpen;
-      if (!sharpen) this._reel('forge', now, this._forgeCell(r.type), () => this._forgeCell(TYPES[Math.floor(Math.random() * TYPES.length)]), width);
+      if (!sharpen) this._reel('forge', now, this._forgeCell(r.type), () => { const types = forgeTypes(now.login); return this._forgeCell(types[Math.floor(Math.random() * types.length)]); }, width);
       this.forgeId = now.id;
     }
     const g = game.members.get(now.login);
