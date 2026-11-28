@@ -260,10 +260,13 @@ function drawArms(ctx, g, look, bob, drill = null) {
     ctx.translate(Math.round(hand[0]), Math.round(hand[1]));
     ctx.rotate(turn);
     ctx.scale(art.k, art.k);
-    // световой меч сияет своим цветом
-    if (art.glow) {
+    // световой меч: клинок сияет своим цветом, рукоять — без ореола
+    if (art.blade) {
+      ctx.save();
       ctx.shadowColor = art.glow;
       ctx.shadowBlur = 9;
+      ctx.drawImage(art.blade, -art.px, -art.py);
+      ctx.restore();
     }
     ctx.drawImage(art.canvas, -art.px, -art.py);
     ctx.restore();
@@ -535,9 +538,12 @@ export function drawThrown(ctx, game) {
       const art = weaponSprite(p.item.type, tierOf(p.item), p.item.skin);
       ctx.rotate(p.x * 0.08);
       ctx.scale(art.k, art.k);
-      if (art.glow) {
+      if (art.blade) {
+        ctx.save();
         ctx.shadowColor = art.glow;
         ctx.shadowBlur = 9;
+        ctx.drawImage(art.blade, -art.px, -art.canvas.height / 2);
+        ctx.restore();
       }
       ctx.drawImage(art.canvas, -art.px, -art.canvas.height / 2);
     } else if (p.kind === 'sand') {

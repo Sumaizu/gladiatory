@@ -1093,17 +1093,41 @@ function saber(tier, long) {
     }
     q.rect(0, top + grip, 3, 1, DARK.silverD);
   };
-  const p = new Pix(3, blade + grip + 1);
-  p.px(1, 0, c);
+  // клинок — отдельным слоем: сияет только он, рукоять без ореола
+  const p = new Pix(3, blade + grip + 1), b = new Pix(3, blade + grip + 1);
+  b.px(1, 0, c);
   for (let y = 1; y < blade; y++) {
-    p.px(0, y, c);
-    p.px(1, y, mix(c, '#ffffff', 0.85));
-    p.px(2, y, c);
+    b.px(0, y, c);
+    b.px(1, y, mix(c, '#ffffff', 0.85));
+    b.px(2, y, c);
   }
   hilt(p, blade);
   const h = new Pix(3, grip + 1);
   hilt(h, 0);
-  return { canvas: p.canvas(), px: 1.5, py: blade + 2.5, k: 1, glow: c, hilt: h.canvas() };
+  return { canvas: p.canvas(), blade: b.canvas(), px: 1.5, py: blade + 2.5, k: 1, glow: c, hilt: h.canvas() };
+}
+
+// тонкий световой клинок вместо рапиры — чтобы колоть: сердцевина в пиксель, короткая серебряная гарда, ребристая
+// рукоять. Хват там же, где у рапиры, — выпад тот же
+function thinSaber(tier) {
+  const c = SABER[Math.min(SABER.length - 1, tier)];
+  // рукоять цельная, в два пикселя: серебро с чёрными рёбрами, короткая — набалдашник сразу под кистью
+  const hilt = (q, top) => {
+    q.rect(1, top, 3, 1, DARK.silver);
+    q.px(3, top, DARK.silverD);
+    for (let i = 1; i <= 4; i++) {
+      q.px(2, top + i, i % 2 ? DARK.silver : DARK.suitD);
+      q.px(3, top + i, i % 2 ? DARK.silverD : DARK.suit);
+    }
+    q.rect(2, top + 5, 2, 1, DARK.silverD);
+  };
+  const p = new Pix(5, 27), b = new Pix(5, 27);
+  b.px(2, 0, c);
+  for (let y = 1; y <= 20; y++) b.px(2, y, mix(c, '#ffffff', 0.45));
+  hilt(p, 21);
+  const h = new Pix(5, 6);
+  hilt(h, 0);
+  return { canvas: p.canvas(), blade: b.canvas(), px: 2.5, py: 24, k: 1, glow: c, hilt: h.canvas() };
 }
 
 // катана и одачи самурая: узкий изогнутый клинок цвета редкости (остриём чуть назад), латунная хабаки, круглая
@@ -1139,6 +1163,7 @@ function weaponArt(type, tier, kind = null) {
   if (type === 'greatsword' && kind === 'jock') return jockSword(tier);
   if (type === 'sword' && kind === 'samurai') return katana(tier, false);
   if ((type === 'sword' || type === 'greatsword') && kind === 'darklord') return saber(tier, type === 'greatsword');
+  if (type === 'rapier' && kind === 'darklord') return thinSaber(tier);
   if (type === 'greatsword' && kind === 'samurai') return katana(tier, true);
   if (type === 'greatsword') {
     // огромный тяжёлый меч, как у Гатса: широкий длинный клинок-плита, грубая гарда, длинная рукоять на две руки
