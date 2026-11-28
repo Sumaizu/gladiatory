@@ -198,7 +198,10 @@ export function lookOf(g, seed) {
     handFar: darklord ? DARK.glove : null,
     handNear: darklord ? (suit ? DARK.glove : DARK.skin) : null,
     // у черепахи доспех от 3 редкости — ещё и наручи на плечах цвета брони
-    armGuard: (turtle || jock || samurai) && tierOf(gear.body) >= 3 ? METALS[tierOf(gear.body)] : null,
+    armGuard: (turtle || jock) && tierOf(gear.body) >= 3 || samurai && tierOf(gear.body) >= 1 ? METALS[tierOf(gear.body)] : null,
+    // самурай: с 2 редкости доспеха — пластины и на плече (до локтя), и большой наплечник-соде поверх руки
+    armUpper: samurai && tierOf(gear.body) >= 2 ? darker(METALS[tierOf(gear.body)], 0.68) : null,
+    sode: samurai && tierOf(gear.body) >= 2 ? tierOf(gear.body) : 0,
     design: (seed >>> 9) % 3,
     net: netUp(g) && !(g.netCool > 0),
     sand: sandUp(g),
@@ -244,6 +247,20 @@ function gladiatorArt(look, pose, dead) {
   // обувь по редкости: сандалии с ремнями до голени, кожаные ботинки, высокие сапоги с пластиной, золото
   const boot = look.feet, bootM = METALS[Math.max(1, boot)];
   const foot = (x, y) => {
+    if (samurai) {
+      // таби на соломенных сандалиях; с обувью — стальная пластина на подъёме (когакэ), с 3 редкости — и на щиколотке
+      p.rect(x - 1, y - 1, 3, 1, skinD);
+      p.rect(x - 1, y, 4, 1, SM.sole);
+      if (boot >= 1) {
+        p.rect(x, y - 1, 3, 1, bootM);
+        p.px(x, y - 1, darker(bootM, 1.3));
+      }
+      if (boot >= 3) {
+        p.rect(x - 1, y - 3, 3, 2, darker(bootM, 0.8));
+        p.px(x - 1, y - 3, darker(bootM, 1.2));
+      }
+      return;
+    }
     if (dl) {
       if (boot >= 1) {
         // высокие глянцевые сапоги тёмного лорда, блик — цвета редкости
@@ -291,12 +308,6 @@ function gladiatorArt(look, pose, dead) {
       p.rect(x - 1, y, 4, 1, skinD);
       return;
     }
-    if (samurai) {
-      // чёрные таби на соломенных сандалиях
-      p.rect(x - 1, y - 1, 3, 1, skinD);
-      p.rect(x - 1, y, 4, 1, SM.sole);
-      return;
-    }
     p.rect(x - 1, y, 4, 1, BELT);
     p.px(x - 1, y - 1, BELT);
   };
@@ -308,7 +319,7 @@ function gladiatorArt(look, pose, dead) {
     foot(17, 39);
     p.rect(13, 36, 2, 3, lgD);
     foot(14, 39);
-    if (look.legs && !dl) p.rect(16, 36, 2, 2, legM);
+    if (look.legs && !dl && !samurai) p.rect(16, 36, 2, 2, legM);
   } else if (pose === 'kneel') {
     p.line(11, 31, 8, 38, lgD, 3);
     foot(8, 39);
@@ -344,7 +355,9 @@ function gladiatorArt(look, pose, dead) {
         p.rect(x - 1, y, 3, 1, c);
       }
     };
-    if (dl) {
+    if (samurai) {
+      // набедренники и поножи самурая — ниже, перекраской хакамы
+    } else if (dl) {
       // с 3 редкости — глянцевый наколенник
       if (look.legs >= 3) {
         p.px(knee[0], 30, darkGloss(look.legs));
@@ -362,6 +375,20 @@ function gladiatorArt(look, pose, dead) {
       p.rect(knee[0] - 1, 29, 3, 2, legM);
       p.px(knee[0] - 1, 29, legL);
       if (look.legs >= 4) for (const y of [25, 27]) p.rect(13 + (knee[0] - 14) * (y - 24) / 7, y, 3, 1, legD);
+    }
+  }
+  if (samurai && look.legs >= 1) {
+    // хайдатэ — набедренник из рядов пластин со шнуровкой, с 2 редкости — сунэатэ, поножи из стальных полос
+    const lace = look.legs >= 7 ? SM.gold : SM.lace;
+    const [t0, s0, s1] = pose === 'sit' ? [33, 36, 38] : pose === 'kneel' ? [30, 34, 38] : [25, 31, 37];
+    for (let y = t0; y <= s1; y++) for (let x = 3; x <= 21; x++) {
+      const c = p.get(x, y);
+      if (c !== skin && c !== skinD) continue;
+      const far = c === skinD, shin = y >= s0, row = (y - t0) % 2;
+      let col = shin ? (look.legs >= 2 ? (x % 2 ? legM : legL) : null) : row === 0 ? legL : (y - t0) % 4 === 1 && x % 4 === 0 ? lace : legM;
+      if (!col) continue;
+      if (y === s0 && look.legs >= 3) col = legL;
+      p.px(x, y, far ? darker(col, 0.72) : col);
     }
   }
   // руки в стойке и на ходу рисуются отдельно (draw.js) и двигаются вместе с оружием
@@ -423,14 +450,18 @@ function gladiatorArt(look, pose, dead) {
     p.px(15, 21 + dy, SM.red);
     p.px(16, 22 + dy, SM.redD);
     p.px(15, 23 + dy, SM.redD);
-    // кусадзури — пластинчатая юбка поверх хакамы (доспех от 3 редкости): три полосы с красной шнуровкой
-    if (look.body >= 3) {
-      const lace = look.body >= 7 ? SM.gold : SM.lace;
-      for (const x0 of [10, 12, 14]) for (let y = 21; y <= 25; y++) {
-        p.px(x0, y + dy, y % 2 ? bodyM : bodyD);
-        p.px(x0 + 1, y + dy, y === 21 ? bodyL : y % 2 ? bodyL : bodyM);
+    // кусадзури — юбка из четырёх пластинчатых панелей поверх хакамы, книзу расходится. С доспехом — два ряда
+    // пластин, с 3 редкости — четыре (до колен), с 4 — пять
+    if (look.body >= 1) {
+      const lace = look.body >= 7 ? SM.gold : SM.lace, rows = look.body >= 4 ? 5 : look.body >= 3 ? 4 : 2;
+      for (let i = 0; i < rows * 2; i++) {
+        const y = 21 + i + dy, flare = i >= 4 ? 1 : 0, top = i % 2 === 0;
+        for (let x = 9 - flare; x <= 16 + flare; x++) {
+          const seam = (x - 9) % 2 === 0 && x > 9 - flare;
+          p.px(x, y, top ? (x === 16 + flare ? bodyM : bodyL) : seam ? bodyD : x === 16 + flare ? bodyD : bodyM);
+        }
+        if (!top && i % 4 === 1) for (const x of [10, 14]) p.px(x, y, lace);
       }
-      for (const y of [22, 24]) for (const x of [10, 12, 14]) p.px(x + 1, y + dy, lace);
     }
   } else for (let y = 21; y < 25; y++) for (let x = 10; x < 16; x++) {
     if (y === 24 && (x === 10 || x === 15)) continue;
@@ -524,22 +555,32 @@ function gladiatorArt(look, pose, dead) {
     p.px(13, 17 + dy, skinD);
   }
   if (samurai && look.body >= 1) {
-    // до — пластинчатый доспех: ряды пластин с красной шнуровкой. Простой — только пояс-харамаки на животе,
-    // с 2 редкости — на весь торс, с 4 — ещё и пластина на горле; у красного шнуровка золотая
-    const lace = look.body >= 7 ? SM.gold : SM.lace, top = look.body >= 2 ? 11 : 15;
-    for (let y = top; y < 20; y++) {
-      const x0 = y < 14 ? 11 : 10, x1 = x0 + 5 + (y >= 12 && y <= 15 ? 1 : 0);
+    // до — крупная стальная кираса шире торса: сверху цельная грудная пластина (с 2 редкости — выпуклая), ниже — ряды
+    // ламелей с шнуровкой. С 3 — наплечник дальнего плеча за спиной, с 4 — нодова на горле и заклёпки на груди,
+    // у легендарной — светлый кант, у божественной — золотой
+    const lace = look.body >= 7 ? SM.gold : SM.lace, trim = look.body >= 7 ? SM.gold : look.body >= 6 ? '#fff2c0' : bodyL;
+    for (let y = 11; y < 20; y++) {
+      const x0 = y < 14 ? 10 : 9, x1 = (y < 14 ? 17 : 16) + (look.body >= 2 && y >= 12 && y <= 13 ? 1 : 0);
       for (let x = x0; x <= x1; x++) {
-        const row = (y - top) % 2 === 0;
-        p.px(x, y + dy, y === top ? bodyL : x === x0 ? bodyD : x === x1 ? (row ? bodyL : bodyM) : row ? bodyM : bodyD);
+        const plate = y <= 13, top = (y - 14) % 2 === 0;
+        p.px(x, y + dy, x === x0 ? bodyD : plate ? (y === 11 ? trim : x >= x1 - 1 ? bodyL : bodyM)
+          : top ? bodyL : x === x1 ? bodyD : bodyM);
       }
-      if ((y - top) % 2 === 1) for (const x of [x0 + 2, x0 + 4]) p.px(x, y + dy, lace);
+      // шнуровка — два вертикальных шнура через ламели
+      if (y >= 14 && (y - 14) % 2 === 1) for (const x of [x0 + 2, x1 - 2]) p.px(x, y + dy, lace);
+    }
+    p.rect(11, 10 + dy, 5, 1, bodyD);
+    if (look.body >= 3) for (let y = 10; y <= 16; y++) {
+      p.rect(7, y + dy, 2, 1, (y - 10) % 2 ? bodyM : bodyL);
+      if ((y - 10) % 2) p.px(8, y + dy, lace);
     }
     if (look.body >= 4) {
       p.rect(12, 10 + dy, 4, 1, bodyM);
       p.px(15, 10 + dy, bodyL);
+      p.px(12, 12 + dy, trim);
+      p.px(16, 12 + dy, trim);
     }
-    if (look.body >= 6) p.px(15, 13 + dy, '#fff2c0');
+    if (look.body >= 6) p.px(15, 12 + dy, '#fff2c0');
   }
   // у черепахи спереди — пластрон: светлые щитки с тёмными швами. С доспехом от 3 редкости — нагрудник на весь
   // торс: выпуклая грудь, воротник у шеи, щитки как у пластрона, кант сверху и снизу (у красного — золотой)
@@ -576,15 +617,8 @@ function gladiatorArt(look, pose, dead) {
   }
   if (dl) {
     // доспех тёмного лорда нарисован вместе с торсом
-  } else if (samurai && tier >= 3) {
-    // соде — большие наплечные пластины ступеньками, с 4 редкости — в три ряда
-    const lace = tier >= 7 ? SM.gold : SM.lace, rows = tier >= 4 ? 3 : 2;
-    for (let i = 0; i < rows; i++) {
-      p.rect(14, 10 + i * 2 + dy, 4, 1, bodyL);
-      p.rect(14, 11 + i * 2 + dy, 4, 1, bodyM);
-      p.px(17, 11 + i * 2 + dy, bodyD);
-      p.px(15, 11 + i * 2 + dy, lace);
-    }
+  } else if (samurai) {
+    // соде рисуется поверх руки (sodeSprite, draw.js)
   } else if (tier === 2 || tier === 4 || (turtle || jock) && tier >= 3) {
     // наплечник на ближнем плече — сегменты
     p.rect(14, 9 + dy, 3, 1, bodyL);
@@ -756,6 +790,13 @@ function gladiatorArt(look, pose, dead) {
       // завязки шляпы под подбородком
       p.px(12, H + 4, SM.redD);
       p.px(12, H + 5, SM.redD);
+      if (look.head >= 3) {
+        // мэмпо — стальная маска на нижнюю половину лица
+        p.rect(13, H + 4, 4, 2, metal);
+        p.px(16, H + 4, metalL);
+        p.px(13, H + 5, metalD);
+        p.px(15, H + 5, metalD);
+      }
     }
     // красный шарф: на шее, узел спереди и два длинных хвоста, что вьются за спиной
     p.rect(11, 10 + dy, 5, 1, SM.red);
@@ -1019,6 +1060,23 @@ function lyingArt(look, dead) {
   return p.canvas((c) => {
     const [r, g, b] = rgb(c), l = (r + g + b) / 3;
     return hex([l * 0.55 + r * 0.15, l * 0.5 + g * 0.1, l * 0.5 + b * 0.1]);
+  });
+}
+
+// соде самурая — большой наплечник из рядов пластин со шнуровкой, висит с ближнего плеча поверх руки
+export function sodeSprite(tier) {
+  return remember('sode2:' + tier, () => {
+    const m = METALS[tier], mD = darker(m, 0.68), mL = darker(m, 1.3);
+    const lace = tier >= 7 ? SAMURAI.gold : SAMURAI.lace, rows = tier >= 4 ? 4 : 3;
+    const p = new Pix(5, rows * 2 + 1);
+    for (let i = 0; i < rows; i++) {
+      p.rect(0, i * 2, 5, 1, i === 0 && tier >= 6 ? (tier >= 7 ? SAMURAI.gold : '#fff2c0') : mL);
+      p.rect(0, i * 2 + 1, 5, 1, m);
+      p.px(4, i * 2 + 1, mD);
+      p.px(2, i * 2 + 1, lace);
+    }
+    p.rect(0, rows * 2, 5, 1, mD);
+    return p.canvas();
   });
 }
 

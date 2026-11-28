@@ -5,7 +5,7 @@ import { tierOf } from './gacha.js';
 import { GEM, GEM_CYCLE, GEM_W, GLARE_CYCLE, GLARE_SIZE, HEART_CYCLE, HEART_REDS, HEART_W, RAINBOW, RAINBOW_CYCLE,
   RAINBOW_W,
   SNOW_CYCLE, STAR_COLORS, starOf } from './stars.js';
-import { LION, P, SPRITE, darker, lionSprite, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, sandSprite, shieldLookOf, shieldSprite, weaponSprite } from './art.js';
+import { LION, P, SPRITE, darker, lionSprite, gladiatorSprite, lookOf, lyingSprite, netHandSprite, netOverSprite, netSprite, sandSprite, shieldLookOf, shieldSprite, sodeSprite, weaponSprite } from './art.js';
 import { drawDummyArt, paintLudusArt } from './ludus.js';
 
 const FONT = '"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif';
@@ -222,9 +222,13 @@ function drawArms(ctx, g, look, bob, drill = null) {
   // у черепахи на обеих руках у запястья — светлые обмотки, наручи у плеча — только с доспехом от 3 редкости
   // у качка руки голые и с бицепсами, с доспехом от 3 редкости — наручи цвета брони на предплечьях
   const arm = look.kind === 'jock' || look.kind === 'samurai' || look.kind === 'darklord'
-    ? (from, to, color) => limb(ctx, from, to, color, null, look.armGuard, look.kind === 'jock')
+    ? (from, to, color) => limb(ctx, from, to, color, look.armUpper || null, look.armGuard, look.kind === 'jock')
     : (from, to, color, cover = null) => limb(ctx, from, to, color, look.wraps ? look.armGuard : cover, look.wraps);
   const length = g.swingMax || 0.3, phase = g.swing > 0 ? 1 - g.swing / length : 0;
+  // наплечник самурая висит с ближнего плеча поверх руки
+  const sode = () => {
+    if (look.sode) ctx.drawImage(sodeSprite(look.sode), 13, 10);
+  };
   ctx.save();
   ctx.translate(-SPRITE.x, -SPRITE.foot - bob);
   if (drill) {
@@ -232,6 +236,7 @@ function drawArms(ctx, g, look, bob, drill = null) {
     fist(ctx, drill[0], glove(skinD));
     arm(SHOULDER.near, drill[1], skin);
     fist(ctx, drill[1], glove(skin));
+    sode();
     ctx.restore();
     return;
   }
@@ -247,6 +252,7 @@ function drawArms(ctx, g, look, bob, drill = null) {
     fist(ctx, far, glove(skinD));
     arm(SHOULDER.near, near, skin);
     fist(ctx, near, glove(skin));
+    sode();
     ctx.restore();
     return;
   }
@@ -279,6 +285,7 @@ function drawArms(ctx, g, look, bob, drill = null) {
     weaponAt();
     arm(SHOULDER.near, low, skin);
     fist(ctx, low, glove(skin));
+    sode();
     ctx.restore();
     return;
   }
@@ -308,6 +315,7 @@ function drawArms(ctx, g, look, bob, drill = null) {
     arm(SHOULDER.near, pos, skin);
     fist(ctx, pos, glove(skin));
   }
+  sode();
   ctx.restore();
 }
 
